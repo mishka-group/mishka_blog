@@ -240,9 +240,15 @@ defmodule MishkaBlog.BlogPost do
     type "blog_post"
 
     includes [
+      :collections,
+      :master_collections,
+      :tenant_collections
     ]
 
     paginated_includes [
+      :collections,
+      :master_collections,
+      :tenant_collections
     ]
   end
 
@@ -259,7 +265,8 @@ defmodule MishkaBlog.BlogPost do
         preload do
           always [
             :site,
-            :version_count
+            :version_count,
+            :collection_count
           ]
         end
       end
@@ -374,6 +381,7 @@ defmodule MishkaBlog.BlogPost do
           static true
 
           requires [
+            :collection_count,
             :version_count,
             :language,
             :featured
@@ -388,6 +396,7 @@ defmodule MishkaBlog.BlogPost do
 
           render fn record ->
             assigns = %{
+              collection_count: record.collection_count || 0,
               version_count: record.version_count || 0,
               language: record.language,
               featured: record.featured
@@ -395,6 +404,13 @@ defmodule MishkaBlog.BlogPost do
 
             ~H"""
             <div class="flex flex-wrap items-center gap-x-[11px] gap-y-1.5 text-[11.5px] font-semibold text-[#8a877f]">
+              <span
+                class="inline-flex items-center gap-[5px]"
+                title={dgettext("mishka_gervaz", "Collections")}
+              >
+                <.icon name="hero-folder" class="size-[13px] text-[#c3c0b8]" />
+                {@collection_count}
+              </span>
               <span class="inline-flex items-center gap-[5px]" title={dgettext("mishka_gervaz", "Versions")}>
                 <.icon name="hero-clock" class="size-[13px] text-[#c3c0b8]" />
                 {@version_count}
@@ -456,6 +472,37 @@ defmodule MishkaBlog.BlogPost do
           ui do
             label fn -> dgettext("mishka_gervaz", "Site") end
             placeholder fn -> dgettext("mishka_gervaz", "Search sites...") end
+          end
+        end
+
+        filter :collection_id, :relation do
+          virtual true
+          resource MishkaBlog.Collection
+          mode :search
+          display_field :name
+          search_field :name
+          min_chars 1
+          page_size 15
+
+          load fn query, state ->
+            case state.master_user? and Map.get(state.filter_values, :site_id) do
+              [_ | _] = site_ids -> Ash.Query.filter(query, site_id in ^site_ids)
+              _every_site -> query
+            end
+          end
+
+          apply fn query, value, context ->
+            relationship =
+              if context.master_user?, do: "master_collections", else: "tenant_collections"
+
+            Ash.Query.filter_input(query, %{
+              relationship => %{"id" => %{"in" => List.wrap(value)}}
+            })
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Collection") end
+            placeholder fn -> dgettext("mishka_gervaz", "Search collections...") end
           end
         end
 
@@ -857,6 +904,13 @@ defmodule MishkaBlog.BlogPost do
         name :post_form
       end
 
+      source do
+        preload do
+          master [:master_collections]
+          tenant [:tenant_collections]
+        end
+      end
+
       fields do
         field :title do
           required true
@@ -950,6 +1004,42 @@ defmodule MishkaBlog.BlogPost do
 
           ui do
             label fn -> dgettext("mishka_gervaz", "Site") end
+          end
+        end
+
+        field :collection_ids, :relation do
+          virtual true
+          resource MishkaBlog.Collection
+          display_field :name
+          search_field :name
+          mode :search_multi
+          depends_on :site_id
+
+          load fn query, state ->
+            site_id =
+              if state.master_user? do
+                Map.get(state.field_values, :site_id)
+              else
+                Map.get(state.current_user, :site_id)
+              end
+
+            Ash.Query.filter_input(query, %{site_id: site_id})
+          end
+
+          derive_value fn record ->
+            cols =
+              cond do
+                is_list(Map.get(record, :master_collections)) -> record.master_collections
+                is_list(Map.get(record, :tenant_collections)) -> record.tenant_collections
+                is_list(Map.get(record, :collections)) -> record.collections
+                true -> []
+              end
+
+            Enum.map(cols, &to_string(&1.id))
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Collections") end
           end
         end
 
@@ -1048,6 +1138,15 @@ defmodule MishkaBlog.BlogPost do
           end
         end
 
+        group :relationships do
+          fields [:collection_ids]
+
+          ui do
+            columns 1
+            class ""
+          end
+        end
+
         group :content do
           fields [:content, :excerpt, :featured_image_url]
 
@@ -1136,6 +1235,11 @@ defmodule MishkaBlog.BlogPost do
       # before/reject seam: a plugin can transform the changeset or add_error to block creation.
       change MishkaCmsCore.Runtime.Resources.Changes.PluginBeforeHook
 
+      # Arguments for assigning relationships during creation
+      argument :collection_ids, {:array, :uuid} do
+        description "List of collection IDs to assign this post to"
+      end
+
       validate present([:title])
       validate present([:slug])
       validate present([:content])
@@ -1156,6 +1260,13 @@ defmodule MishkaBlog.BlogPost do
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
       change MishkaCmsCore.Runtime.Resources.Changes.SetLanguageGroupId
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+
+      # Manage relationships if provided
+      change manage_relationship(:collection_ids, :tenant_collections,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
 
       change fn changeset, _context ->
         status = Ash.Changeset.get_attribute(changeset, :status)
@@ -1198,6 +1309,11 @@ defmodule MishkaBlog.BlogPost do
     end
 
     create :master_create do
+      # Arguments for assigning relationships during creation
+      argument :collection_ids, {:array, :uuid} do
+        description "List of collection IDs to assign this post to"
+      end
+
       validate present([:title])
       validate present([:slug])
       validate present([:content])
@@ -1214,6 +1330,13 @@ defmodule MishkaBlog.BlogPost do
 
       change MishkaCmsCore.Runtime.Resources.Changes.SetLanguageGroupId
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+
+      # Manage relationships within the post's own site
+      change manage_relationship(:collection_ids, :tenant_collections,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
 
       change fn changeset, _context ->
         status = Ash.Changeset.get_attribute(changeset, :status)
@@ -1261,6 +1384,11 @@ defmodule MishkaBlog.BlogPost do
       transaction? true
       accept List.delete(@admin_fields, :site_id)
 
+      # Arguments for managing relationships during update
+      argument :collection_ids, {:array, :uuid} do
+        description "List of collection IDs to assign this post to (replaces existing)"
+      end
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantIsolation,
@@ -1281,6 +1409,13 @@ defmodule MishkaBlog.BlogPost do
       end
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+
+      # Manage relationships if provided
+      change manage_relationship(:collection_ids, :tenant_collections,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
 
       change fn changeset, _context ->
         status = Ash.Changeset.get_attribute(changeset, :status)
@@ -1334,6 +1469,11 @@ defmodule MishkaBlog.BlogPost do
       accept List.delete(@admin_fields, :site_id)
       multitenancy :bypass
 
+      # Arguments for managing relationships during update
+      argument :collection_ids, {:array, :uuid} do
+        description "List of collection IDs to assign this post to (replaces existing)"
+      end
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
       # Records are related within the post's own site, whoever the caller is.
@@ -1349,6 +1489,13 @@ defmodule MishkaBlog.BlogPost do
       end
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+
+      # Manage relationships within the post's own site
+      change manage_relationship(:collection_ids, :tenant_collections,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
 
       change fn changeset, _context ->
         status = Ash.Changeset.get_attribute(changeset, :status)
@@ -1614,6 +1761,62 @@ defmodule MishkaBlog.BlogPost do
       validate present([:scheduled_publish_at])
 
       change set_attribute(:status, :scheduled)
+    end
+
+    update :assign_collections do
+      description "Replaces post's collections with the provided list of collection IDs"
+      accept []
+      require_atomic? false
+
+      argument :collection_ids, {:array, :uuid} do
+        allow_nil? false
+        description "List of collection IDs to assign this post to"
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      change manage_relationship(:collection_ids, :tenant_collections,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
+    end
+
+    update :add_collection do
+      description "Adds post to a single collection"
+      accept []
+      require_atomic? false
+
+      argument :collection_id, :uuid do
+        allow_nil? false
+        description "Collection ID to add this post to"
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      change manage_relationship(:collection_id, :tenant_collections,
+               type: :append,
+               on_no_match: :error
+             )
+    end
+
+    update :remove_collection do
+      description "Removes post from a single collection"
+      accept []
+      require_atomic? false
+
+      argument :collection_id, :uuid do
+        allow_nil? false
+        description "Collection ID to remove this post from"
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      change manage_relationship(:collection_id, :tenant_collections,
+               type: :remove,
+               on_no_match: :ignore,
+               on_missing: :ignore
+             )
     end
 
     destroy :destroy do
@@ -2341,6 +2544,37 @@ defmodule MishkaBlog.BlogPost do
       description "All language variants (translations) of this blog post"
     end
 
+    # Relationship - for public/guest users
+    many_to_many :collections, MishkaBlog.Collection do
+      public? true
+      description "Collections this post belongs to (public access)"
+      through MishkaBlog.PostCollection
+      source_attribute_on_join_resource :post_id
+      destination_attribute_on_join_resource :collection_id
+      read_action :public_list
+    end
+
+    # Relationship - for admin users with tenant
+    many_to_many :tenant_collections, MishkaBlog.Collection do
+      public? true
+      description "Collections this post belongs to (tenant admin access)"
+      through MishkaBlog.PostCollection
+      source_attribute_on_join_resource :post_id
+      destination_attribute_on_join_resource :collection_id
+    end
+
+    # Bypass relationship - for admin users without tenant
+    many_to_many :master_collections, MishkaBlog.Collection do
+      public? true
+      description "Collections this post belongs to (master admin access, bypass tenant)"
+      through MishkaBlog.PostCollection
+      source_attribute_on_join_resource :post_id
+      destination_attribute_on_join_resource :collection_id
+      read_action :master_read
+
+      filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
+    end
+
     # VERSION MANAGEMENT - sorted_versions relationship for loading version history
     # Loaded through `:sorted_versions` as whoever runs the read. A version query handed to a load
     # is left unbuilt (`Ash.Query.new/1`) so that this action builds it for that reader.
@@ -2421,6 +2655,12 @@ defmodule MishkaBlog.BlogPost do
   end
 
   aggregates do
+    count :collection_count, :tenant_collections do
+      public? true
+      multitenancy :bypass
+      description "Total number of collections this post belongs to"
+    end
+
     count :version_count, :sorted_versions do
       public? true
       multitenancy :bypass

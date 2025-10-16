@@ -133,6 +133,18 @@ defmodule MishkaBlog.Test.Factory do
     end
   end
 
+  # Collection factory
+  def create_collection!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    # Collection MUST have a site_id (not global)
+    site_id = site_id || create_site!().id
+    tenant = site_id
+
+    overrides
+    |> collection(tenant)
+    |> generate()
+  end
+
   # BlogPost factory
   def create_blog_post!(overrides \\ []) do
     {site_id, overrides} = Keyword.pop(overrides, :site_id)
@@ -144,4 +156,44 @@ defmodule MishkaBlog.Test.Factory do
     |> blog_post(tenant)
     |> generate()
   end
+
+  # PostCollection factory
+  def create_post_collection!(overrides \\ []) do
+    {post_id, overrides} = Keyword.pop(overrides, :post_id)
+    {collection_id, overrides} = Keyword.pop(overrides, :collection_id)
+
+    {post_id, collection_id} =
+      on_one_site(
+        {MishkaBlog.BlogPost, post_id, &create_blog_post!/1},
+        {MishkaBlog.Collection, collection_id, &create_collection!/1}
+      )
+
+    overrides
+    |> Keyword.put(:post_id, post_id)
+    |> Keyword.put(:collection_id, collection_id)
+    |> post_collection()
+    |> generate()
+  end
+
+  # A row that joins two records joins two records of ONE site, as a site's own writes do; the one
+  # not given is made on the site of the one that is.
+  defp on_one_site({left, left_id, make_left}, {right, right_id, make_right}) do
+    case {left_id, right_id} do
+      {nil, nil} ->
+        record = make_left.([])
+        {record.id, make_right.(site_id: record.site_id).id}
+
+      {left_id, nil} ->
+        {left_id, make_right.(site_id: site_of(left, left_id)).id}
+
+      {nil, right_id} ->
+        {make_left.(site_id: site_of(right, right_id)).id, right_id}
+
+      given ->
+        given
+    end
+  end
+
+  defp site_of(resource, id),
+    do: Ash.get!(resource, id, action: :master_get, authorize?: false).site_id
 end

@@ -10,6 +10,30 @@ defmodule MishkaBlog.Dev.Generator do
   # TEST generators
   # ---------------------------------------------------------------------------
 
+  def collection(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaBlog.Collection,
+      :create,
+      authorize?: false,
+      defaults: [
+        name: sequence(:name, &"Test Collection #{&1}"),
+        slug: sequence(:slug, &"test-collection-#{&1}"),
+        description: sequence(:description, &"Test collection description #{&1}"),
+        status: StreamData.member_of([:active, :draft, :archived]),
+        schema: [],
+        seo_tags: [],
+        featured: false,
+        display_order: 0,
+        language: "en",
+        language_group_id: nil,
+        parent_collection_id: nil,
+        site_id: nil
+      ],
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
   def blog_post(opts \\ [], tenant \\ nil) do
     changeset_generator(
       MishkaBlog.BlogPost,
@@ -33,6 +57,19 @@ defmodule MishkaBlog.Dev.Generator do
       ],
       overrides: opts,
       tenant: tenant
+    )
+  end
+
+  def post_collection(opts \\ []) do
+    changeset_generator(
+      MishkaBlog.PostCollection,
+      :assign,
+      authorize?: false,
+      defaults: [
+        post_id: nil,
+        collection_id: nil
+      ],
+      overrides: opts
     )
   end
 end

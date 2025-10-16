@@ -880,6 +880,301 @@ defmodule MishkaBlog.Test.BlogPostTest do
       end
     end
 
+    describe "collection relationships" do
+      test "creates post and assigns it to multiple collections in same tenant" do
+        site = create_site!()
+
+        # Create 2 collections in the same tenant
+        collection1 =
+          create_collection!(
+            name: "Collection 1",
+            slug: "collection-1",
+            status: :active,
+            site_id: site.id
+          )
+
+        collection2 =
+          create_collection!(
+            name: "Collection 2",
+            slug: "collection-2",
+            status: :active,
+            site_id: site.id
+          )
+
+        # Create a post and assign it to these collections
+        blog_post =
+          BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              title: "Post with Collections",
+              slug: "post-with-collections",
+              content: "<p>Content</p>",
+              status: :draft,
+              language: "en",
+              collection_ids: [collection1.id, collection2.id]
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Load collections relationship
+        blog_post_with_collections =
+          Ash.load!(blog_post, :collections, tenant: site.id, authorize?: false)
+
+        collection_ids =
+          Enum.map(blog_post_with_collections.collections, & &1.id) |> Enum.sort()
+
+        assert length(blog_post_with_collections.collections) == 2
+        assert Enum.sort([collection1.id, collection2.id]) == collection_ids
+      end
+
+      test "master_create: creates post and assigns it to multiple collections in same tenant" do
+        site = create_site!()
+
+        # Create 2 collections in the same tenant
+        collection1 =
+          create_collection!(
+            name: "Collection 1",
+            slug: "collection-1",
+            status: :active,
+            site_id: site.id
+          )
+
+        collection2 =
+          create_collection!(
+            name: "Collection 2",
+            slug: "collection-2",
+            status: :active,
+            site_id: site.id
+          )
+
+        # Create a post using master_create and assign it to these collections
+        blog_post =
+          BlogPost
+          |> Ash.Changeset.for_create(
+            :master_create,
+            %{
+              title: "Master Post with Collections",
+              slug: "master-post-with-collections",
+              content: "<p>Content</p>",
+              status: :draft,
+              language: "en",
+              site_id: site.id,
+              collection_ids: [collection1.id, collection2.id]
+            },
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Load collections relationship
+        blog_post_with_collections =
+          Ash.load!(blog_post, :collections, tenant: site.id, authorize?: false)
+
+        collection_ids =
+          Enum.map(blog_post_with_collections.collections, & &1.id) |> Enum.sort()
+
+        assert length(blog_post_with_collections.collections) == 2
+        assert Enum.sort([collection1.id, collection2.id]) == collection_ids
+      end
+
+      test "prevents assigning post to collection from different tenant" do
+        site_a = create_site!()
+        site_b = create_site!()
+
+        # Create collection in tenant A
+        collection_a =
+          create_collection!(
+            name: "Collection A",
+            slug: "collection-a",
+            status: :active,
+            site_id: site_a.id
+          )
+
+        # Try to create a post in tenant B with a collection from tenant A
+        # This should fail because the collection doesn't exist in tenant B
+        assert_raise Ash.Error.Invalid, fn ->
+          BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              title: "Post in Tenant B",
+              slug: "post-tenant-b",
+              content: "<p>Content</p>",
+              status: :draft,
+              language: "en",
+              collection_ids: [collection_a.id]
+            },
+            tenant: site_b.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+        end
+      end
+
+      test "master_create: prevents assigning post to collection from different tenant" do
+        site_a = create_site!()
+        site_b = create_site!()
+
+        # Create collection in tenant A
+        collection_a =
+          create_collection!(
+            name: "Collection A",
+            slug: "collection-a",
+            status: :active,
+            site_id: site_a.id
+          )
+
+        # Try to create a post in tenant B with a collection from tenant A using master_create
+        # This should fail because even though master_create sets the tenant to site_b.id,
+        # the collection only exists in tenant A
+        assert_raise Ash.Error.Invalid, fn ->
+          BlogPost
+          |> Ash.Changeset.for_create(
+            :master_create,
+            %{
+              title: "Master Post in Tenant B",
+              slug: "master-post-tenant-b",
+              content: "<p>Content</p>",
+              status: :draft,
+              language: "en",
+              site_id: site_b.id,
+              collection_ids: [collection_a.id]
+            },
+            authorize?: false
+          )
+          |> Ash.create!()
+        end
+      end
+
+      test "can add collections to existing post" do
+        site = create_site!()
+
+        collection1 = create_collection!(name: "Collection 1", status: :active, site_id: site.id)
+        collection2 = create_collection!(name: "Collection 2", status: :active, site_id: site.id)
+
+        # Create post without collections
+        blog_post = create_blog_post!(title: "Post", site_id: site.id)
+
+        # Add collection using add_collection action
+        updated =
+          blog_post
+          |> Ash.Changeset.for_update(
+            :add_collection,
+            %{collection_id: collection1.id},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.update!()
+
+        # Add another collection
+        updated2 =
+          updated
+          |> Ash.Changeset.for_update(
+            :add_collection,
+            %{collection_id: collection2.id},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.update!()
+
+        # Load and verify
+        post_with_collections =
+          Ash.load!(updated2, :collections, tenant: site.id, authorize?: false)
+
+        collection_ids = Enum.map(post_with_collections.collections, & &1.id) |> Enum.sort()
+        assert Enum.sort([collection1.id, collection2.id]) == collection_ids
+      end
+
+      test "can remove collection from post" do
+        site = create_site!()
+
+        collection1 = create_collection!(name: "Collection 1", status: :active, site_id: site.id)
+        collection2 = create_collection!(name: "Collection 2", status: :active, site_id: site.id)
+
+        # Create post with collections
+        blog_post =
+          BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              title: "Post",
+              slug: "post",
+              content: "<p>Content</p>",
+              status: :draft,
+              language: "en",
+              collection_ids: [collection1.id, collection2.id]
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Remove one collection
+        updated =
+          blog_post
+          |> Ash.Changeset.for_update(
+            :remove_collection,
+            %{collection_id: collection1.id},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.update!()
+
+        # Load and verify
+        post_with_collections =
+          Ash.load!(updated, :collections, tenant: site.id, authorize?: false)
+
+        assert length(post_with_collections.collections) == 1
+        assert Enum.at(post_with_collections.collections, 0).id == collection2.id
+      end
+
+      test "can replace all collections using assign_collections" do
+        site = create_site!()
+
+        collection1 = create_collection!(name: "Collection 1", status: :active, site_id: site.id)
+        collection2 = create_collection!(name: "Collection 2", status: :active, site_id: site.id)
+        collection3 = create_collection!(name: "Collection 3", status: :active, site_id: site.id)
+
+        # Create post with collections 1 and 2
+        blog_post =
+          BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              title: "Post",
+              slug: "post",
+              content: "<p>Content</p>",
+              status: :draft,
+              language: "en",
+              collection_ids: [collection1.id, collection2.id]
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Replace with collection 3
+        updated =
+          blog_post
+          |> Ash.Changeset.for_update(
+            :assign_collections,
+            %{collection_ids: [collection3.id]},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.update!()
+
+        # Load and verify
+        post_with_collections =
+          Ash.load!(updated, :collections, tenant: site.id, authorize?: false)
+
+        assert length(post_with_collections.collections) == 1
+        assert Enum.at(post_with_collections.collections, 0).id == collection3.id
+      end
+    end
+
     describe "JSON API configuration" do
       test "has correct JSON API type" do
         json_api_type = AshJsonApi.Resource.Info.type(BlogPost)

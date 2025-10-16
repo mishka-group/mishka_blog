@@ -895,6 +895,207 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
       end
     end
 
+    describe "Paginated relationships - BlogPost with collections" do
+      test "public can include post collections with pagination", %{site: site} do
+        # Create post
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              title: "Post with Collections",
+              slug: "post-with-collections",
+              content: "Content",
+              status: :published
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 15 collections and add post to them
+        collection_ids =
+          Enum.map(1..15, fn i ->
+            collection =
+              MishkaBlog.Collection
+              |> Ash.Changeset.for_create(
+                :create,
+                %{
+                  name: "Collection #{i}",
+                  slug: "collection-#{i}",
+                  description: "Desc #{i}",
+                  status: :active
+                },
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            MishkaBlog.PostCollection
+            |> Ash.Changeset.for_create(
+              :assign,
+              %{post_id: post.id, collection_id: collection.id},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+            collection.id
+          end)
+
+        # Fetch post with paginated collections (limit 10)
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?include=collections&included_page[collections][limit]=10&included_page[collections][offset]=0",
+            %{},
+            method: :get,
+            headers: []
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        # Verify post data
+        assert body["data"]["id"] == post.id
+
+        # Verify included collections (should be limited to 10)
+        assert is_list(body["included"])
+
+        collection_records =
+          Enum.filter(body["included"], fn inc -> inc["type"] == "collection" end)
+
+        assert length(collection_records) == 10
+
+        # Verify all included collections are from our created list
+        included_collection_ids = Enum.map(collection_records, & &1["id"])
+        Enum.each(included_collection_ids, fn id -> assert id in collection_ids end)
+      end
+
+      test "tenant admin can include tenant_collections with pagination", %{
+        tenant_admin: tenant_admin,
+        site: site
+      } do
+        token = sign_in_tenant(tenant_admin)
+
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{title: "Tenant Post", slug: "tenant-post", content: "Content", status: :draft},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 12 collections
+        _collection_ids =
+          Enum.map(1..12, fn i ->
+            collection =
+              MishkaBlog.Collection
+              |> Ash.Changeset.for_create(
+                :create,
+                %{name: "Col #{i}", slug: "col-#{i}", status: :active},
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            MishkaBlog.PostCollection
+            |> Ash.Changeset.for_create(
+              :assign,
+              %{post_id: post.id, collection_id: collection.id},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+            collection.id
+          end)
+
+        # Fetch post with paginated tenant_collections
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/#{post.id}?include=tenant_collections&included_page[tenant_collections][limit]=8",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        collection_records =
+          Enum.filter(body["included"], fn inc -> inc["type"] == "collection" end)
+
+        assert length(collection_records) == 8
+      end
+
+      test "master admin can include master_collections with pagination", %{
+        master_user: master_user,
+        site: site
+      } do
+        token = sign_in_master(master_user)
+
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :master_create,
+            %{
+              title: "Master Post",
+              slug: "master-post",
+              content: "Content",
+              status: :published,
+              site_id: site.id
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 20 collections
+        _collection_ids =
+          Enum.map(1..20, fn i ->
+            collection =
+              MishkaBlog.Collection
+              |> Ash.Changeset.for_create(
+                :create,
+                %{name: "MC #{i}", slug: "mc-#{i}", status: :active},
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            MishkaBlog.PostCollection
+            |> Ash.Changeset.for_create(
+              :assign,
+              %{post_id: post.id, collection_id: collection.id},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+            collection.id
+          end)
+
+        # Fetch post with paginated master_collections
+        response =
+          make_api_request(
+            "#{@api_master_path}/#{post.id}?include=master_collections&included_page[master_collections][limit]=15",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        collection_records =
+          Enum.filter(body["included"], fn inc -> inc["type"] == "collection" end)
+
+        assert length(collection_records) == 15
+      end
+    end
+
     describe "STATUS-SPECIFIC LISTINGS - Tenant Admin" do
       test "tenant admin can list published posts", %{tenant_admin: tenant_admin, site: site} do
         token = sign_in_tenant(tenant_admin)
