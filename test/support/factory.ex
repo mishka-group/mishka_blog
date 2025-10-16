@@ -11,6 +11,7 @@ defmodule MishkaBlog.Test.Factory do
   Blog records are tenant-scoped, so each wrapper pops `:site_id` and passes it as the Ash tenant.
   """
 
+  import MishkaBlog.Dev.Generator, except: [generate: 1, generate: 2]
   import MishkaCmsCore.Dev.Generator, except: [generate: 1, generate: 2]
   import Ash.Generator, only: [generate: 1]
 
@@ -130,5 +131,17 @@ defmodule MishkaBlog.Test.Factory do
       {:ok, nil} -> create_permission!(name: name)
       {:ok, permission} -> permission
     end
+  end
+
+  # BlogPost factory
+  def create_blog_post!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    # BlogPost MUST have a site_id (not global)
+    site_id = site_id || create_site!().id
+    tenant = site_id
+
+    overrides
+    |> blog_post(tenant)
+    |> generate()
   end
 end
