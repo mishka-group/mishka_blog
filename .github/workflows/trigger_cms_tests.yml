@@ -1,0 +1,29 @@
+name: Trigger CMS Tests
+
+on:
+  push:
+    branches: [none_master]
+  pull_request:
+    branches: [none_master]
+
+jobs:
+  trigger-cms:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger mishka_cms workflow
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.CMS_REPO_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: '${{ github.repository_owner }}',
+              repo: 'temp_mishka_cms',
+              workflow_id: 'test_with_extentions.yml',
+              ref: 'master',
+              inputs: {
+                blog_ref: '${{ github.sha }}'
+              }
+            })
+
+      - name: Wait for workflow to start
+        run: echo "Triggered mishka_cms tests with blog ref ${{ github.sha }}"
