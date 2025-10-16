@@ -1096,6 +1096,120 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
       end
     end
 
+    describe "Paginated relationships - BlogPost with tags" do
+      test "public can include post tags with pagination", %{site: site} do
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{title: "Tagged Post", slug: "tagged-post", content: "Content", status: :published},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 18 tags
+        tag_ids =
+          Enum.map(1..18, fn i ->
+            tag =
+              MishkaBlog.Tag
+              |> Ash.Changeset.for_create(
+                :create,
+                %{name: "Tag #{i}", slug: "tag-#{i}"},
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            MishkaBlog.PostTag
+            |> Ash.Changeset.for_create(
+              :assign,
+              %{post_id: post.id, tag_id: tag.id},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+            tag.id
+          end)
+
+        # Fetch post with paginated tags
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?include=tags&included_page[tags][limit]=10",
+            %{},
+            method: :get,
+            headers: []
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        tag_records = Enum.filter(body["included"], fn inc -> inc["type"] == "tag" end)
+        assert length(tag_records) == 10
+
+        included_tag_ids = Enum.map(tag_records, & &1["id"])
+        Enum.each(included_tag_ids, fn id -> assert id in tag_ids end)
+      end
+
+      test "tenant admin can include tenant_tags with pagination", %{
+        tenant_admin: tenant_admin,
+        site: site
+      } do
+        token = sign_in_tenant(tenant_admin)
+
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{title: "Post", slug: "post", content: "Content", status: :draft},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 25 tags
+        _tag_ids =
+          Enum.map(1..25, fn i ->
+            tag =
+              MishkaBlog.Tag
+              |> Ash.Changeset.for_create(
+                :create,
+                %{name: "TTag #{i}", slug: "ttag-#{i}"},
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            MishkaBlog.PostTag
+            |> Ash.Changeset.for_create(
+              :assign,
+              %{post_id: post.id, tag_id: tag.id},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+            tag.id
+          end)
+
+        # Fetch with pagination
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/#{post.id}?include=tenant_tags&included_page[tenant_tags][limit]=15",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        tag_records = Enum.filter(body["included"], fn inc -> inc["type"] == "tag" end)
+        assert length(tag_records) == 15
+      end
+    end
+
     describe "STATUS-SPECIFIC LISTINGS - Tenant Admin" do
       test "tenant admin can list published posts", %{tenant_admin: tenant_admin, site: site} do
         token = sign_in_tenant(tenant_admin)

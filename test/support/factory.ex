@@ -175,6 +175,36 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
+  # Tag factory
+  def create_blog_tag!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    # Tag MUST have a site_id (not global)
+    site_id = site_id || create_site!().id
+    tenant = site_id
+
+    overrides
+    |> tag(tenant)
+    |> generate()
+  end
+
+  # PostTag factory
+  def create_post_tag!(overrides \\ []) do
+    {post_id, overrides} = Keyword.pop(overrides, :post_id)
+    {tag_id, overrides} = Keyword.pop(overrides, :tag_id)
+
+    {post_id, tag_id} =
+      on_one_site(
+        {MishkaBlog.BlogPost, post_id, &create_blog_post!/1},
+        {MishkaBlog.Tag, tag_id, &create_blog_tag!/1}
+      )
+
+    overrides
+    |> Keyword.put(:post_id, post_id)
+    |> Keyword.put(:tag_id, tag_id)
+    |> post_tag()
+    |> generate()
+  end
+
   # A row that joins two records joins two records of ONE site, as a site's own writes do; the one
   # not given is made on the site of the one that is.
   defp on_one_site({left, left_id, make_left}, {right, right_id, make_right}) do

@@ -72,4 +72,36 @@ defmodule MishkaBlog.Dev.Generator do
       overrides: opts
     )
   end
+
+  def tag(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaBlog.Tag,
+      :create,
+      authorize?: false,
+      defaults: [
+        name: sequence(:name, &"Test Tag #{&1}"),
+        slug: sequence(:slug, &"test-tag-#{&1}"),
+        description: sequence(:description, &"Test tag description #{&1}"),
+        language: "en",
+        language_group_id: nil,
+        parent_tag_id: nil,
+        site_id: nil
+      ],
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
+  def post_tag(opts \\ []) do
+    changeset_generator(
+      MishkaBlog.PostTag,
+      :assign,
+      authorize?: false,
+      defaults: [
+        post_id: nil,
+        tag_id: nil
+      ],
+      overrides: opts
+    )
+  end
 end

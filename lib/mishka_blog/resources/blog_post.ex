@@ -242,13 +242,19 @@ defmodule MishkaBlog.BlogPost do
     includes [
       :collections,
       :master_collections,
-      :tenant_collections
+      :tenant_collections,
+      :tags,
+      :master_tags,
+      :tenant_tags
     ]
 
     paginated_includes [
       :collections,
       :master_collections,
-      :tenant_collections
+      :tenant_collections,
+      :tags,
+      :master_tags,
+      :tenant_tags
     ]
   end
 
@@ -266,7 +272,8 @@ defmodule MishkaBlog.BlogPost do
           always [
             :site,
             :version_count,
-            :collection_count
+            :collection_count,
+            :tag_count
           ]
         end
       end
@@ -382,6 +389,7 @@ defmodule MishkaBlog.BlogPost do
 
           requires [
             :collection_count,
+            :tag_count,
             :version_count,
             :language,
             :featured
@@ -397,6 +405,7 @@ defmodule MishkaBlog.BlogPost do
           render fn record ->
             assigns = %{
               collection_count: record.collection_count || 0,
+              tag_count: record.tag_count || 0,
               version_count: record.version_count || 0,
               language: record.language,
               featured: record.featured
@@ -410,6 +419,10 @@ defmodule MishkaBlog.BlogPost do
               >
                 <.icon name="hero-folder" class="size-[13px] text-[#c3c0b8]" />
                 {@collection_count}
+              </span>
+              <span class="inline-flex items-center gap-[5px]" title={dgettext("mishka_gervaz", "Tags")}>
+                <.icon name="hero-tag" class="size-[13px] text-[#c3c0b8]" />
+                {@tag_count}
               </span>
               <span class="inline-flex items-center gap-[5px]" title={dgettext("mishka_gervaz", "Versions")}>
                 <.icon name="hero-clock" class="size-[13px] text-[#c3c0b8]" />
@@ -906,8 +919,8 @@ defmodule MishkaBlog.BlogPost do
 
       source do
         preload do
-          master [:master_collections]
-          tenant [:tenant_collections]
+          master [:master_collections, :master_tags]
+          tenant [:tenant_collections, :tenant_tags]
         end
       end
 
@@ -1043,6 +1056,42 @@ defmodule MishkaBlog.BlogPost do
           end
         end
 
+        field :tag_ids, :relation do
+          virtual true
+          resource MishkaBlog.Tag
+          display_field :name
+          search_field :name
+          mode :search_multi
+          depends_on :site_id
+
+          load fn query, state ->
+            site_id =
+              if state.master_user? do
+                Map.get(state.field_values, :site_id)
+              else
+                Map.get(state.current_user, :site_id)
+              end
+
+            Ash.Query.filter_input(query, %{site_id: site_id})
+          end
+
+          derive_value fn record ->
+            tags =
+              cond do
+                is_list(Map.get(record, :master_tags)) -> record.master_tags
+                is_list(Map.get(record, :tenant_tags)) -> record.tenant_tags
+                is_list(Map.get(record, :tags)) -> record.tags
+                true -> []
+              end
+
+            Enum.map(tags, &to_string(&1.id))
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Tags") end
+          end
+        end
+
         field :content, :textarea do
           required true
 
@@ -1139,7 +1188,7 @@ defmodule MishkaBlog.BlogPost do
         end
 
         group :relationships do
-          fields [:collection_ids]
+          fields [:collection_ids, :tag_ids]
 
           ui do
             columns 1
@@ -1240,6 +1289,10 @@ defmodule MishkaBlog.BlogPost do
         description "List of collection IDs to assign this post to"
       end
 
+      argument :tag_ids, {:array, :uuid} do
+        description "List of tag IDs to assign to this post"
+      end
+
       validate present([:title])
       validate present([:slug])
       validate present([:content])
@@ -1263,6 +1316,12 @@ defmodule MishkaBlog.BlogPost do
 
       # Manage relationships if provided
       change manage_relationship(:collection_ids, :tenant_collections,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
+
+      change manage_relationship(:tag_ids, :tenant_tags,
                type: :append_and_remove,
                on_no_match: :error,
                on_match: :ignore
@@ -1314,6 +1373,10 @@ defmodule MishkaBlog.BlogPost do
         description "List of collection IDs to assign this post to"
       end
 
+      argument :tag_ids, {:array, :uuid} do
+        description "List of tag IDs to assign to this post"
+      end
+
       validate present([:title])
       validate present([:slug])
       validate present([:content])
@@ -1333,6 +1396,12 @@ defmodule MishkaBlog.BlogPost do
 
       # Manage relationships within the post's own site
       change manage_relationship(:collection_ids, :tenant_collections,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
+
+      change manage_relationship(:tag_ids, :tenant_tags,
                type: :append_and_remove,
                on_no_match: :error,
                on_match: :ignore
@@ -1389,6 +1458,10 @@ defmodule MishkaBlog.BlogPost do
         description "List of collection IDs to assign this post to (replaces existing)"
       end
 
+      argument :tag_ids, {:array, :uuid} do
+        description "List of tag IDs to assign to this post (replaces existing)"
+      end
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantIsolation,
@@ -1412,6 +1485,12 @@ defmodule MishkaBlog.BlogPost do
 
       # Manage relationships if provided
       change manage_relationship(:collection_ids, :tenant_collections,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
+
+      change manage_relationship(:tag_ids, :tenant_tags,
                type: :append_and_remove,
                on_no_match: :error,
                on_match: :ignore
@@ -1474,6 +1553,10 @@ defmodule MishkaBlog.BlogPost do
         description "List of collection IDs to assign this post to (replaces existing)"
       end
 
+      argument :tag_ids, {:array, :uuid} do
+        description "List of tag IDs to assign to this post (replaces existing)"
+      end
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
       # Records are related within the post's own site, whoever the caller is.
@@ -1492,6 +1575,12 @@ defmodule MishkaBlog.BlogPost do
 
       # Manage relationships within the post's own site
       change manage_relationship(:collection_ids, :tenant_collections,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
+
+      change manage_relationship(:tag_ids, :tenant_tags,
                type: :append_and_remove,
                on_no_match: :error,
                on_match: :ignore
@@ -1817,6 +1906,55 @@ defmodule MishkaBlog.BlogPost do
                on_no_match: :ignore,
                on_missing: :ignore
              )
+    end
+
+    update :assign_tags do
+      description "Replaces post's tags with the provided list of tag IDs"
+      accept []
+      require_atomic? false
+
+      argument :tag_ids, {:array, :uuid} do
+        allow_nil? false
+        description "List of tag IDs to assign to this post"
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      change manage_relationship(:tag_ids, :tenant_tags,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
+    end
+
+    update :add_tag do
+      description "Adds a single tag to the post"
+      accept []
+      require_atomic? false
+
+      argument :tag_id, :uuid do
+        allow_nil? false
+        description "Tag ID to add to this post"
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      change manage_relationship(:tag_id, :tenant_tags, type: :append, on_no_match: :error)
+    end
+
+    update :remove_tag do
+      description "Removes a single tag from the post"
+      accept []
+      require_atomic? false
+
+      argument :tag_id, :uuid do
+        allow_nil? false
+        description "Tag ID to remove from this post"
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      change manage_relationship(:tag_id, :tenant_tags, type: :remove)
     end
 
     destroy :destroy do
@@ -2575,6 +2713,37 @@ defmodule MishkaBlog.BlogPost do
       filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
     end
 
+    # Relationship - for public/guest users
+    many_to_many :tags, MishkaBlog.Tag do
+      public? true
+      description "Tags categorizing this post (public access)"
+      through MishkaBlog.PostTag
+      source_attribute_on_join_resource :post_id
+      destination_attribute_on_join_resource :tag_id
+      read_action :public_list
+    end
+
+    # Relationship - for admin users with tenant
+    many_to_many :tenant_tags, MishkaBlog.Tag do
+      public? true
+      description "Tags categorizing this post (tenant admin access)"
+      through MishkaBlog.PostTag
+      source_attribute_on_join_resource :post_id
+      destination_attribute_on_join_resource :tag_id
+    end
+
+    # Bypass relationship - for admin users without tenant
+    many_to_many :master_tags, MishkaBlog.Tag do
+      public? true
+      description "Tags categorizing this post (master admin access, bypass tenant)"
+      through MishkaBlog.PostTag
+      source_attribute_on_join_resource :post_id
+      destination_attribute_on_join_resource :tag_id
+      read_action :master_read
+
+      filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
+    end
+
     # VERSION MANAGEMENT - sorted_versions relationship for loading version history
     # Loaded through `:sorted_versions` as whoever runs the read. A version query handed to a load
     # is left unbuilt (`Ash.Query.new/1`) so that this action builds it for that reader.
@@ -2659,6 +2828,12 @@ defmodule MishkaBlog.BlogPost do
       public? true
       multitenancy :bypass
       description "Total number of collections this post belongs to"
+    end
+
+    count :tag_count, :tenant_tags do
+      public? true
+      multitenancy :bypass
+      description "Total number of tags assigned to this post"
     end
 
     count :version_count, :sorted_versions do
