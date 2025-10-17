@@ -245,7 +245,13 @@ defmodule MishkaBlog.BlogPost do
       :tenant_collections,
       :tags,
       :master_tags,
-      :tenant_tags
+      :tenant_tags,
+      :bloggers,
+      :master_bloggers,
+      :tenant_bloggers,
+      bloggers: [:user],
+      master_bloggers: [:user],
+      tenant_bloggers: [:user]
     ]
 
     paginated_includes [
@@ -254,7 +260,13 @@ defmodule MishkaBlog.BlogPost do
       :tenant_collections,
       :tags,
       :master_tags,
-      :tenant_tags
+      :tenant_tags,
+      :bloggers,
+      :master_bloggers,
+      :tenant_bloggers,
+      [:bloggers, :user],
+      [:master_bloggers, :user],
+      [:tenant_bloggers, :user]
     ]
   end
 
@@ -919,8 +931,8 @@ defmodule MishkaBlog.BlogPost do
 
       source do
         preload do
-          master [:master_collections, :master_tags]
-          tenant [:tenant_collections, :tenant_tags]
+          master [:master_collections, :master_tags, :master_bloggers]
+          tenant [:tenant_collections, :tenant_tags, :tenant_bloggers]
         end
       end
 
@@ -1056,6 +1068,51 @@ defmodule MishkaBlog.BlogPost do
           end
         end
 
+        field :blogger_ids, :relation do
+          virtual true
+          resource MishkaBlog.Blogger
+          search_field :display_name
+          mode :search_multi
+          depends_on :site_id
+
+          display_field fn blogger ->
+            case blogger do
+              %{user: %{email: email}} when not is_nil(email) -> to_string(email)
+              %{display_name: name} when not is_nil(name) -> name
+              _ -> to_string(blogger.id)
+            end
+          end
+
+          load fn query, state ->
+            query = Ash.Query.load(query, :user)
+
+            site_id =
+              if state.master_user? do
+                Map.get(state.field_values, :site_id)
+              else
+                Map.get(state.current_user, :site_id)
+              end
+
+            Ash.Query.filter_input(query, %{site_id: site_id})
+          end
+
+          derive_value fn record ->
+            bloggers =
+              cond do
+                is_list(Map.get(record, :master_bloggers)) -> record.master_bloggers
+                is_list(Map.get(record, :tenant_bloggers)) -> record.tenant_bloggers
+                is_list(Map.get(record, :bloggers)) -> record.bloggers
+                true -> []
+              end
+
+            Enum.map(bloggers, &to_string(&1.id))
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Bloggers / Authors") end
+          end
+        end
+
         field :tag_ids, :relation do
           virtual true
           resource MishkaBlog.Tag
@@ -1188,7 +1245,7 @@ defmodule MishkaBlog.BlogPost do
         end
 
         group :relationships do
-          fields [:collection_ids, :tag_ids]
+          fields [:collection_ids, :blogger_ids, :tag_ids]
 
           ui do
             columns 1
@@ -1293,6 +1350,10 @@ defmodule MishkaBlog.BlogPost do
         description "List of tag IDs to assign to this post"
       end
 
+      argument :blogger_ids, {:array, :uuid} do
+        description "List of blogger IDs to assign as authors"
+      end
+
       validate present([:title])
       validate present([:slug])
       validate present([:content])
@@ -1322,6 +1383,12 @@ defmodule MishkaBlog.BlogPost do
              )
 
       change manage_relationship(:tag_ids, :tenant_tags,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
+
+      change manage_relationship(:blogger_ids, :tenant_bloggers,
                type: :append_and_remove,
                on_no_match: :error,
                on_match: :ignore
@@ -1377,6 +1444,10 @@ defmodule MishkaBlog.BlogPost do
         description "List of tag IDs to assign to this post"
       end
 
+      argument :blogger_ids, {:array, :uuid} do
+        description "List of blogger IDs to assign as authors"
+      end
+
       validate present([:title])
       validate present([:slug])
       validate present([:content])
@@ -1402,6 +1473,12 @@ defmodule MishkaBlog.BlogPost do
              )
 
       change manage_relationship(:tag_ids, :tenant_tags,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
+
+      change manage_relationship(:blogger_ids, :tenant_bloggers,
                type: :append_and_remove,
                on_no_match: :error,
                on_match: :ignore
@@ -1462,6 +1539,10 @@ defmodule MishkaBlog.BlogPost do
         description "List of tag IDs to assign to this post (replaces existing)"
       end
 
+      argument :blogger_ids, {:array, :uuid} do
+        description "List of blogger IDs to assign as authors (replaces existing)"
+      end
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantIsolation,
@@ -1491,6 +1572,12 @@ defmodule MishkaBlog.BlogPost do
              )
 
       change manage_relationship(:tag_ids, :tenant_tags,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
+
+      change manage_relationship(:blogger_ids, :tenant_bloggers,
                type: :append_and_remove,
                on_no_match: :error,
                on_match: :ignore
@@ -1557,6 +1644,10 @@ defmodule MishkaBlog.BlogPost do
         description "List of tag IDs to assign to this post (replaces existing)"
       end
 
+      argument :blogger_ids, {:array, :uuid} do
+        description "List of blogger IDs to assign as authors (replaces existing)"
+      end
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
       # Records are related within the post's own site, whoever the caller is.
@@ -1581,6 +1672,12 @@ defmodule MishkaBlog.BlogPost do
              )
 
       change manage_relationship(:tag_ids, :tenant_tags,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
+
+      change manage_relationship(:blogger_ids, :tenant_bloggers,
                type: :append_and_remove,
                on_no_match: :error,
                on_match: :ignore
@@ -1850,6 +1947,58 @@ defmodule MishkaBlog.BlogPost do
       validate present([:scheduled_publish_at])
 
       change set_attribute(:status, :scheduled)
+    end
+
+    update :assign_bloggers do
+      description "Replaces post's authors/co-authors with the provided list of blogger IDs"
+      accept []
+      require_atomic? false
+
+      argument :blogger_ids, {:array, :uuid} do
+        allow_nil? false
+        description "List of blogger IDs to assign as authors/co-authors of this post"
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      change manage_relationship(:blogger_ids, :tenant_bloggers,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
+    end
+
+    update :add_blogger do
+      description "Adds a single blogger as author/co-author to the post"
+      accept []
+      require_atomic? false
+
+      argument :blogger_id, :uuid do
+        allow_nil? false
+        description "Blogger ID to add as author/co-author"
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      change manage_relationship(:blogger_id, :tenant_bloggers,
+               type: :append,
+               on_no_match: :error
+             )
+    end
+
+    update :remove_blogger do
+      description "Removes a single blogger from the post's authors"
+      accept []
+      require_atomic? false
+
+      argument :blogger_id, :uuid do
+        allow_nil? false
+        description "Blogger ID to remove from authors"
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      change manage_relationship(:blogger_id, :tenant_bloggers, type: :remove)
     end
 
     update :assign_collections do
@@ -2683,6 +2832,39 @@ defmodule MishkaBlog.BlogPost do
     end
 
     # Relationship - for public/guest users
+    many_to_many :bloggers, MishkaBlog.Blogger do
+      public? true
+      description "Bloggers who authored or co-authored this post (public access)"
+      through MishkaBlog.PostBlogger
+      source_attribute_on_join_resource :post_id
+      destination_attribute_on_join_resource :blogger_id
+      read_action :public_list
+    end
+
+    # Relationship - for admin users with tenant
+    many_to_many :tenant_bloggers, MishkaBlog.Blogger do
+      public? true
+      description "Bloggers who authored or co-authored this post (tenant admin access)"
+      through MishkaBlog.PostBlogger
+      source_attribute_on_join_resource :post_id
+      destination_attribute_on_join_resource :blogger_id
+    end
+
+    # Bypass relationship - for admin users without tenant
+    many_to_many :master_bloggers, MishkaBlog.Blogger do
+      public? true
+
+      description "Bloggers who authored or co-authored this post (master admin access, bypass tenant)"
+
+      through MishkaBlog.PostBlogger
+      source_attribute_on_join_resource :post_id
+      destination_attribute_on_join_resource :blogger_id
+      read_action :master_read
+
+      filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
+    end
+
+    # Relationship - for public/guest users
     many_to_many :collections, MishkaBlog.Collection do
       public? true
       description "Collections this post belongs to (public access)"
@@ -2834,6 +3016,12 @@ defmodule MishkaBlog.BlogPost do
       public? true
       multitenancy :bypass
       description "Total number of tags assigned to this post"
+    end
+
+    count :blogger_count, :tenant_bloggers do
+      public? true
+      multitenancy :bypass
+      description "Total number of bloggers/authors for this post"
     end
 
     count :version_count, :sorted_versions do

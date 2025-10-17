@@ -60,6 +60,43 @@ defmodule MishkaBlog.Dev.Generator do
     )
   end
 
+  def blogger(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaBlog.Blogger,
+      :create,
+      authorize?: false,
+      defaults: [
+        user_id: nil,
+        display_name: sequence(:display_name, &"Test Blogger #{&1}"),
+        slug: sequence(:slug, &"test-blogger-#{&1}"),
+        bio: sequence(:bio, &"Test bio for blogger #{&1}"),
+        avatar_url: nil,
+        cover_image_url: nil,
+        expertise_areas: [],
+        social_links: [],
+        contact_email: nil,
+        can_publish_directly: false,
+        site_id: nil
+      ],
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
+  def post_blogger(opts \\ []) do
+    changeset_generator(
+      MishkaBlog.PostBlogger,
+      :assign,
+      authorize?: false,
+      defaults: [
+        post_id: nil,
+        blogger_id: nil,
+        role: nil
+      ],
+      overrides: opts
+    )
+  end
+
   def post_collection(opts \\ []) do
     changeset_generator(
       MishkaBlog.PostCollection,

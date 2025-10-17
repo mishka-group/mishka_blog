@@ -157,6 +157,42 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
+  # Blogger factory
+  def create_blogger!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    {user_id, overrides} = Keyword.pop(overrides, :user_id)
+
+    # Blogger MUST have a site_id (not global)
+    site_id = site_id || create_site!().id
+    # Blogger MUST have a user_id, one of the blogger's own site
+    user_id = user_id || create_user!(site_id: site_id).id
+
+    tenant = site_id
+
+    overrides
+    |> Keyword.put(:user_id, user_id)
+    |> blogger(tenant)
+    |> generate()
+  end
+
+  # PostBlogger factory
+  def create_post_blogger!(overrides \\ []) do
+    {post_id, overrides} = Keyword.pop(overrides, :post_id)
+    {blogger_id, overrides} = Keyword.pop(overrides, :blogger_id)
+
+    {post_id, blogger_id} =
+      on_one_site(
+        {MishkaBlog.BlogPost, post_id, &create_blog_post!/1},
+        {MishkaBlog.Blogger, blogger_id, &create_blogger!/1}
+      )
+
+    overrides
+    |> Keyword.put(:post_id, post_id)
+    |> Keyword.put(:blogger_id, blogger_id)
+    |> post_blogger()
+    |> generate()
+  end
+
   # PostCollection factory
   def create_post_collection!(overrides \\ []) do
     {post_id, overrides} = Keyword.pop(overrides, :post_id)

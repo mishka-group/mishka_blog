@@ -1210,6 +1210,216 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
       end
     end
 
+    describe "Paginated relationships - BlogPost with bloggers and users" do
+      test "public can include bloggers.user with pagination", %{site: site} do
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              title: "Multi-author Post",
+              slug: "multi-author-post",
+              content: "Content",
+              status: :published
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 12 bloggers with users
+        blogger_data =
+          Enum.map(1..12, fn i ->
+            user = create_user!(site_id: site.id, email: "author#{i}@example.com")
+
+            blogger =
+              MishkaBlog.Blogger
+              |> Ash.Changeset.for_create(
+                :create,
+                %{user_id: user.id, display_name: "Author #{i}", slug: "author-#{i}"},
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            MishkaBlog.PostBlogger
+            |> Ash.Changeset.for_create(
+              :assign,
+              %{post_id: post.id, blogger_id: blogger.id},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+            %{blogger_id: blogger.id, user_id: user.id}
+          end)
+
+        # Fetch post with paginated bloggers.user
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?include=bloggers.user&included_page[bloggers][limit]=8",
+            %{},
+            method: :get,
+            headers: []
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        # Verify bloggers are included (limited to 8)
+        blogger_records = Enum.filter(body["included"], fn inc -> inc["type"] == "blogger" end)
+        assert length(blogger_records) == 8
+
+        # Verify users are included (should be 8 users for 8 bloggers)
+        user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
+        assert length(user_records) == 8
+
+        # Verify all users are from our created list
+        included_user_ids = Enum.map(user_records, & &1["id"])
+        all_user_ids = Enum.map(blogger_data, & &1.user_id)
+        Enum.each(included_user_ids, fn id -> assert id in all_user_ids end)
+
+        # The blogger is the public profile; the account behind it stays with its owner and admins.
+        assert Enum.all?(
+                 blogger_records,
+                 &String.starts_with?(&1["attributes"]["display_name"], "Author ")
+               )
+
+        assert Enum.all?(user_records, &(account_fields(&1) == %{}))
+        refute response.resp_body =~ "@example.com"
+      end
+
+      test "tenant admin can include tenant_bloggers.user with pagination", %{
+        tenant_admin: tenant_admin,
+        site: site
+      } do
+        token = sign_in_tenant(tenant_admin)
+
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{title: "Post", slug: "post-b", content: "Content", status: :draft},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 20 bloggers
+        _blogger_data =
+          Enum.map(1..20, fn i ->
+            user = create_user!(site_id: site.id, email: "tblogger#{i}@example.com")
+
+            blogger =
+              MishkaBlog.Blogger
+              |> Ash.Changeset.for_create(
+                :create,
+                %{user_id: user.id, display_name: "TBlogger #{i}", slug: "tblogger-#{i}"},
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            MishkaBlog.PostBlogger
+            |> Ash.Changeset.for_create(
+              :assign,
+              %{post_id: post.id, blogger_id: blogger.id},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+            %{blogger_id: blogger.id, user_id: user.id}
+          end)
+
+        # Fetch with pagination
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/#{post.id}?include=tenant_bloggers.user&included_page[tenant_bloggers][limit]=12",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        blogger_records = Enum.filter(body["included"], fn inc -> inc["type"] == "blogger" end)
+        assert length(blogger_records) == 12
+
+        user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
+        assert length(user_records) == 12
+      end
+
+      test "master admin can include master_bloggers.user with pagination", %{
+        master_user: master_user,
+        site: site
+      } do
+        token = sign_in_master(master_user)
+
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :master_create,
+            %{
+              title: "Master Post",
+              slug: "master-post-b",
+              content: "Content",
+              status: :published,
+              site_id: site.id
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 25 bloggers
+        _blogger_data =
+          Enum.map(1..25, fn i ->
+            user = create_user!(site_id: site.id, email: "mblogger#{i}@example.com")
+
+            blogger =
+              MishkaBlog.Blogger
+              |> Ash.Changeset.for_create(
+                :create,
+                %{user_id: user.id, display_name: "MBlogger #{i}", slug: "mblogger-#{i}"},
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            MishkaBlog.PostBlogger
+            |> Ash.Changeset.for_create(
+              :assign,
+              %{post_id: post.id, blogger_id: blogger.id},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+            %{blogger_id: blogger.id, user_id: user.id}
+          end)
+
+        # Fetch with pagination
+        response =
+          make_api_request(
+            "#{@api_master_path}/#{post.id}?include=master_bloggers.user&included_page[master_bloggers][limit]=15",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        blogger_records = Enum.filter(body["included"], fn inc -> inc["type"] == "blogger" end)
+        assert length(blogger_records) == 15
+
+        user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
+        assert length(user_records) == 15
+      end
+    end
+
     describe "STATUS-SPECIFIC LISTINGS - Tenant Admin" do
       test "tenant admin can list published posts", %{tenant_admin: tenant_admin, site: site} do
         token = sign_in_tenant(tenant_admin)
