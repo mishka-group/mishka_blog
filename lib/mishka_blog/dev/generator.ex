@@ -110,6 +110,21 @@ defmodule MishkaBlog.Dev.Generator do
     )
   end
 
+  def post_rating(opts \\ [], actor \\ nil) do
+    changeset_generator(
+      MishkaBlog.PostRating,
+      :create,
+      authorize?: false,
+      defaults: [
+        post_id: nil,
+        user_id: nil,
+        rating: StreamData.integer(1..5)
+      ],
+      overrides: opts,
+      actor: actor
+    )
+  end
+
   def tag(opts \\ [], tenant \\ nil) do
     changeset_generator(
       MishkaBlog.Tag,

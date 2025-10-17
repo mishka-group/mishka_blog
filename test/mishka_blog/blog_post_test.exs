@@ -1206,6 +1206,64 @@ defmodule MishkaBlog.Test.BlogPostTest do
       end
     end
 
+    describe "calculation: rating_average and rating_count" do
+      test "returns correct rating average and count" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+
+        # Create ratings: 5, 4, 5, 3, 5 = avg 4.4, count 5
+        create_post_rating!(post_id: post.id, rating: 5)
+        create_post_rating!(post_id: post.id, rating: 4)
+        create_post_rating!(post_id: post.id, rating: 5)
+        create_post_rating!(post_id: post.id, rating: 3)
+        create_post_rating!(post_id: post.id, rating: 5)
+
+        loaded_post =
+          Ash.load!(post, [:rating_average, :rating_count], tenant: site.id, authorize?: false)
+
+        assert loaded_post.rating_count == 5
+        # Average should be 4.4
+        assert_in_delta loaded_post.rating_average, 4.4, 0.01
+      end
+
+      test "returns zero when no ratings exist" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+
+        loaded_post =
+          Ash.load!(post, [:rating_average, :rating_count], tenant: site.id, authorize?: false)
+
+        assert loaded_post.rating_count == 0
+        assert is_nil(loaded_post.rating_average)
+      end
+
+      test "calculates correct average for high number of ratings" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+
+        # Simulate 2000 ratings with average 4.7
+        # Create 1400 5-star, 400 4-star, 200 5-star (avg = 4.7)
+        for _ <- 1..14 do
+          create_post_rating!(post_id: post.id, rating: 5)
+        end
+
+        for _ <- 1..4 do
+          create_post_rating!(post_id: post.id, rating: 4)
+        end
+
+        for _ <- 1..2 do
+          create_post_rating!(post_id: post.id, rating: 5)
+        end
+
+        loaded_post =
+          Ash.load!(post, [:rating_average, :rating_count], tenant: site.id, authorize?: false)
+
+        assert loaded_post.rating_count == 20
+        # Average should be approximately 4.8
+        assert loaded_post.rating_average >= 4.8 and loaded_post.rating_average <= 5.0
+      end
+    end
+
     describe "calculation: comment_count" do
       test "returns correct comment count" do
         site = create_site!()

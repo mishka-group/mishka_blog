@@ -2983,6 +2983,12 @@ defmodule MishkaBlog.BlogPost do
       filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
     end
 
+    has_many :ratings, MishkaBlog.PostRating do
+      public? true
+      destination_attribute :post_id
+      description "User ratings for this blog post (for schema.org structured data)"
+    end
+
     has_many :views, MishkaBlog.PostView do
       public? true
       destination_attribute :post_id
@@ -3088,6 +3094,14 @@ defmodule MishkaBlog.BlogPost do
     end
 
     count :view_count, :views do
+      public? true
+    end
+
+    avg :rating_average, :ratings, :rating do
+      public? true
+    end
+
+    count :rating_count, :ratings do
       public? true
     end
 
