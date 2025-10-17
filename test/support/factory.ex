@@ -241,6 +241,30 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
+  # PostView factory
+  def create_post_view!(overrides \\ []) do
+    {post_id, overrides} = Keyword.pop(overrides, :post_id)
+    {user_id, overrides} = Keyword.pop(overrides, :user_id)
+
+    post_id = post_id || create_blog_post!().id
+    # user_id is optional for guest views
+
+    overrides =
+      overrides
+      |> Keyword.put(:post_id, post_id)
+
+    overrides =
+      if user_id do
+        Keyword.put(overrides, :user_id, user_id)
+      else
+        overrides
+      end
+
+    overrides
+    |> post_view()
+    |> generate()
+  end
+
   # Comment factory
   def create_comment!(overrides \\ []) do
     {site_id, overrides} = Keyword.pop(overrides, :site_id)

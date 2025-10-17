@@ -298,7 +298,8 @@ defmodule MishkaBlog.BlogPost do
             :version_count,
             :collection_count,
             :tag_count,
-            :comment_count
+            :comment_count,
+            :view_count
           ]
         end
       end
@@ -2982,6 +2983,12 @@ defmodule MishkaBlog.BlogPost do
       filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
     end
 
+    has_many :views, MishkaBlog.PostView do
+      public? true
+      destination_attribute :post_id
+      description "Page views for this blog post"
+    end
+
     # VERSION MANAGEMENT - sorted_versions relationship for loading version history
     # Loaded through `:sorted_versions` as whoever runs the read. A version query handed to a load
     # is left unbuilt (`Ash.Query.new/1`) so that this action builds it for that reader.
@@ -3078,6 +3085,10 @@ defmodule MishkaBlog.BlogPost do
       public? true
       multitenancy :bypass
       description "Total number of bloggers/authors for this post"
+    end
+
+    count :view_count, :views do
+      public? true
     end
 
     # Counted whoever may read the comments themselves: it is an admin-only field of the post, read

@@ -142,6 +142,22 @@ defmodule MishkaBlog.Dev.Generator do
     )
   end
 
+  def post_view(opts \\ []) do
+    changeset_generator(
+      MishkaBlog.PostView,
+      :create,
+      authorize?: false,
+      defaults: [
+        post_id: nil,
+        user_id: nil,
+        ip_address: sequence(:ip_address, &"192.168.1.#{rem(&1, 255)}"),
+        user_agent: "Mozilla/5.0 Test Browser",
+        referer: nil
+      ],
+      overrides: opts
+    )
+  end
+
   def comment(opts \\ [], tenant \\ nil) do
     changeset_generator(
       MishkaBlog.Comment,

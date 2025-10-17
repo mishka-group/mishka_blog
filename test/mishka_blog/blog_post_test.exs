@@ -1182,6 +1182,30 @@ defmodule MishkaBlog.Test.BlogPostTest do
       end
     end
 
+    describe "calculation: view_count" do
+      test "returns correct view count" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+
+        # Create 10 views
+        for _ <- 1..10 do
+          user = create_user!()
+          create_post_view!(post_id: post.id, user_id: user.id)
+        end
+
+        loaded_post = Ash.load!(post, [:view_count], tenant: site.id, authorize?: false)
+        assert loaded_post.view_count == 10
+      end
+
+      test "returns zero when no views exist" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+
+        loaded_post = Ash.load!(post, [:view_count], tenant: site.id, authorize?: false)
+        assert loaded_post.view_count == 0
+      end
+    end
+
     describe "calculation: comment_count" do
       test "returns correct comment count" do
         site = create_site!()

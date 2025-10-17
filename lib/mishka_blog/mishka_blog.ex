@@ -308,6 +308,7 @@ defmodule MishkaBlog do
     resource MishkaBlog.PostCollection
     resource MishkaBlog.Tag
     resource MishkaBlog.PostTag
+    resource MishkaBlog.PostView
     resource MishkaBlog.Blogger
     resource MishkaBlog.PostBlogger
     resource MishkaBlog.Comment
