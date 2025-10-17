@@ -241,6 +241,37 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
+  # Comment factory
+  def create_comment!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    {post_id, overrides} = Keyword.pop(overrides, :post_id)
+
+    {site_id, post_id} =
+      cond do
+        site_id && post_id ->
+          {site_id, post_id}
+
+        post_id ->
+          post = Ash.get!(MishkaBlog.BlogPost, post_id, action: :master_get, authorize?: false)
+          {post.site_id, post.id}
+
+        site_id ->
+          post = create_blog_post!(site_id: site_id)
+          {site_id, post.id}
+
+        true ->
+          post = create_blog_post!()
+          {post.site_id, post.id}
+      end
+
+    tenant = site_id
+
+    overrides
+    |> Keyword.put(:post_id, post_id)
+    |> comment(tenant)
+    |> generate()
+  end
+
   # A row that joins two records joins two records of ONE site, as a site's own writes do; the one
   # not given is made on the site of the one that is.
   defp on_one_site({left, left_id, make_left}, {right, right_id, make_right}) do

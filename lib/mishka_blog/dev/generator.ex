@@ -141,4 +141,23 @@ defmodule MishkaBlog.Dev.Generator do
       overrides: opts
     )
   end
+
+  def comment(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaBlog.Comment,
+      :create,
+      authorize?: false,
+      tenant: tenant,
+      defaults: [
+        post_id: nil,
+        author_id: nil,
+        parent_comment_id: nil,
+        content: sequence(:comment_content, &"This is test comment content number #{&1}"),
+        status: :pending,
+        sender_data: %{},
+        is_pinned: false
+      ],
+      overrides: opts
+    )
+  end
 end

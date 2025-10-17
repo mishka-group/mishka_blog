@@ -1182,6 +1182,52 @@ defmodule MishkaBlog.Test.BlogPostTest do
       end
     end
 
+    describe "calculation: comment_count" do
+      test "returns correct comment count" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+
+        # Create 5 comments
+        for i <- 1..5 do
+          create_comment!(post_id: post.id, content: "Comment #{i}")
+        end
+
+        loaded_post = Ash.load!(post, [:comment_count], tenant: site.id, authorize?: false)
+        assert loaded_post.comment_count == 5
+      end
+
+      test "does not count archived comments" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+
+        # Create 3 active comments
+        for i <- 1..3 do
+          create_comment!(post_id: post.id, content: "Active comment #{i}")
+        end
+
+        # Create 2 archived comments
+        for i <- 1..2 do
+          comment = create_comment!(post_id: post.id, content: "Archived comment #{i}")
+
+          comment
+          |> Ash.Changeset.for_destroy(:destroy, %{}, authorize?: false)
+          |> Ash.destroy!()
+        end
+
+        loaded_post = Ash.load!(post, [:comment_count], tenant: site.id, authorize?: false)
+        # Should only count the 3 active comments
+        assert loaded_post.comment_count == 3
+      end
+
+      test "returns zero when no comments exist" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+
+        loaded_post = Ash.load!(post, [:comment_count], tenant: site.id, authorize?: false)
+        assert loaded_post.comment_count == 0
+      end
+    end
+
     describe "public_list action" do
       test "returns only published posts" do
         site = create_site!()

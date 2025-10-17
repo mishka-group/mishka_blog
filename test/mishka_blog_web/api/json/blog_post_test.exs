@@ -158,6 +158,21 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
       token
     end
 
+    defp comment_statuses(response) do
+      response
+      |> included("comment")
+      |> Enum.map(& &1["attributes"]["status"])
+      |> Enum.sort()
+    end
+
+    defp assert_no_hidden_comment(response) do
+      for body <- ["PENDING-BODY", "FLAGGED-BODY", "SPAM-BODY", "ARCHIVED-BODY"] do
+        refute response.resp_body =~ body, "#{body} reached a caller who is not an admin"
+      end
+
+      assert Enum.all?(comment_statuses(response), &(&1 == "approved"))
+    end
+
     describe "CREATE - POST /post" do
       test "master admin can create post for any site", %{
         master_user: master_user,
@@ -1210,6 +1225,583 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
       end
     end
 
+    describe "Paginated relationships - BlogPost with comments and authors" do
+      test "public can include comments.author with pagination", %{site: site} do
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              title: "Commented Post",
+              slug: "commented-post",
+              content: "Content",
+              status: :published
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 20 approved comments with users
+        comment_data =
+          Enum.map(1..20, fn i ->
+            user = create_user!(site_id: site.id, email: "commenter#{i}@example.com")
+
+            comment =
+              MishkaBlog.Comment
+              |> Ash.Changeset.for_create(
+                :create,
+                %{
+                  post_id: post.id,
+                  content: "Comment #{i}",
+                  author_id: user.id,
+                  status: :approved
+                },
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            %{comment_id: comment.id, user_id: user.id}
+          end)
+
+        # Fetch post with paginated comments.author
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?include=comments.author&included_page[comments][limit]=10",
+            %{},
+            method: :get,
+            headers: []
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        # Verify comments are included (limited to 10)
+        comment_records = Enum.filter(body["included"], fn inc -> inc["type"] == "comment" end)
+        assert length(comment_records) == 10
+
+        # Verify users are included (should be 10 users for 10 comments)
+        user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
+        assert length(user_records) == 10
+
+        # Verify all users are from our created list
+        included_user_ids = Enum.map(user_records, & &1["id"])
+        all_user_ids = Enum.map(comment_data, & &1.user_id)
+        Enum.each(included_user_ids, fn id -> assert id in all_user_ids end)
+
+        # A visitor gets who wrote each comment, never the account behind it.
+        assert Enum.all?(user_records, &(account_fields(&1) == %{}))
+        refute response.resp_body =~ "@example.com"
+      end
+
+      test "tenant admin can include tenant_comments.author with pagination", %{
+        tenant_admin: tenant_admin,
+        site: site
+      } do
+        token = sign_in_tenant(tenant_admin)
+
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{title: "Post", slug: "post-t", content: "Content", status: :draft},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 15 comments with different statuses
+        _comment_data =
+          Enum.map(1..15, fn i ->
+            user = create_user!(site_id: site.id, email: "tcommenter#{i}@example.com")
+            status = if rem(i, 2) == 0, do: :approved, else: :pending
+
+            comment =
+              MishkaBlog.Comment
+              |> Ash.Changeset.for_create(
+                :create,
+                %{
+                  post_id: post.id,
+                  content: "TComment #{i}",
+                  author_id: user.id,
+                  status: status
+                },
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            %{comment_id: comment.id, user_id: user.id}
+          end)
+
+        # Fetch with pagination - tenant admin should see all comments (not just approved)
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/#{post.id}?include=tenant_comments.author&included_page[tenant_comments][limit]=10",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        comment_records = Enum.filter(body["included"], fn inc -> inc["type"] == "comment" end)
+        assert length(comment_records) == 10
+
+        user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
+        assert length(user_records) == 10
+      end
+
+      test "master admin can include master_comments.author with pagination", %{
+        master_user: master_user,
+        site: site
+      } do
+        token = sign_in_master(master_user)
+
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :master_create,
+            %{
+              title: "Master Post",
+              slug: "master-post-c",
+              content: "Content",
+              status: :published,
+              site_id: site.id
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 30 comments
+        _comment_data =
+          Enum.map(1..30, fn i ->
+            user = create_user!(site_id: site.id, email: "mcommenter#{i}@example.com")
+
+            comment =
+              MishkaBlog.Comment
+              |> Ash.Changeset.for_create(
+                :create,
+                %{
+                  post_id: post.id,
+                  content: "MComment #{i}",
+                  author_id: user.id,
+                  status: :approved
+                },
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            %{comment_id: comment.id, user_id: user.id}
+          end)
+
+        # Fetch with pagination
+        response =
+          make_api_request(
+            "#{@api_master_path}/#{post.id}?include=master_comments.author&included_page[master_comments][limit]=20",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        comment_records = Enum.filter(body["included"], fn inc -> inc["type"] == "comment" end)
+        assert length(comment_records) == 20
+
+        user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
+        assert length(user_records) == 20
+      end
+
+      test "public only sees approved comments", %{site: site} do
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{title: "Post", slug: "post-status", content: "Content", status: :published},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 5 approved and 5 pending comments
+        approved_count = 5
+
+        Enum.each(1..5, fn i ->
+          user = create_user!(site_id: site.id, email: "approved#{i}@example.com")
+
+          MishkaBlog.Comment
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              post_id: post.id,
+              content: "Approved #{i}",
+              author_id: user.id,
+              status: :approved
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+        end)
+
+        Enum.each(1..5, fn i ->
+          user = create_user!(site_id: site.id, email: "pending#{i}@example.com")
+
+          MishkaBlog.Comment
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              post_id: post.id,
+              content: "Pending #{i}",
+              author_id: user.id,
+              status: :pending
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+        end)
+
+        # Public should only see approved comments
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?include=comments&included_page[comments][limit]=20",
+            %{},
+            method: :get,
+            headers: []
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        comment_records = Enum.filter(body["included"], fn inc -> inc["type"] == "comment" end)
+        # Should only get approved comments
+        assert length(comment_records) == approved_count
+      end
+    end
+
+    describe "Comments a visitor can reach through a published post" do
+      setup %{site: site} do
+        post = create_blog_post!(site_id: site.id, status: :published)
+        pending_author = create_user!(site_id: site.id, email: "pending-author@example.com")
+
+        for {status, content} <- [
+              approved: "APPROVED-BODY",
+              pending: "PENDING-BODY",
+              flagged: "FLAGGED-BODY",
+              spam: "SPAM-BODY"
+            ] do
+          create_comment!(
+            site_id: site.id,
+            post_id: post.id,
+            status: status,
+            content: content,
+            author_id: pending_author.id
+          )
+        end
+
+        create_comment!(
+          site_id: site.id,
+          post_id: post.id,
+          status: :approved,
+          content: "ARCHIVED-BODY"
+        )
+        |> Ash.Changeset.for_destroy(:destroy, %{}, authorize?: false, tenant: site.id)
+        |> Ash.destroy!()
+
+        %{post: post, pending_author: pending_author}
+      end
+
+      test "an anonymous include=tenant_comments on one post is refused", %{post: post} do
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?include=tenant_comments",
+            %{},
+            method: :get
+          )
+
+        assert response.status == 403
+        assert_no_hidden_comment(response)
+      end
+
+      test "an anonymous include=tenant_comments on the listing is refused", %{post: _post} do
+        response =
+          make_api_request("#{@api_public_path}/published?include=tenant_comments", %{},
+            method: :get
+          )
+
+        assert response.status == 403
+        assert_no_hidden_comment(response)
+      end
+
+      test "an anonymous include=tenant_comments.author names no hidden comment's author", %{
+        post: post,
+        pending_author: pending_author
+      } do
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?include=tenant_comments.author",
+            %{},
+            method: :get
+          )
+
+        assert response.status == 403
+        assert_no_hidden_comment(response)
+        refute response.resp_body =~ to_string(pending_author.email)
+      end
+
+      test "a signed-in user who is not an admin is refused the same include", %{
+        post: post,
+        site: site
+      } do
+        reader =
+          create_user!(
+            email: "reader@example.com",
+            password: @password,
+            password_confirmation: @password,
+            site_id: site.id
+          )
+
+        token = sign_in_tenant(reader)
+
+        for path <- [
+              "#{@api_public_path}/published/#{post.id}?include=tenant_comments",
+              "#{@api_public_path}/published?include=tenant_comments"
+            ] do
+          response =
+            make_api_request(path, %{},
+              method: :get,
+              headers: [{"authorization", "Bearer #{token}"}]
+            )
+
+          assert response.status == 403, "#{path} answered #{response.status}"
+          assert_no_hidden_comment(response)
+        end
+      end
+
+      test "loading tenant_comments through the public read with no actor never returns a hidden comment",
+           %{post: post, site: site} do
+        assert {:error, %Ash.Error.Forbidden{}} =
+                 Ash.get(MishkaBlog.BlogPost, post.id,
+                   action: :public_get,
+                   load: [:tenant_comments],
+                   actor: nil,
+                   tenant: site.id
+                 )
+      end
+
+      test "include=comments still returns the approved comment, and only it", %{post: post} do
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?include=comments",
+            %{},
+            method: :get
+          )
+
+        assert response.status == 200
+
+        assert Enum.map(included(response, "comment"), & &1["attributes"]["content"]) == [
+                 "APPROVED-BODY"
+               ]
+      end
+
+      test "comment_count no longer counts hidden comments for a visitor; approved_comment_count does the public job",
+           %{post: post} do
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?fields[blog_post]=comment_count,approved_comment_count",
+            %{},
+            method: :get
+          )
+
+        assert response.status == 200
+        attributes = Jason.decode!(response.resp_body)["data"]["attributes"]
+
+        refute Map.has_key?(attributes, "comment_count")
+        assert attributes["approved_comment_count"] == 1
+      end
+
+      test "a visitor cannot find posts with hidden comments by filtering on them", %{post: post} do
+        for query <- ["filter[tenant_comments][status]=pending", "filter[comment_count]=4"] do
+          response =
+            make_api_request("#{@api_public_path}/published?#{query}", %{}, method: :get)
+
+          assert response.status == 200, "#{query} answered #{response.status}"
+          ids = Enum.map(Jason.decode!(response.resp_body)["data"], & &1["id"])
+          refute post.id in ids, "#{query} picked out the post that has hidden comments"
+        end
+      end
+
+      test "a tenant admin still moderates every status through include=tenant_comments", %{
+        post: post,
+        tenant_admin: tenant_admin
+      } do
+        token = sign_in_tenant(tenant_admin)
+
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/#{post.id}?include=tenant_comments&fields[blog_post]=comment_count,approved_comment_count",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        assert comment_statuses(response) == ["approved", "flagged", "pending", "spam"]
+        refute response.resp_body =~ "ARCHIVED-BODY"
+
+        attributes = Jason.decode!(response.resp_body)["data"]["attributes"]
+        assert attributes["comment_count"] == 4
+        assert attributes["approved_comment_count"] == 1
+      end
+
+      test "a master admin still moderates every status through include=master_comments", %{
+        post: post,
+        master_user: master_user
+      } do
+        token = sign_in_master(master_user)
+
+        response =
+          make_api_request("#{@api_master_path}/#{post.id}?include=master_comments", %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+          )
+
+        assert response.status == 200
+        assert comment_statuses(response) == ["approved", "flagged", "pending", "spam"]
+      end
+    end
+
+    describe "Accounts a visitor can reach through a published post" do
+      setup %{site: site} do
+        post = create_blog_post!(site_id: site.id, status: :published)
+
+        # The account holds a site and a permission, so an empty answer for either is it withheld.
+        author =
+          create_user_with_permissions!(["admin:dashboard:blog:comment"],
+            site_id: site.id,
+            email: "commenter@example.com"
+          )
+
+        create_blogger!(
+          site_id: site.id,
+          user_id: author.id,
+          display_name: "Commenter Profile",
+          slug: "commenter-profile"
+        )
+
+        create_comment!(
+          site_id: site.id,
+          post_id: post.id,
+          status: :approved,
+          content: "Visible",
+          author_id: author.id
+        )
+
+        %{post: post, author: author}
+      end
+
+      test "include=comments.author gives a visitor the author's id and no account field", %{
+        post: post,
+        author: author
+      } do
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?include=comments.author",
+            %{},
+            method: :get
+          )
+
+        assert response.status == 200
+        assert [user] = included(response, "user")
+        assert user["id"] == author.id
+        assert account_fields(user) == %{}
+        assert included(response, "site") == []
+        refute response.resp_body =~ to_string(author.email)
+      end
+
+      test "a visitor naming the account's fields and relationships outright still gets none", %{
+        post: post,
+        author: author
+      } do
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?include=comments.author&fields[user]=email,confirmed_at,site_id,site,permissions,permission_values",
+            %{},
+            method: :get
+          )
+
+        assert response.status == 200
+        assert [user] = included(response, "user")
+        assert account_fields(user) == %{}
+        assert included(response, "site") == []
+        assert included(response, "permission") == []
+        refute response.resp_body =~ to_string(author.email)
+      end
+
+      test "include=comments.author_profile gives a visitor the author's public profile", %{
+        post: post,
+        author: author
+      } do
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?include=comments.author_profile",
+            %{},
+            method: :get
+          )
+
+        assert response.status == 200
+        assert [profile] = included(response, "blogger")
+        assert profile["attributes"]["display_name"] == "Commenter Profile"
+        refute response.resp_body =~ to_string(author.email)
+      end
+
+      test "a tenant admin gets the full account through include=tenant_comments.author", %{
+        post: post,
+        author: author,
+        tenant_admin: tenant_admin
+      } do
+        token = sign_in_tenant(tenant_admin)
+
+        response =
+          make_api_request("#{@api_tenant_path}/#{post.id}?include=tenant_comments.author", %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        assert [user] = included(response, "user")
+        assert user["attributes"]["email"] == to_string(author.email)
+        assert user["attributes"]["site_id"] == author.site_id
+        assert user["attributes"]["site"]["id"] == author.site_id
+        assert user["attributes"]["permission_values"] == ["admin:dashboard:blog:comment"]
+      end
+
+      test "a master admin gets the full account through include=master_comments.author", %{
+        post: post,
+        author: author,
+        master_user: master_user
+      } do
+        token = sign_in_master(master_user)
+
+        response =
+          make_api_request("#{@api_master_path}/#{post.id}?include=master_comments.author", %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+          )
+
+        assert response.status == 200
+        assert [user] = included(response, "user")
+        assert user["attributes"]["email"] == to_string(author.email)
+      end
+    end
+
     describe "Paginated relationships - BlogPost with bloggers and users" do
       test "public can include bloggers.user with pagination", %{site: site} do
         post =
@@ -1417,6 +2009,109 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
         assert length(user_records) == 15
+      end
+    end
+
+    describe "Paginated relationships - Combined includes" do
+      test "can combine multiple paginated relationships in one request", %{site: site} do
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{title: "Rich Post", slug: "rich-post", content: "Content", status: :published},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 10 collections
+        Enum.each(1..10, fn i ->
+          collection =
+            MishkaBlog.Collection
+            |> Ash.Changeset.for_create(
+              :create,
+              %{name: "Col #{i}", slug: "col-c-#{i}", status: :active},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+          MishkaBlog.PostCollection
+          |> Ash.Changeset.for_create(
+            :assign,
+            %{post_id: post.id, collection_id: collection.id},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+        end)
+
+        # Create 15 tags
+        Enum.each(1..15, fn i ->
+          tag =
+            MishkaBlog.Tag
+            |> Ash.Changeset.for_create(
+              :create,
+              %{name: "Tag #{i}", slug: "tag-c-#{i}"},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+          MishkaBlog.PostTag
+          |> Ash.Changeset.for_create(
+            :assign,
+            %{post_id: post.id, tag_id: tag.id},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+        end)
+
+        # Create 20 comments
+        Enum.each(1..20, fn i ->
+          user = create_user!(site_id: site.id, email: "combo#{i}@example.com")
+
+          MishkaBlog.Comment
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              post_id: post.id,
+              content: "Comment #{i}",
+              author_id: user.id,
+              status: :approved
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+        end)
+
+        # Fetch post with multiple paginated relationships
+        response =
+          make_api_request(
+            "#{@api_public_path}/published/#{post.id}?include=collections,tags,comments.author&included_page[collections][limit]=5&included_page[tags][limit]=8&included_page[comments][limit]=12",
+            %{},
+            method: :get,
+            headers: []
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        collection_records =
+          Enum.filter(body["included"], fn inc -> inc["type"] == "collection" end)
+
+        tag_records = Enum.filter(body["included"], fn inc -> inc["type"] == "tag" end)
+        comment_records = Enum.filter(body["included"], fn inc -> inc["type"] == "comment" end)
+        user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
+
+        # Verify each relationship respects its own pagination limit
+        assert length(collection_records) == 5
+        assert length(tag_records) == 8
+        assert length(comment_records) == 12
+        assert length(user_records) == 12
+        assert Enum.all?(user_records, &(account_fields(&1) == %{}))
       end
     end
 
@@ -2122,6 +2817,290 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         body = Jason.decode!(response.resp_body)
         assert body["data"]["id"] == post.id
         assert body["data"]["attributes"]["title"] == "Archived Master Post"
+      end
+    end
+
+    describe "Pagination with relationships - Status-specific listings" do
+      test "tenant admin can list published posts with paginated collections", %{
+        tenant_admin: tenant_admin,
+        site: site
+      } do
+        token = sign_in_tenant(tenant_admin)
+
+        # Create published post with collections
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              title: "Published with Collections",
+              slug: "pub-with-coll",
+              content: "Content",
+              status: :published
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 15 collections
+        _collection_ids =
+          Enum.map(1..15, fn i ->
+            collection =
+              MishkaBlog.Collection
+              |> Ash.Changeset.for_create(
+                :create,
+                %{name: "PC #{i}", slug: "pc-#{i}", status: :active},
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            MishkaBlog.PostCollection
+            |> Ash.Changeset.for_create(
+              :assign,
+              %{post_id: post.id, collection_id: collection.id},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+            collection.id
+          end)
+
+        # Fetch published posts with paginated collections
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/published?include=tenant_collections&included_page[tenant_collections][limit]=10",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        # Find our post in the list
+        post_data = Enum.find(body["data"], fn p -> p["id"] == post.id end)
+        assert post_data != nil
+
+        # Verify collections are paginated
+        if body["included"] do
+          collection_records =
+            Enum.filter(body["included"], fn inc -> inc["type"] == "collection" end)
+
+          # Should have collections (up to 10 per post)
+          assert length(collection_records) > 0
+          assert length(collection_records) <= 10
+        end
+      end
+
+      test "tenant admin can list drafts with paginated bloggers", %{
+        tenant_admin: tenant_admin,
+        site: site
+      } do
+        token = sign_in_tenant(tenant_admin)
+
+        # Create draft post with bloggers
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              title: "Draft with Authors",
+              slug: "draft-authors",
+              content: "Content",
+              status: :draft
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 8 bloggers
+        _blogger_ids =
+          Enum.map(1..8, fn i ->
+            user = create_user!(site_id: site.id, email: "draftauthor#{i}@example.com")
+
+            blogger =
+              MishkaBlog.Blogger
+              |> Ash.Changeset.for_create(
+                :create,
+                %{user_id: user.id, display_name: "Draft Author #{i}", slug: "draft-author-#{i}"},
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            MishkaBlog.PostBlogger
+            |> Ash.Changeset.for_create(
+              :assign,
+              %{post_id: post.id, blogger_id: blogger.id},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+            blogger.id
+          end)
+
+        # Fetch drafts with paginated bloggers
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/drafts?include=tenant_bloggers.user&included_page[tenant_bloggers][limit]=5",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        post_data = Enum.find(body["data"], fn p -> p["id"] == post.id end)
+        assert post_data != nil
+
+        if body["included"] do
+          blogger_records = Enum.filter(body["included"], fn inc -> inc["type"] == "blogger" end)
+          assert length(blogger_records) > 0
+          assert length(blogger_records) <= 5
+        end
+      end
+
+      test "tenant admin can list featured posts with paginated tags", %{
+        tenant_admin: tenant_admin,
+        site: site
+      } do
+        token = sign_in_tenant(tenant_admin)
+
+        # Create featured post with tags
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              title: "Featured with Tags",
+              slug: "featured-tags",
+              content: "Content",
+              status: :published,
+              featured: true
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Create 12 tags
+        _tag_ids =
+          Enum.map(1..12, fn i ->
+            tag =
+              MishkaBlog.Tag
+              |> Ash.Changeset.for_create(
+                :create,
+                %{name: "FTag #{i}", slug: "ftag-#{i}"},
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            MishkaBlog.PostTag
+            |> Ash.Changeset.for_create(
+              :assign,
+              %{post_id: post.id, tag_id: tag.id},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+            tag.id
+          end)
+
+        # Fetch featured posts with paginated tags
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/featured?include=tenant_tags&included_page[tenant_tags][limit]=8",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        post_data = Enum.find(body["data"], fn p -> p["id"] == post.id end)
+        assert post_data != nil
+
+        if body["included"] do
+          tag_records = Enum.filter(body["included"], fn inc -> inc["type"] == "tag" end)
+          assert length(tag_records) > 0
+          assert length(tag_records) <= 8
+        end
+      end
+
+      test "master admin can list language variants with paginated comments", %{
+        master_user: master_user,
+        site: site
+      } do
+        token = sign_in_master(master_user)
+
+        # Create post with comments
+        post =
+          MishkaBlog.BlogPost
+          |> Ash.Changeset.for_create(
+            :master_create,
+            %{
+              title: "Lang Variant with Comments",
+              slug: "lang-comments",
+              content: "Content",
+              status: :published,
+              language: "en",
+              site_id: site.id
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        language_group_id = post.language_group_id
+
+        # Create 10 comments
+        Enum.each(1..10, fn i ->
+          user = create_user!(site_id: site.id, email: "langcomment#{i}@example.com")
+
+          MishkaBlog.Comment
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              post_id: post.id,
+              content: "Lang Comment #{i}",
+              author_id: user.id,
+              status: :approved
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+        end)
+
+        # Fetch language variants with paginated comments
+        response =
+          make_api_request(
+            "#{@api_master_path}/language-variants?language_group_id=#{language_group_id}&include=master_comments.author&included_page[master_comments][limit]=6",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        post_data = Enum.find(body["data"], fn p -> p["id"] == post.id end)
+        assert post_data != nil
+
+        if body["included"] do
+          comment_records = Enum.filter(body["included"], fn inc -> inc["type"] == "comment" end)
+          assert length(comment_records) > 0
+          assert length(comment_records) <= 6
+        end
       end
     end
 

@@ -1100,6 +1100,15 @@ defmodule MishkaBlog.Blogger do
                  required?: false
     end
 
+    # A PROFILE AS A COMMENT NAMES ITS AUTHOR — `MishkaBlog.Comment.author_profile`. That
+    # relationship keeps it to the comment's own site, so this read needs no tenant of its own, and a
+    # master reading comments with none still gets their authors' names.
+    read :comment_author do
+      description "An active blogger profile, as a comment names its author on the comment's own site"
+      multitenancy :bypass
+      filter expr(is_nil(archived_at))
+    end
+
     read :public_get do
       description "Public endpoint to get a single active (non-archived) blogger by ID (no authentication required)"
       filter expr(is_nil(archived_at))
@@ -1605,6 +1614,16 @@ defmodule MishkaBlog.Blogger do
 
     bypass action(:public_by_slug) do
       authorize_if always()
+    end
+
+    # Only through a comment's `author_profile`, which keeps it to the comment's site.
+    bypass action(:comment_author) do
+      authorize_if accessing_from(MishkaBlog.Comment, :author_profile)
+    end
+
+    # Read directly it crosses every site, so only a master may.
+    policy action(:comment_author) do
+      authorize_if actor_attribute_equals(:site_id, nil)
     end
 
     # Admin access for all operations

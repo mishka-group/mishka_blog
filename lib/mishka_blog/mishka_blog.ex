@@ -189,6 +189,45 @@ defmodule MishkaBlog do
         get :preview_version, route: "/:tag_id/version/:version_id/preview"
       end
 
+      base_route "/v1/master/admin/mishka-blog/comment", MishkaBlog.Comment do
+        index :master_read
+        get :master_read
+        index :master_archived, route: "/archived"
+        get :master_archived, route: "/archived/:id"
+        patch :master_update, read_action: :master_get
+        patch :master_approve, route: "/:id/approve", read_action: :master_get
+        patch :master_flag, route: "/:id/flag", read_action: :master_get
+        patch :master_mark_spam, route: "/:id/mark-spam", read_action: :master_get
+        patch :master_pin, route: "/:id/pin", read_action: :master_get
+        patch :master_unpin, route: "/:id/unpin", read_action: :master_get
+        patch :master_unarchive, route: "/:id/unarchive", read_action: :master_get_archived
+        delete :master_destroy, route: "/:id/archive", read_action: :master_get
+        delete :master_permanent_destroy, route: "/:id/permanent", read_action: :master_get
+      end
+
+      base_route "/v1/tenant/admin/mishka-blog/comment", MishkaBlog.Comment do
+        index :read
+        get :read
+        index :archived, route: "/archived"
+        get :archived, route: "/archived/:id"
+        post :create
+        patch :update
+        patch :approve, route: "/:id/approve"
+        patch :flag, route: "/:id/flag"
+        patch :mark_spam, route: "/:id/mark-spam"
+        patch :pin, route: "/:id/pin"
+        patch :unpin, route: "/:id/unpin"
+        patch :unarchive, route: "/:id/unarchive", read_action: :get_archived
+        delete :destroy, route: "/:id/archive"
+        delete :permanent_destroy, route: "/:id/permanent"
+      end
+
+      base_route "/v1/user/mishka-blog/comment", MishkaBlog.Comment do
+        index :my_comments, route: "/my-comments"
+        index :approved_by_post, route: "/approved"
+        post :create_public, route: "/create"
+      end
+
       base_route "/v1/user/mishka-blog/post", MishkaBlog.BlogPost do
         index :public_list, route: "/published"
         get :public_get, route: "/published/:id"
@@ -265,5 +304,6 @@ defmodule MishkaBlog do
     resource MishkaBlog.PostTag
     resource MishkaBlog.Blogger
     resource MishkaBlog.PostBlogger
+    resource MishkaBlog.Comment
   end
 end

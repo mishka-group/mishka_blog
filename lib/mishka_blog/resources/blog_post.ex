@@ -246,9 +246,15 @@ defmodule MishkaBlog.BlogPost do
       :tags,
       :master_tags,
       :tenant_tags,
+      :comments,
+      :master_comments,
+      :tenant_comments,
       :bloggers,
       :master_bloggers,
       :tenant_bloggers,
+      comments: [:author, :author_profile],
+      master_comments: [:author],
+      tenant_comments: [:author, :author_profile],
       bloggers: [:user],
       master_bloggers: [:user],
       tenant_bloggers: [:user]
@@ -261,9 +267,15 @@ defmodule MishkaBlog.BlogPost do
       :tags,
       :master_tags,
       :tenant_tags,
+      :comments,
+      :master_comments,
+      :tenant_comments,
       :bloggers,
       :master_bloggers,
       :tenant_bloggers,
+      [:comments, :author],
+      [:master_comments, :author],
+      [:tenant_comments, :author],
       [:bloggers, :user],
       [:master_bloggers, :user],
       [:tenant_bloggers, :user]
@@ -285,7 +297,8 @@ defmodule MishkaBlog.BlogPost do
             :site,
             :version_count,
             :collection_count,
-            :tag_count
+            :tag_count,
+            :comment_count
           ]
         end
       end
@@ -400,6 +413,7 @@ defmodule MishkaBlog.BlogPost do
           static true
 
           requires [
+            :comment_count,
             :collection_count,
             :tag_count,
             :version_count,
@@ -416,6 +430,7 @@ defmodule MishkaBlog.BlogPost do
 
           render fn record ->
             assigns = %{
+              comment_count: record.comment_count || 0,
               collection_count: record.collection_count || 0,
               tag_count: record.tag_count || 0,
               version_count: record.version_count || 0,
@@ -425,6 +440,10 @@ defmodule MishkaBlog.BlogPost do
 
             ~H"""
             <div class="flex flex-wrap items-center gap-x-[11px] gap-y-1.5 text-[11.5px] font-semibold text-[#8a877f]">
+              <span class="inline-flex items-center gap-[5px]" title={dgettext("mishka_gervaz", "Comments")}>
+                <.icon name="hero-chat-bubble-left" class="size-[13px] text-[#c3c0b8]" />
+                {@comment_count}
+              </span>
               <span
                 class="inline-flex items-center gap-[5px]"
                 title={dgettext("mishka_gervaz", "Collections")}
@@ -1317,8 +1336,9 @@ defmodule MishkaBlog.BlogPost do
 
   # Field-level authorization policies
   field_policies do
-    # Admin-only fields.
-    field_policy [:version_count, :latest_version, :recent_versions] do
+    # Admin-only fields. `comment_count` counts every status, so it would tell a visitor how many
+    # comments are waiting for moderation or were marked spam; `approved_comment_count` is the public one.
+    field_policy [:version_count, :latest_version, :recent_versions, :comment_count] do
       authorize_if {MishkaCmsCore.Accounts.Checks.AccessPermissions,
                     permissions: ["admin:dashboard:blog:post", "admin:api:blog:post"]}
     end
@@ -2626,6 +2646,17 @@ defmodule MishkaBlog.BlogPost do
       authorize_if always()
     end
 
+    # The post a comment is on, loaded beside the comment for whoever moderates it.
+    bypass accessing_from(MishkaBlog.Comment, :post) do
+      authorize_if {MishkaCmsCore.Accounts.Checks.AccessPermissions,
+                    permissions: ["admin:dashboard:blog:comment", "admin:api:blog:comment"]}
+    end
+
+    bypass accessing_from(MishkaBlog.Comment, :master_post) do
+      authorize_if {MishkaCmsCore.Accounts.Checks.AccessPermissions,
+                    permissions: ["admin:dashboard:blog:comment", "admin:api:blog:comment"]}
+    end
+
     # Admin access for all other actions
     policy always() do
       access_type :strict
@@ -2926,6 +2957,31 @@ defmodule MishkaBlog.BlogPost do
       filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
     end
 
+    # Relationship - for public/guest users
+    has_many :comments, MishkaBlog.Comment do
+      public? true
+      destination_attribute :post_id
+      description "Comments on this blog post (public access, approved only)"
+      read_action :public_list
+    end
+
+    # Relationship - for admin users with tenant
+    has_many :tenant_comments, MishkaBlog.Comment do
+      public? true
+      destination_attribute :post_id
+      description "Comments on this blog post (tenant admin access, all statuses)"
+    end
+
+    # Bypass relationship - for admin users without tenant
+    has_many :master_comments, MishkaBlog.Comment do
+      public? true
+      destination_attribute :post_id
+      description "Comments on this blog post (master admin access, bypass tenant)"
+      read_action :master_read
+
+      filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
+    end
+
     # VERSION MANAGEMENT - sorted_versions relationship for loading version history
     # Loaded through `:sorted_versions` as whoever runs the read. A version query handed to a load
     # is left unbuilt (`Ash.Query.new/1`) so that this action builds it for that reader.
@@ -3022,6 +3078,23 @@ defmodule MishkaBlog.BlogPost do
       public? true
       multitenancy :bypass
       description "Total number of bloggers/authors for this post"
+    end
+
+    # Counted whoever may read the comments themselves: it is an admin-only field of the post, read
+    # by a holder of the post area (see `field_policies`).
+    count :comment_count, :tenant_comments do
+      public? true
+      multitenancy :bypass
+      authorize? false
+      description "Every comment on the post, in every status — for moderators"
+    end
+
+    # Counted through `:comments`, so through `Comment.public_list` — the approved comments, the ones
+    # a visitor can read.
+    count :approved_comment_count, :comments do
+      public? true
+      multitenancy :bypass
+      description "The approved comments a visitor can read"
     end
 
     count :version_count, :sorted_versions do
