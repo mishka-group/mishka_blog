@@ -222,6 +222,12 @@ defmodule MishkaBlog do
         delete :permanent_destroy, route: "/:id/permanent"
       end
 
+      base_route "/v1/user/mishka-blog/bookmark", MishkaBlog.PostBookmark do
+        index :my_bookmarks, route: "/my-bookmarks"
+        post :create
+        delete :remove
+      end
+
       base_route "/v1/user/mishka-blog/post-rating", MishkaBlog.PostRating do
         index :my_ratings, route: "/my-ratings"
         post :create
@@ -320,5 +326,6 @@ defmodule MishkaBlog do
     resource MishkaBlog.PostBlogger
     resource MishkaBlog.Comment
     resource MishkaBlog.CommentVote
+    resource MishkaBlog.PostBookmark
   end
 end

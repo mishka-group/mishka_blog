@@ -97,6 +97,20 @@ defmodule MishkaBlog.Dev.Generator do
     )
   end
 
+  def post_bookmark(opts \\ [], actor \\ nil) do
+    changeset_generator(
+      MishkaBlog.PostBookmark,
+      :create,
+      authorize?: false,
+      defaults: [
+        post_id: nil,
+        user_id: nil
+      ],
+      overrides: opts,
+      actor: actor
+    )
+  end
+
   def post_collection(opts \\ []) do
     changeset_generator(
       MishkaBlog.PostCollection,

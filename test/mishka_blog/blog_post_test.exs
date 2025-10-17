@@ -1264,6 +1264,30 @@ defmodule MishkaBlog.Test.BlogPostTest do
       end
     end
 
+    describe "calculation: bookmark_count" do
+      test "returns correct bookmark count" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+
+        # Create 7 bookmarks
+        for _ <- 1..7 do
+          user = create_user!()
+          create_post_bookmark!(post_id: post.id, user_id: user.id)
+        end
+
+        loaded_post = Ash.load!(post, [:bookmark_count], tenant: site.id, authorize?: false)
+        assert loaded_post.bookmark_count == 7
+      end
+
+      test "returns zero when no bookmarks exist" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+
+        loaded_post = Ash.load!(post, [:bookmark_count], tenant: site.id, authorize?: false)
+        assert loaded_post.bookmark_count == 0
+      end
+    end
+
     describe "calculation: comment_count" do
       test "returns correct comment count" do
         site = create_site!()
@@ -1307,6 +1331,49 @@ defmodule MishkaBlog.Test.BlogPostTest do
 
         loaded_post = Ash.load!(post, [:comment_count], tenant: site.id, authorize?: false)
         assert loaded_post.comment_count == 0
+      end
+    end
+
+    describe "calculation: all metrics together" do
+      test "loads all calculations simultaneously" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+
+        # Create views
+        for _ <- 1..5 do
+          user = create_user!()
+          create_post_view!(post_id: post.id, user_id: user.id)
+        end
+
+        # Create ratings
+        create_post_rating!(post_id: post.id, rating: 5)
+        create_post_rating!(post_id: post.id, rating: 4)
+        create_post_rating!(post_id: post.id, rating: 5)
+
+        # Create bookmarks
+        for _ <- 1..3 do
+          user = create_user!()
+          create_post_bookmark!(post_id: post.id, user_id: user.id)
+        end
+
+        # Create comments
+        for i <- 1..4 do
+          create_comment!(post_id: post.id, content: "Comment #{i}")
+        end
+
+        loaded_post =
+          Ash.load!(
+            post,
+            [:view_count, :rating_average, :rating_count, :bookmark_count, :comment_count],
+            tenant: site.id,
+            authorize?: false
+          )
+
+        assert loaded_post.view_count == 5
+        assert loaded_post.rating_count == 3
+        assert loaded_post.rating_average > 4.6
+        assert loaded_post.bookmark_count == 3
+        assert loaded_post.comment_count == 4
       end
     end
 

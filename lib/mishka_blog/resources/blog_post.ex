@@ -2983,6 +2983,12 @@ defmodule MishkaBlog.BlogPost do
       filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
     end
 
+    has_many :bookmarks, MishkaBlog.PostBookmark do
+      public? true
+      destination_attribute :post_id
+      description "User bookmarks for this blog post"
+    end
+
     has_many :ratings, MishkaBlog.PostRating do
       public? true
       destination_attribute :post_id
@@ -3102,6 +3108,10 @@ defmodule MishkaBlog.BlogPost do
     end
 
     count :rating_count, :ratings do
+      public? true
+    end
+
+    count :bookmark_count, :bookmarks do
       public? true
     end
 

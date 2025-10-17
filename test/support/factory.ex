@@ -193,6 +193,38 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
+  # PostBookmark factory
+  def create_post_bookmark!(overrides \\ []) do
+    {post_id, overrides} = Keyword.pop(overrides, :post_id)
+    {user_id, overrides} = Keyword.pop(overrides, :user_id)
+    {actor, overrides} = Keyword.pop(overrides, :actor)
+
+    post_id = post_id || create_blog_post!().id
+
+    # If user_id is provided, look up or create that user
+    # Otherwise, use/create actor
+    {actor, _user_id} =
+      cond do
+        actor && user_id ->
+          {actor, user_id}
+
+        actor ->
+          {actor, actor.id}
+
+        user_id ->
+          {Ash.get!(MishkaCmsCore.Accounts.User, user_id, authorize?: false), user_id}
+
+        true ->
+          user = create_user!(site_id: site_of(MishkaBlog.BlogPost, post_id))
+          {user, user.id}
+      end
+
+    overrides
+    |> Keyword.put(:post_id, post_id)
+    |> post_bookmark(actor)
+    |> generate()
+  end
+
   # PostCollection factory
   def create_post_collection!(overrides \\ []) do
     {post_id, overrides} = Keyword.pop(overrides, :post_id)
