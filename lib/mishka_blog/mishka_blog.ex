@@ -228,6 +228,12 @@ defmodule MishkaBlog do
         post :create_public, route: "/create"
       end
 
+      base_route "/v1/user/mishka-blog/comment-vote", MishkaBlog.CommentVote do
+        index :my_votes, route: "/my-votes"
+        post :create
+        delete :remove
+      end
+
       base_route "/v1/user/mishka-blog/post", MishkaBlog.BlogPost do
         index :public_list, route: "/published"
         get :public_get, route: "/published/:id"
@@ -305,5 +311,6 @@ defmodule MishkaBlog do
     resource MishkaBlog.Blogger
     resource MishkaBlog.PostBlogger
     resource MishkaBlog.Comment
+    resource MishkaBlog.CommentVote
   end
 end

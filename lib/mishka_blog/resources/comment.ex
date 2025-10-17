@@ -203,7 +203,9 @@ defmodule MishkaBlog.Comment do
             :site,
             :author,
             :author_profile,
-            :author_master?
+            :author_master?,
+            :upvote_count,
+            :downvote_count
           ]
 
           tenant [:post]
@@ -284,10 +286,11 @@ defmodule MishkaBlog.Comment do
           end
         end
 
-        # The pinned marker, in a cell of its own.
+        # Pinned state and the vote tallies read as one group of markers, so they share a cell rather
+        # than each holding a track of their own the way `is_pinned` used to.
         column :stats_info do
           static true
-          requires [:is_pinned]
+          requires [:is_pinned, :upvote_count, :downvote_count]
           label fn -> dgettext("mishka_gervaz", "Stats") end
           visible fn state -> state.template.name() == :table end
 
@@ -297,11 +300,21 @@ defmodule MishkaBlog.Comment do
 
           render fn record ->
             assigns = %{
-              is_pinned: record.is_pinned
+              is_pinned: record.is_pinned,
+              upvote_count: record.upvote_count || 0,
+              downvote_count: record.downvote_count || 0
             }
 
             ~H"""
             <div class="flex flex-wrap items-center gap-x-[11px] gap-y-1.5 text-[11.5px] font-semibold text-[#8a877f]">
+              <span class="inline-flex items-center gap-[5px]" title={gettext("Upvotes")}>
+                <.icon name="hero-hand-thumb-up" class="size-[13px] text-[#c3c0b8]" />
+                {@upvote_count}
+              </span>
+              <span class="inline-flex items-center gap-[5px]" title={gettext("Downvotes")}>
+                <.icon name="hero-hand-thumb-down" class="size-[13px] text-[#c3c0b8]" />
+                {@downvote_count}
+              </span>
               <span :if={@is_pinned} title={gettext("Pinned")}>
                 <.icon name="hero-bookmark-solid" class="size-[13px] text-[#4f4bcc]" />
               </span>
@@ -1675,6 +1688,12 @@ defmodule MishkaBlog.Comment do
       destination_attribute :parent_comment_id
       description "Child comments replying to this comment"
     end
+
+    has_many :votes, MishkaBlog.CommentVote do
+      public? true
+      destination_attribute :comment_id
+      description "Votes (upvote/downvote) on this comment"
+    end
   end
 
   calculations do
@@ -1687,6 +1706,18 @@ defmodule MishkaBlog.Comment do
               :boolean,
               {MishkaCmsCore.Accounts.Calculations.ByMaster, field: :author_id} do
       description "Whether the author is a master, for a reader who cannot load a master's account"
+    end
+  end
+
+  aggregates do
+    count :upvote_count, :votes do
+      public? true
+      filter expr(vote_type == :up)
+    end
+
+    count :downvote_count, :votes do
+      public? true
+      filter expr(vote_type == :down)
     end
   end
 end

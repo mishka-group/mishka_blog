@@ -1159,6 +1159,132 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
       end
     end
 
+    describe "Aggregates - vote counts" do
+      test "can load upvote_count and downvote_count aggregates", %{
+        site: site,
+        tenant_admin: tenant_admin
+      } do
+        token = sign_in_tenant(tenant_admin)
+        post = create_blog_post!(site_id: site.id, status: :published)
+
+        comment =
+          create_comment!(
+            site_id: site.id,
+            post_id: post.id,
+            content: "Comment with votes",
+            status: :approved
+          )
+
+        # Create upvotes
+        for i <- 1..7 do
+          user = create_user!(email: "upvoter#{i}@example.com", site_id: site.id)
+          create_comment_vote!(comment_id: comment.id, user_id: user.id, vote_type: :up)
+        end
+
+        # Create downvotes
+        for i <- 1..3 do
+          user = create_user!(email: "downvoter#{i}@example.com", site_id: site.id)
+          create_comment_vote!(comment_id: comment.id, user_id: user.id, vote_type: :down)
+        end
+
+        # Fetch comment with vote count calculations - need to request fields explicitly
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/#{comment.id}?fields[comment]=upvote_count,downvote_count",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+        assert body["data"]["id"] == comment.id
+
+        # Verify vote count calculations
+        attributes = body["data"]["attributes"]
+        assert attributes["upvote_count"] == 7
+        assert attributes["downvote_count"] == 3
+      end
+
+      test "public can see vote counts on approved comments list", %{site: site} do
+        post = create_blog_post!(site_id: site.id, status: :published)
+
+        comment =
+          create_comment!(
+            site_id: site.id,
+            post_id: post.id,
+            content: "Comment with public votes",
+            status: :approved
+          )
+
+        # Create some votes
+        for i <- 1..5 do
+          user = create_user!(email: "public_voter#{i}@example.com", site_id: site.id)
+          vote_type = if rem(i, 2) == 0, do: :up, else: :down
+          create_comment_vote!(comment_id: comment.id, user_id: user.id, vote_type: vote_type)
+        end
+
+        # Fetch from approved list with vote count fields
+        response =
+          make_api_request(
+            "#{@api_public_approved_path}?post_id=#{post.id}&fields[comment]=upvote_count,downvote_count",
+            %{},
+            method: :get,
+            headers: []
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        # Find our comment in the list
+        comment_data = Enum.find(body["data"], fn c -> c["id"] == comment.id end)
+        assert comment_data != nil
+
+        attributes = comment_data["attributes"]
+        # 5 votes: indices 1,3,5 = down (3), indices 2,4 = up (2)
+        assert attributes["upvote_count"] == 2
+        assert attributes["downvote_count"] == 3
+      end
+
+      test "vote counts are accessible via aggregates (not relationships)", %{
+        site: site,
+        tenant_admin: tenant_admin
+      } do
+        token = sign_in_tenant(tenant_admin)
+        post = create_blog_post!(site_id: site.id, status: :published)
+
+        comment =
+          create_comment!(
+            site_id: site.id,
+            post_id: post.id,
+            content: "Comment with vote counts via aggregates",
+            status: :approved
+          )
+
+        # Create votes
+        for i <- 1..4 do
+          user = create_user!(email: "vote_user#{i}@example.com", site_id: site.id)
+          create_comment_vote!(comment_id: comment.id, user_id: user.id, vote_type: :up)
+        end
+
+        # Fetch comment - need to request calculations explicitly
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/#{comment.id}?fields[comment]=upvote_count,downvote_count",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        # Verify calculations are loaded
+        assert body["data"]["attributes"]["upvote_count"] == 4
+        assert body["data"]["attributes"]["downvote_count"] == 0
+      end
+    end
+
     describe "List with filters and pagination" do
       test "tenant admin can list all comments with pagination", %{
         tenant_admin: tenant_admin,

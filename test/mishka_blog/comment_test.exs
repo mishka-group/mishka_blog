@@ -1017,6 +1017,121 @@ defmodule MishkaBlog.Test.CommentTest do
       end
     end
 
+    describe "vote count calculations" do
+      test "upvote_count returns correct count" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+        comment = create_comment!(post_id: post.id, content: "Test comment")
+
+        # Create 5 upvotes
+        for _ <- 1..5 do
+          user = create_user!()
+          create_comment_vote!(comment_id: comment.id, user_id: user.id, vote_type: :up)
+        end
+
+        # Create 2 downvotes
+        for _ <- 1..2 do
+          user = create_user!()
+          create_comment_vote!(comment_id: comment.id, user_id: user.id, vote_type: :down)
+        end
+
+        loaded_comment = Ash.load!(comment, [:upvote_count], authorize?: false)
+        assert loaded_comment.upvote_count == 5
+      end
+
+      test "downvote_count returns correct count" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+        comment = create_comment!(post_id: post.id, content: "Test comment")
+
+        # Create 3 upvotes
+        for _ <- 1..3 do
+          user = create_user!()
+          create_comment_vote!(comment_id: comment.id, user_id: user.id, vote_type: :up)
+        end
+
+        # Create 7 downvotes
+        for _ <- 1..7 do
+          user = create_user!()
+          create_comment_vote!(comment_id: comment.id, user_id: user.id, vote_type: :down)
+        end
+
+        loaded_comment = Ash.load!(comment, [:downvote_count], authorize?: false)
+        assert loaded_comment.downvote_count == 7
+      end
+
+      test "both vote counts return correct values" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+        comment = create_comment!(post_id: post.id, content: "Test comment")
+
+        # Create 10 upvotes
+        for _ <- 1..10 do
+          user = create_user!()
+          create_comment_vote!(comment_id: comment.id, user_id: user.id, vote_type: :up)
+        end
+
+        # Create 4 downvotes
+        for _ <- 1..4 do
+          user = create_user!()
+          create_comment_vote!(comment_id: comment.id, user_id: user.id, vote_type: :down)
+        end
+
+        loaded_comment = Ash.load!(comment, [:upvote_count, :downvote_count], authorize?: false)
+        assert loaded_comment.upvote_count == 10
+        assert loaded_comment.downvote_count == 4
+      end
+
+      test "vote counts return zero when no votes exist" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+        comment = create_comment!(post_id: post.id, content: "Test comment")
+
+        loaded_comment = Ash.load!(comment, [:upvote_count, :downvote_count], authorize?: false)
+        assert loaded_comment.upvote_count == 0
+        assert loaded_comment.downvote_count == 0
+      end
+
+      test "vote counts work for multiple comments" do
+        site = create_site!()
+        post = create_blog_post!(site_id: site.id)
+        comment1 = create_comment!(post_id: post.id, content: "Comment 1")
+        comment2 = create_comment!(post_id: post.id, content: "Comment 2")
+
+        # Comment 1: 5 upvotes, 2 downvotes
+        for _ <- 1..5 do
+          user = create_user!()
+          create_comment_vote!(comment_id: comment1.id, user_id: user.id, vote_type: :up)
+        end
+
+        for _ <- 1..2 do
+          user = create_user!()
+          create_comment_vote!(comment_id: comment1.id, user_id: user.id, vote_type: :down)
+        end
+
+        # Comment 2: 3 upvotes, 8 downvotes
+        for _ <- 1..3 do
+          user = create_user!()
+          create_comment_vote!(comment_id: comment2.id, user_id: user.id, vote_type: :up)
+        end
+
+        for _ <- 1..8 do
+          user = create_user!()
+          create_comment_vote!(comment_id: comment2.id, user_id: user.id, vote_type: :down)
+        end
+
+        loaded_comments =
+          Ash.load!([comment1, comment2], [:upvote_count, :downvote_count], authorize?: false)
+
+        [loaded1, loaded2] = loaded_comments
+
+        assert loaded1.upvote_count == 5
+        assert loaded1.downvote_count == 2
+        assert loaded2.upvote_count == 3
+        assert loaded2.downvote_count == 8
+      end
+    end
+
     # ============================================================================
     # MASTER ACTIONS TESTS
     # ============================================================================

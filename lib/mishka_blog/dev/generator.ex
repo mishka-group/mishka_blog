@@ -160,4 +160,19 @@ defmodule MishkaBlog.Dev.Generator do
       overrides: opts
     )
   end
+
+  def comment_vote(opts \\ [], actor \\ nil) do
+    changeset_generator(
+      MishkaBlog.CommentVote,
+      :create,
+      authorize?: false,
+      defaults: [
+        comment_id: nil,
+        user_id: nil,
+        vote_type: StreamData.member_of([:up, :down])
+      ],
+      overrides: opts,
+      actor: actor
+    )
+  end
 end

@@ -272,6 +272,38 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
+  # CommentVote factory
+  def create_comment_vote!(overrides \\ []) do
+    {comment_id, overrides} = Keyword.pop(overrides, :comment_id)
+    {user_id, overrides} = Keyword.pop(overrides, :user_id)
+    {actor, overrides} = Keyword.pop(overrides, :actor)
+
+    comment_id = comment_id || create_comment!().id
+
+    # If user_id is provided, look up or create that user
+    # Otherwise, use/create actor
+    {actor, _user_id} =
+      cond do
+        actor && user_id ->
+          {actor, user_id}
+
+        actor ->
+          {actor, actor.id}
+
+        user_id ->
+          {Ash.get!(MishkaCmsCore.Accounts.User, user_id, authorize?: false), user_id}
+
+        true ->
+          user = create_user!(site_id: site_of(MishkaBlog.Comment, comment_id))
+          {user, user.id}
+      end
+
+    overrides
+    |> Keyword.put(:comment_id, comment_id)
+    |> comment_vote(actor)
+    |> generate()
+  end
+
   # A row that joins two records joins two records of ONE site, as a site's own writes do; the one
   # not given is made on the site of the one that is.
   defp on_one_site({left, left_id, make_left}, {right, right_id, make_right}) do
