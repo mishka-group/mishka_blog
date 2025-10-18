@@ -150,6 +150,45 @@ defmodule MishkaBlog do
         get :preview_version, route: "/:blogger_id/version/:version_id/preview"
       end
 
+      base_route "/v1/master/admin/mishka-blog/team", MishkaBlog.Team do
+        index :master_read
+        get :master_read
+        get :master_by_slug, route: "/by-slug/:slug"
+        index :master_archived, route: "/archived"
+        get :master_archived, route: "/archived/:id"
+        post :master_create
+        patch :master_update, read_action: :master_get
+        patch :master_unarchive, route: "/:id/unarchive", read_action: :master_get_archived
+        delete :master_destroy, route: "/:id/archive", read_action: :master_get
+        delete :master_permanent_destroy, route: "/:id/permanent", read_action: :master_get
+
+        get :master_get_with_versions, route: "/:id/with-versions"
+        index :master_list_versions, route: "/:team_id/versions"
+
+        patch :master_restore_version_api,
+          route: "/:id/version/:version_id/restore"
+
+        get :master_preview_version, route: "/:team_id/version/:version_id/preview"
+      end
+
+      base_route "/v1/tenant/admin/mishka-blog/team", MishkaBlog.Team do
+        index :read
+        get :read
+        get :by_slug, route: "/by-slug/:slug"
+        index :archived, route: "/archived"
+        get :archived, route: "/archived/:id"
+        post :create
+        patch :update
+        patch :unarchive, route: "/:id/unarchive", read_action: :get_archived
+        delete :destroy, route: "/:id/archive"
+        delete :permanent_destroy, route: "/:id/permanent"
+
+        get :get_with_versions, route: "/:id/with-versions"
+        index :list_versions, route: "/:team_id/versions"
+        patch :restore_version_api, route: "/:id/version/:version_id/restore"
+        get :preview_version, route: "/:team_id/version/:version_id/preview"
+      end
+
       base_route "/v1/master/admin/mishka-blog/tag", MishkaBlog.Tag do
         index :master_read
         get :master_read
@@ -256,6 +295,12 @@ defmodule MishkaBlog do
         get :public_get, route: "/active/:id"
       end
 
+      base_route "/v1/user/mishka-blog/team", MishkaBlog.Team do
+        index :public_list
+        get :public_get, route: "/:id"
+        get :public_by_slug, route: "/by-slug/:slug"
+      end
+
       base_route "/v1/user/mishka-blog/tag", MishkaBlog.Tag do
         index :public_list
         get :public_get, route: "/:id"
@@ -327,5 +372,8 @@ defmodule MishkaBlog do
     resource MishkaBlog.Comment
     resource MishkaBlog.CommentVote
     resource MishkaBlog.PostBookmark
+    resource MishkaBlog.Team
+    resource MishkaBlog.TeamPermission
+    resource MishkaBlog.TeamMember
   end
 end

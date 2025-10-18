@@ -378,6 +378,186 @@ defmodule MishkaBlog.Test.BloggerTest do
       end
     end
 
+    describe "Blogger with teams management" do
+      test "creates blogger with teams" do
+        site = create_site!()
+        user = create_user!()
+        team1 = create_team!(site_id: site.id, status: :active)
+        team2 = create_team!(site_id: site.id, status: :active)
+
+        blogger =
+          Blogger
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              user_id: user.id,
+              display_name: "Test Blogger",
+              slug: "test-blogger",
+              team_ids: [team1.id, team2.id]
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        # Load teams
+        teams_query =
+          MishkaBlog.Team
+          |> Ash.Query.set_tenant(site.id)
+          |> Ash.Query.page(limit: 10)
+
+        blogger_with_teams = Ash.load!(blogger, [teams: teams_query], authorize?: false)
+
+        team_ids = Enum.map(blogger_with_teams.teams.results, & &1.id)
+        assert team1.id in team_ids
+        assert team2.id in team_ids
+        assert length(team_ids) == 2
+      end
+
+      test "updates blogger teams" do
+        site = create_site!()
+        user = create_user!()
+        team1 = create_team!(site_id: site.id, status: :active)
+        team2 = create_team!(site_id: site.id, status: :active)
+        team3 = create_team!(site_id: site.id, status: :active)
+
+        blogger = create_blogger!(site_id: site.id, user_id: user.id, team_ids: [team1.id])
+
+        # Update teams - replace team1 with team2 and team3
+        result =
+          blogger
+          |> Ash.Changeset.for_update(
+            :update,
+            %{team_ids: [team2.id, team3.id]},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.update()
+
+        assert {:ok, updated_blogger} = result
+
+        # Load teams
+        teams_query =
+          MishkaBlog.Team
+          |> Ash.Query.set_tenant(site.id)
+          |> Ash.Query.page(limit: 10)
+
+        blogger_with_teams =
+          Ash.load!(updated_blogger, [teams: teams_query], authorize?: false)
+
+        team_ids = Enum.map(blogger_with_teams.teams.results, & &1.id)
+        assert team2.id in team_ids
+        assert team3.id in team_ids
+        assert team1.id not in team_ids
+        assert length(team_ids) == 2
+      end
+
+      test "removes all teams when empty array provided" do
+        site = create_site!()
+        user = create_user!()
+        team1 = create_team!(site_id: site.id, status: :active)
+        team2 = create_team!(site_id: site.id, status: :active)
+
+        blogger =
+          create_blogger!(site_id: site.id, user_id: user.id, team_ids: [team1.id, team2.id])
+
+        # Remove all teams
+        result =
+          blogger
+          |> Ash.Changeset.for_update(
+            :update,
+            %{team_ids: []},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.update()
+
+        assert {:ok, updated_blogger} = result
+
+        # Verify all teams removed
+        teams_query =
+          MishkaBlog.Team
+          |> Ash.Query.set_tenant(site.id)
+          |> Ash.Query.page(limit: 10)
+
+        blogger_with_teams =
+          Ash.load!(updated_blogger, [teams: teams_query], authorize?: false)
+
+        assert blogger_with_teams.teams.results == []
+      end
+
+      test "master_create creates blogger with teams" do
+        site = create_site!()
+        user = create_user!()
+        team1 = create_team!(site_id: site.id, status: :active)
+        team2 = create_team!(site_id: site.id, status: :active)
+
+        blogger =
+          Blogger
+          |> Ash.Changeset.for_create(
+            :master_create,
+            %{
+              user_id: user.id,
+              display_name: "Master Blogger",
+              slug: "master-blogger",
+              site_id: site.id,
+              team_ids: [team1.id, team2.id]
+            },
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        teams_query =
+          MishkaBlog.Team
+          |> Ash.Query.set_tenant(site.id)
+          |> Ash.Query.page(limit: 10)
+
+        blogger_with_teams = Ash.load!(blogger, [teams: teams_query], authorize?: false)
+
+        team_ids = Enum.map(blogger_with_teams.teams.results, & &1.id)
+        assert team1.id in team_ids
+        assert team2.id in team_ids
+      end
+
+      test "master_update updates blogger teams" do
+        site = create_site!()
+        user = create_user!()
+        team1 = create_team!(site_id: site.id)
+        team2 = create_team!(site_id: site.id)
+        team3 = create_team!(site_id: site.id)
+
+        blogger = create_blogger!(site_id: site.id, user_id: user.id, team_ids: [team1.id])
+
+        result =
+          blogger
+          |> Ash.Changeset.for_update(
+            :master_update,
+            %{team_ids: [team2.id, team3.id]},
+            authorize?: false
+          )
+          |> Ash.update()
+
+        assert {:ok, updated_blogger} = result
+
+        teams_query =
+          MishkaBlog.Team
+          |> Ash.Query.set_tenant(site.id)
+          |> Ash.Query.page(limit: 10)
+
+        blogger_with_teams =
+          Ash.load!(updated_blogger, [tenant_teams: teams_query],
+            tenant: site.id,
+            authorize?: false
+          )
+
+        team_ids = Enum.map(blogger_with_teams.tenant_teams.results, & &1.id)
+        assert team2.id in team_ids
+        assert team3.id in team_ids
+        assert team1.id not in team_ids
+        assert length(team_ids) == 2
+      end
+    end
+
     describe "JSON API configuration" do
       test "has correct JSON API type" do
         json_api_type = AshJsonApi.Resource.Info.type(Blogger)

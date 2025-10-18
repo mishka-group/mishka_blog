@@ -83,6 +83,52 @@ defmodule MishkaBlog.Dev.Generator do
     )
   end
 
+  def team(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaBlog.Team,
+      :create,
+      authorize?: false,
+      defaults: [
+        name: sequence(:name, &"Test Team #{&1}"),
+        slug: sequence(:slug, &"test-team-#{&1}"),
+        description: sequence(:description, &"Test description for team #{&1}"),
+        avatar_url: nil,
+        cover_image_url: nil,
+        status: :draft,
+        site_id: nil
+      ],
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
+  def team_member(opts \\ []) do
+    changeset_generator(
+      MishkaBlog.TeamMember,
+      :assign,
+      authorize?: false,
+      defaults: [
+        team_id: nil,
+        blogger_id: nil,
+        role: nil
+      ],
+      overrides: opts
+    )
+  end
+
+  def team_permission(opts \\ []) do
+    changeset_generator(
+      MishkaBlog.TeamPermission,
+      :assign,
+      authorize?: false,
+      defaults: [
+        team_id: nil,
+        permission_id: nil
+      ],
+      overrides: opts
+    )
+  end
+
   def post_blogger(opts \\ []) do
     changeset_generator(
       MishkaBlog.PostBlogger,

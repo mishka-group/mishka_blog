@@ -175,6 +175,53 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
+  # Team factory
+  def create_team!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    # Team MUST have a site_id (not global)
+    site_id = site_id || create_site!().id
+    tenant = site_id
+
+    overrides
+    |> team(tenant)
+    |> generate()
+  end
+
+  # TeamMember factory
+  def create_team_member!(overrides \\ []) do
+    {team_id, overrides} = Keyword.pop(overrides, :team_id)
+    {blogger_id, overrides} = Keyword.pop(overrides, :blogger_id)
+
+    # TeamMember MUST have a team_id and a blogger_id, both of one site
+    {team_id, blogger_id} =
+      on_one_site(
+        {MishkaBlog.Team, team_id, &create_team!/1},
+        {MishkaBlog.Blogger, blogger_id, &create_blogger!/1}
+      )
+
+    overrides
+    |> Keyword.put(:team_id, team_id)
+    |> Keyword.put(:blogger_id, blogger_id)
+    |> team_member()
+    |> generate()
+  end
+
+  # TeamPermission factory
+  def create_team_permission!(overrides \\ []) do
+    {team_id, overrides} = Keyword.pop(overrides, :team_id)
+    {permission_id, overrides} = Keyword.pop(overrides, :permission_id)
+
+    # TeamPermission MUST have a team_id and permission_id
+    team_id = team_id || create_team!().id
+    permission_id = permission_id || create_permission!().id
+
+    overrides
+    |> Keyword.put(:team_id, team_id)
+    |> Keyword.put(:permission_id, permission_id)
+    |> team_permission()
+    |> generate()
+  end
+
   # PostBlogger factory
   def create_post_blogger!(overrides \\ []) do
     {post_id, overrides} = Keyword.pop(overrides, :post_id)

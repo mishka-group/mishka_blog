@@ -1252,6 +1252,223 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
       end
     end
 
+    describe "Paginated relationships - Blogger with teams" do
+      test "public can include blogger teams with pagination", %{site: site} do
+        user = create_user!(site_id: site.id)
+
+        blogger =
+          create_blogger!(
+            site_id: site.id,
+            user_id: user.id,
+            display_name: "Team Blogger",
+            slug: "team-blogger"
+          )
+
+        # Create 20 teams and add blogger as member
+        team_ids =
+          Enum.map(1..20, fn i ->
+            team =
+              create_team!(
+                site_id: site.id,
+                name: "Team #{i}",
+                slug: "team-#{i}",
+                status: :active
+              )
+
+            create_team_member!(team_id: team.id, blogger_id: blogger.id)
+            team.id
+          end)
+
+        # Fetch blogger with paginated teams (limit 10)
+        response =
+          make_api_request(
+            "#{@api_public_path}/#{blogger.id}?include=teams&included_page[teams][limit]=10&included_page[teams][offset]=0",
+            %{},
+            method: :get,
+            headers: []
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        # Verify blogger data
+        assert body["data"]["id"] == blogger.id
+        assert body["data"]["attributes"]["display_name"] == "Team Blogger"
+
+        # Verify included teams (should be limited to 10)
+        assert is_list(body["included"])
+        team_records = Enum.filter(body["included"], fn inc -> inc["type"] == "team" end)
+        assert length(team_records) == 10
+
+        # Verify all included teams are from our created list
+        included_team_ids = Enum.map(team_records, & &1["id"])
+        Enum.each(included_team_ids, fn id -> assert id in team_ids end)
+      end
+
+      test "public can paginate through blogger teams using offset", %{site: site} do
+        user = create_user!(site_id: site.id)
+        blogger = create_blogger!(site_id: site.id, user_id: user.id, slug: "offset-blogger")
+
+        # Create 25 teams
+        _team_ids =
+          Enum.map(1..25, fn i ->
+            team =
+              create_team!(
+                site_id: site.id,
+                name: "Offset Team #{i}",
+                slug: "offset-team-#{i}",
+                status: :active
+              )
+
+            create_team_member!(team_id: team.id, blogger_id: blogger.id)
+            team.id
+          end)
+
+        # Fetch second page (offset 10, limit 10)
+        response =
+          make_api_request(
+            "#{@api_public_path}/#{blogger.id}?include=teams&included_page[teams][limit]=10&included_page[teams][offset]=10",
+            %{},
+            method: :get,
+            headers: []
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        team_records = Enum.filter(body["included"], fn inc -> inc["type"] == "team" end)
+        assert length(team_records) == 10
+      end
+
+      test "tenant admin can include tenant_teams with pagination", %{
+        tenant_admin: tenant_admin,
+        site: site
+      } do
+        token = sign_in_tenant(tenant_admin)
+        user = create_user!(site_id: site.id)
+        blogger = create_blogger!(site_id: site.id, user_id: user.id, slug: "tenant-blogger")
+
+        # Create 15 teams
+        team_ids =
+          Enum.map(1..15, fn i ->
+            team =
+              create_team!(
+                site_id: site.id,
+                name: "Tenant Team #{i}",
+                slug: "tenant-team-#{i}",
+                status: :active
+              )
+
+            create_team_member!(team_id: team.id, blogger_id: blogger.id)
+            team.id
+          end)
+
+        # Fetch blogger with paginated tenant_teams (limit 10)
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/#{blogger.id}?include=tenant_teams&included_page[tenant_teams][limit]=10",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        team_records = Enum.filter(body["included"], fn inc -> inc["type"] == "team" end)
+        assert length(team_records) == 10
+
+        included_team_ids = Enum.map(team_records, & &1["id"])
+        Enum.each(included_team_ids, fn id -> assert id in team_ids end)
+      end
+
+      test "master admin can include master_teams with pagination", %{
+        master_user: master_user,
+        site: site
+      } do
+        token = sign_in_master(master_user)
+        user = create_user!(site_id: site.id)
+        blogger = create_blogger!(site_id: site.id, user_id: user.id, slug: "master-blogger")
+
+        # Create 12 teams
+        _team_ids =
+          Enum.map(1..12, fn i ->
+            team =
+              create_team!(
+                site_id: site.id,
+                name: "Master Team #{i}",
+                slug: "master-team-#{i}",
+                status: :active
+              )
+
+            create_team_member!(team_id: team.id, blogger_id: blogger.id)
+            team.id
+          end)
+
+        # Fetch blogger with paginated master_teams
+        response =
+          make_api_request(
+            "#{@api_master_path}/#{blogger.id}?include=master_teams&included_page[master_teams][limit]=10",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        team_records = Enum.filter(body["included"], fn inc -> inc["type"] == "team" end)
+        assert length(team_records) == 10
+      end
+
+      test "pagination respects team status (only active)", %{site: site} do
+        user = create_user!(site_id: site.id)
+        blogger = create_blogger!(site_id: site.id, user_id: user.id, slug: "status-blogger")
+
+        # Create 10 active teams
+        active_team_ids =
+          Enum.map(1..10, fn i ->
+            team =
+              create_team!(
+                site_id: site.id,
+                name: "Active #{i}",
+                slug: "active-#{i}",
+                status: :active
+              )
+
+            create_team_member!(team_id: team.id, blogger_id: blogger.id)
+            team.id
+          end)
+
+        # Create 5 draft teams (should not appear)
+        Enum.each(1..5, fn i ->
+          team =
+            create_team!(site_id: site.id, name: "Draft #{i}", slug: "draft-#{i}", status: :draft)
+
+          create_team_member!(team_id: team.id, blogger_id: blogger.id)
+        end)
+
+        # Fetch blogger with teams (should only get active)
+        response =
+          make_api_request(
+            "#{@api_public_path}/#{blogger.id}?include=teams&included_page[teams][limit]=20",
+            %{},
+            method: :get,
+            headers: []
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        team_records = Enum.filter(body["included"], fn inc -> inc["type"] == "team" end)
+        # Should only get 10 active teams, not 15 total
+        assert length(team_records) == 10
+
+        included_team_ids = Enum.map(team_records, & &1["id"])
+        Enum.each(included_team_ids, fn id -> assert id in active_team_ids end)
+      end
+    end
+
     describe "Paginated relationships - Blogger with posts" do
       test "public can include blogger posts with pagination", %{site: site} do
         user = create_user!(site_id: site.id)
@@ -1550,6 +1767,75 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
 
         included_post_ids = Enum.map(post_records, & &1["id"])
         Enum.each(included_post_ids, fn id -> assert id in published_post_ids end)
+      end
+
+      test "can combine teams and posts pagination in one request", %{site: site} do
+        user = create_user!(site_id: site.id)
+        blogger = create_blogger!(site_id: site.id, user_id: user.id, slug: "combined-blogger")
+
+        # Create 15 teams
+        _team_ids =
+          Enum.map(1..15, fn i ->
+            team =
+              create_team!(
+                site_id: site.id,
+                name: "Combined Team #{i}",
+                slug: "combined-team-#{i}",
+                status: :active
+              )
+
+            create_team_member!(team_id: team.id, blogger_id: blogger.id)
+            team.id
+          end)
+
+        # Create 20 posts
+        _post_ids =
+          Enum.map(1..20, fn i ->
+            post =
+              MishkaBlog.BlogPost
+              |> Ash.Changeset.for_create(
+                :create,
+                %{
+                  title: "Combined Post #{i}",
+                  slug: "combined-post-#{i}",
+                  content: "Content",
+                  status: :published
+                },
+                tenant: site.id,
+                authorize?: false
+              )
+              |> Ash.create!()
+
+            MishkaBlog.PostBlogger
+            |> Ash.Changeset.for_create(
+              :assign,
+              %{post_id: post.id, blogger_id: blogger.id},
+              tenant: site.id,
+              authorize?: false
+            )
+            |> Ash.create!()
+
+            post.id
+          end)
+
+        # Fetch blogger with both teams and posts paginated
+        response =
+          make_api_request(
+            "#{@api_public_path}/#{blogger.id}?include=teams,posts&included_page[teams][limit]=8&included_page[posts][limit]=12",
+            %{},
+            method: :get,
+            headers: []
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+
+        team_records = Enum.filter(body["included"], fn inc -> inc["type"] == "team" end)
+        post_records = Enum.filter(body["included"], fn inc -> inc["type"] == "blog_post" end)
+
+        # Verify each relationship respects its own pagination limit
+        assert length(team_records) == 8
+        assert length(post_records) == 12
       end
     end
 

@@ -201,12 +201,18 @@ defmodule MishkaBlog.Blogger do
     # renders this resource's own `display_name`, `slug`, `bio` and `avatar_url`; it never needs the
     # account. Admin routes load the user through their own gated actions.
     includes [
+      :teams,
+      :master_teams,
+      :tenant_teams,
       :posts,
       :master_posts,
       :tenant_posts
     ]
 
     paginated_includes [
+      :teams,
+      :master_teams,
+      :tenant_teams,
       :posts,
       :master_posts,
       :tenant_posts
@@ -673,6 +679,13 @@ defmodule MishkaBlog.Blogger do
         name :blogger_form
       end
 
+      source do
+        preload do
+          master [:master_teams]
+          tenant [:tenant_teams]
+        end
+      end
+
       fields do
         field :site_id, :relation do
           display_field :name
@@ -748,6 +761,42 @@ defmodule MishkaBlog.Blogger do
           end
         end
 
+        field :team_ids, :relation do
+          virtual true
+          resource MishkaBlog.Team
+          display_field :name
+          search_field :name
+          mode :search_multi
+          depends_on :site_id
+
+          load fn query, state ->
+            site_id =
+              if state.master_user? do
+                Map.get(state.field_values, :site_id)
+              else
+                Map.get(state.current_user, :site_id)
+              end
+
+            Ash.Query.filter_input(query, %{site_id: site_id})
+          end
+
+          derive_value fn record ->
+            teams =
+              cond do
+                is_list(Map.get(record, :master_teams)) -> record.master_teams
+                is_list(Map.get(record, :tenant_teams)) -> record.tenant_teams
+                is_list(Map.get(record, :teams)) -> record.teams
+                true -> []
+              end
+
+            Enum.map(teams, &to_string(&1.id))
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Teams") end
+          end
+        end
+
         field :bio, :textarea do
           ui do
             label fn -> dgettext("mishka_gervaz", "Bio") end
@@ -812,7 +861,8 @@ defmodule MishkaBlog.Blogger do
             :display_name,
             :slug,
             :contact_email,
-            :can_publish_directly
+            :can_publish_directly,
+            :team_ids
           ]
 
           ui do
@@ -923,6 +973,10 @@ defmodule MishkaBlog.Blogger do
       primary? true
       accept List.delete(@admin_fields, :site_id)
 
+      argument :team_ids, {:array, :uuid} do
+        description "List of team IDs to assign this blogger to"
+      end
+
       validate present([:user_id, :display_name, :slug])
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
@@ -930,10 +984,20 @@ defmodule MishkaBlog.Blogger do
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
 
+      change manage_relationship(:team_ids, :tenant_teams,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_lookup: :relate
+             )
+
       description "Creates blogger profile for tenant users - requires tenant context, auto-assigns site_id"
     end
 
     create :master_create do
+      argument :team_ids, {:array, :uuid} do
+        description "List of team IDs to assign this blogger to"
+      end
+
       validate present([:user_id, :display_name, :slug, :site_id])
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
@@ -945,6 +1009,12 @@ defmodule MishkaBlog.Blogger do
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
 
+      change manage_relationship(:team_ids, :tenant_teams,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_lookup: :relate
+             )
+
       description "Creates blogger profile for master users - bypasses multi-tenancy, requires explicit site_id"
     end
 
@@ -953,6 +1023,10 @@ defmodule MishkaBlog.Blogger do
       require_atomic? false
       transaction? true
       accept List.delete(@admin_fields, :site_id)
+
+      argument :team_ids, {:array, :uuid} do
+        description "List of team IDs to assign this blogger to (replaces existing)"
+      end
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
@@ -965,6 +1039,12 @@ defmodule MishkaBlog.Blogger do
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
 
+      change manage_relationship(:team_ids, :tenant_teams,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_lookup: :relate
+             )
+
       description "Updates blogger profile for tenant users - requires tenant context, prevents site_id changes"
     end
 
@@ -974,6 +1054,10 @@ defmodule MishkaBlog.Blogger do
       transaction? true
       accept List.delete(@admin_fields, :site_id)
       multitenancy :bypass
+
+      argument :team_ids, {:array, :uuid} do
+        description "List of team IDs to assign this blogger to (replaces existing)"
+      end
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
@@ -990,6 +1074,12 @@ defmodule MishkaBlog.Blogger do
       end
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+
+      change manage_relationship(:team_ids, :tenant_teams,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
     end
 
     read :by_user do
@@ -1120,6 +1210,55 @@ defmodule MishkaBlog.Blogger do
       argument :slug, :string, allow_nil?: false
       filter expr(slug == ^arg(:slug) and is_nil(archived_at))
       get? true
+    end
+
+    update :assign_teams do
+      description "Replaces blogger's team memberships with the provided list of team IDs"
+      accept []
+      require_atomic? false
+
+      argument :team_ids, {:array, :uuid} do
+        allow_nil? false
+        description "List of team IDs to assign this blogger to"
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      change manage_relationship(:team_ids, :tenant_teams,
+               type: :append_and_remove,
+               on_no_match: :error,
+               on_match: :ignore
+             )
+    end
+
+    update :add_team do
+      description "Adds blogger to a single team"
+      accept []
+      require_atomic? false
+
+      argument :team_id, :uuid do
+        allow_nil? false
+        description "Team ID to add this blogger to"
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      change manage_relationship(:team_id, :tenant_teams, type: :append, on_no_match: :error)
+    end
+
+    update :remove_team do
+      description "Removes blogger from a single team"
+      accept []
+      require_atomic? false
+
+      argument :team_id, :uuid do
+        allow_nil? false
+        description "Team ID to remove this blogger from"
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      change manage_relationship(:team_id, :tenant_teams, type: :remove)
     end
 
     destroy :destroy do
@@ -1781,6 +1920,37 @@ defmodule MishkaBlog.Blogger do
       public? true
       domain MishkaCmsCore.Accounts
       description "The user account associated with this blogger profile"
+    end
+
+    # Relationship - for public with tenant
+    many_to_many :teams, MishkaBlog.Team do
+      public? true
+      description "Teams this blogger is a member of (public access)"
+      through MishkaBlog.TeamMember
+      source_attribute_on_join_resource :blogger_id
+      destination_attribute_on_join_resource :team_id
+      read_action :public_list
+    end
+
+    # Relationship - for admin users with tenant
+    many_to_many :tenant_teams, MishkaBlog.Team do
+      public? true
+      description "Teams this blogger is a member of (tenant admin access)"
+      through MishkaBlog.TeamMember
+      source_attribute_on_join_resource :blogger_id
+      destination_attribute_on_join_resource :team_id
+    end
+
+    # Bypass relationship - for admin users without tenant
+    many_to_many :master_teams, MishkaBlog.Team do
+      public? true
+      description "Teams this blogger is a member of (master admin access, bypass tenant)"
+      through MishkaBlog.TeamMember
+      source_attribute_on_join_resource :blogger_id
+      destination_attribute_on_join_resource :team_id
+      read_action :master_read
+
+      filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
     end
 
     # Relationship - for public with tenant
