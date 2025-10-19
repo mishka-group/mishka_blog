@@ -129,6 +129,24 @@ defmodule MishkaBlog.Dev.Generator do
     )
   end
 
+  def auto_posting(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaBlog.AutoPosting,
+      :create,
+      authorize?: false,
+      defaults: [
+        name: sequence(:name, &"Test Auto Posting #{&1}"),
+        plugin: sequence(:plugin, &"test_plugin_#{&1}"),
+        description: sequence(:description, &"Test auto posting description #{&1}"),
+        is_active: false,
+        config: %{},
+        site_id: nil
+      ],
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
   def post_blogger(opts \\ []) do
     changeset_generator(
       MishkaBlog.PostBlogger,

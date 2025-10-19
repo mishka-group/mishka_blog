@@ -222,6 +222,19 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
+  # AutoPosting factory
+  def create_auto_posting!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+
+    # AutoPosting MUST have a site_id (not global)
+    site_id = site_id || create_site!().id
+    tenant = site_id
+
+    overrides
+    |> auto_posting(tenant)
+    |> generate()
+  end
+
   # PostBlogger factory
   def create_post_blogger!(overrides \\ []) do
     {post_id, overrides} = Keyword.pop(overrides, :post_id)

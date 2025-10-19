@@ -261,6 +261,52 @@ defmodule MishkaBlog do
         delete :permanent_destroy, route: "/:id/permanent"
       end
 
+      base_route "/v1/master/admin/mishka-blog/auto-posting", MishkaBlog.AutoPosting do
+        index :master_read
+        get :master_get
+        get :master_by_plugin, route: "/by-plugin/:plugin"
+        index :master_active, route: "/active"
+        index :master_archived, route: "/archived"
+        get :master_get_archived, route: "/archived/:id"
+        post :master_create
+        patch :master_update, read_action: :master_get
+        patch :master_activate, route: "/:id/activate", read_action: :master_get
+        patch :master_deactivate, route: "/:id/deactivate", read_action: :master_get
+        patch :master_unarchive, route: "/:id/unarchive", read_action: :master_get_archived
+        delete :master_destroy, route: "/:id/archive", read_action: :master_get
+        delete :master_permanent_destroy, route: "/:id/permanent", read_action: :master_get
+
+        get :master_get_with_versions, route: "/:id/with-versions"
+        index :master_list_versions, route: "/:auto_posting_id/versions"
+
+        patch :master_restore_version_api,
+          route: "/:id/version/:version_id/restore",
+          read_action: :master_get
+
+        get :master_preview_version, route: "/:auto_posting_id/version/:version_id/preview"
+      end
+
+      base_route "/v1/tenant/admin/mishka-blog/auto-posting", MishkaBlog.AutoPosting do
+        index :read
+        get :read
+        get :by_plugin, route: "/by-plugin/:plugin"
+        index :active, route: "/active"
+        index :archived, route: "/archived"
+        get :archived, route: "/archived/:id"
+        post :create
+        patch :update
+        patch :activate, route: "/:id/activate"
+        patch :deactivate, route: "/:id/deactivate"
+        patch :unarchive, route: "/:id/unarchive", read_action: :get_archived
+        delete :destroy, route: "/:id/archive"
+        delete :permanent_destroy, route: "/:id/permanent"
+
+        get :get_with_versions, route: "/:id/with-versions"
+        index :list_versions, route: "/:auto_posting_id/versions"
+        patch :restore_version_api, route: "/:id/version/:version_id/restore"
+        get :preview_version, route: "/:auto_posting_id/version/:version_id/preview"
+      end
+
       base_route "/v1/user/mishka-blog/bookmark", MishkaBlog.PostBookmark do
         index :my_bookmarks, route: "/my-bookmarks"
         post :create
@@ -365,6 +411,7 @@ defmodule MishkaBlog do
     resource MishkaBlog.PostCollection
     resource MishkaBlog.Tag
     resource MishkaBlog.PostTag
+    resource MishkaBlog.AutoPosting
     resource MishkaBlog.PostRating
     resource MishkaBlog.PostView
     resource MishkaBlog.Blogger
