@@ -378,6 +378,95 @@ defmodule MishkaBlog.Test.BloggerTest do
       end
     end
 
+    describe "calculations" do
+      test "follower_count returns the number of followers" do
+        site = create_site!()
+        blogger = create_blogger!(site_id: site.id)
+
+        # Create 3 followers for this blogger
+        user1 = create_user!()
+        user2 = create_user!()
+        user3 = create_user!()
+
+        create_blogger_follower!(blogger_id: blogger.id, follower_user_id: user1.id)
+        create_blogger_follower!(blogger_id: blogger.id, follower_user_id: user2.id)
+        create_blogger_follower!(blogger_id: blogger.id, follower_user_id: user3.id)
+
+        # Load the follower_count calculation (no tenant needed for calculation!)
+        blogger_with_count =
+          Ash.get!(Blogger, blogger.id, tenant: site.id, authorize?: false)
+          |> Ash.load!(:follower_count, authorize?: false)
+
+        assert blogger_with_count.follower_count == 3
+      end
+
+      test "follower_count returns 0 when blogger has no followers" do
+        site = create_site!()
+        blogger = create_blogger!(site_id: site.id)
+
+        # Load the follower_count calculation (no tenant needed for calculation!)
+        blogger_with_count =
+          Ash.get!(Blogger, blogger.id, tenant: site.id, authorize?: false)
+          |> Ash.load!(:follower_count, authorize?: false)
+
+        assert blogger_with_count.follower_count == 0
+      end
+
+      test "follower_count updates when followers are added or removed" do
+        site = create_site!()
+        blogger = create_blogger!(site_id: site.id)
+        user1 = create_user!()
+        user2 = create_user!()
+
+        # Initially 0 followers
+        blogger_with_count =
+          Ash.get!(Blogger, blogger.id, tenant: site.id, authorize?: false)
+          |> Ash.load!(:follower_count, authorize?: false)
+
+        assert blogger_with_count.follower_count == 0
+
+        # Add first follower
+        follow1 = create_blogger_follower!(blogger_id: blogger.id, follower_user_id: user1.id)
+
+        blogger_with_count =
+          Ash.get!(Blogger, blogger.id, tenant: site.id, authorize?: false)
+          |> Ash.load!(:follower_count, authorize?: false)
+
+        assert blogger_with_count.follower_count == 1
+
+        # Add second follower
+        follow2 = create_blogger_follower!(blogger_id: blogger.id, follower_user_id: user2.id)
+
+        blogger_with_count =
+          Ash.get!(Blogger, blogger.id, tenant: site.id, authorize?: false)
+          |> Ash.load!(:follower_count, authorize?: false)
+
+        assert blogger_with_count.follower_count == 2
+
+        # Remove first follower
+        follow1
+        |> Ash.Changeset.for_destroy(:unfollow, %{}, authorize?: false)
+        |> Ash.destroy!()
+
+        blogger_with_count =
+          Ash.get!(Blogger, blogger.id, tenant: site.id, authorize?: false)
+          |> Ash.load!(:follower_count, authorize?: false)
+
+        assert blogger_with_count.follower_count == 1
+
+        # Remove second follower
+        follow2
+        |> Ash.Changeset.for_destroy(:unfollow, %{}, authorize?: false)
+        |> Ash.destroy!()
+
+        blogger_with_count =
+          Ash.get!(Blogger, blogger.id, tenant: site.id, authorize?: false)
+          |> Ash.load!(:follower_count, authorize?: false)
+
+        assert blogger_with_count.follower_count == 0
+      end
+    end
+
     describe "Blogger with teams management" do
       test "creates blogger with teams" do
         site = create_site!()

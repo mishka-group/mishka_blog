@@ -187,6 +187,58 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
+  # BloggerFollower factory
+  def create_blogger_follower!(overrides \\ []) do
+    {blogger_id, overrides} = Keyword.pop(overrides, :blogger_id)
+    {actor, overrides} = Keyword.pop(overrides, :actor)
+
+    # BloggerFollower MUST have a blogger_id
+    blogger_id = blogger_id || create_blogger!().id
+
+    # BloggerFollower MUST have an actor (relate_actor will set follower_user), by default a user of
+    # the blogger's site
+    actor = actor || create_user!(site_id: site_of(MishkaBlog.Blogger, blogger_id))
+
+    overrides
+    |> Keyword.put(:blogger_id, blogger_id)
+    |> blogger_follower(actor)
+    |> generate()
+  end
+
+  # TeamFollower factory
+  def create_team_follower!(overrides \\ []) do
+    {team_id, overrides} = Keyword.pop(overrides, :team_id)
+    {follower_user_id, overrides} = Keyword.pop(overrides, :follower_user_id)
+    {actor, overrides} = Keyword.pop(overrides, :actor)
+
+    # TeamFollower MUST have a team_id
+    team_id = team_id || create_team!().id
+
+    # If follower_user_id is provided, look up or create that user
+    # Otherwise, use/create actor
+    {actor, _follower_user_id} =
+      cond do
+        actor && follower_user_id ->
+          {actor, follower_user_id}
+
+        actor ->
+          {actor, actor.id}
+
+        follower_user_id ->
+          {Ash.get!(MishkaCmsCore.Accounts.User, follower_user_id, authorize?: false),
+           follower_user_id}
+
+        true ->
+          user = create_user!(site_id: site_of(MishkaBlog.Team, team_id))
+          {user, user.id}
+      end
+
+    overrides
+    |> Keyword.put(:team_id, team_id)
+    |> team_follower(actor)
+    |> generate()
+  end
+
   # TeamMember factory
   def create_team_member!(overrides \\ []) do
     {team_id, overrides} = Keyword.pop(overrides, :team_id)

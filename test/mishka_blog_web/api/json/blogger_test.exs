@@ -1014,6 +1014,133 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
       end
     end
 
+    describe "CALCULATIONS - follower_count" do
+      test "follower_count calculation returns 0 when no followers", %{
+        master_user: master_user,
+        site: site,
+        site1_user: site1_user
+      } do
+        token = sign_in_master(master_user)
+
+        blogger =
+          create_blogger!(
+            site_id: site.id,
+            user_id: site1_user.id,
+            display_name: "No Followers",
+            slug: "no-followers"
+          )
+
+        response =
+          make_api_request(
+            "#{@api_master_path}/#{blogger.id}?fields[blogger]=follower_count",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+        assert body["data"]["attributes"]["follower_count"] == 0
+      end
+
+      test "follower_count calculation returns correct count with followers", %{
+        master_user: master_user,
+        site: site,
+        site1_user: site1_user,
+        tenant_admin: tenant_admin
+      } do
+        token = sign_in_master(master_user)
+
+        blogger =
+          create_blogger!(
+            site_id: site.id,
+            user_id: site1_user.id,
+            display_name: "Popular Blogger",
+            slug: "popular-blogger"
+          )
+
+        # Create some followers
+        _follower1 =
+          MishkaBlog.BloggerFollower
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              blogger_id: blogger.id
+            },
+            tenant: site.id,
+            authorize?: false,
+            actor: tenant_admin
+          )
+          |> Ash.create!()
+
+        _follower2 =
+          MishkaBlog.BloggerFollower
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              blogger_id: blogger.id
+            },
+            tenant: site.id,
+            authorize?: false,
+            actor: master_user
+          )
+          |> Ash.create!()
+
+        response =
+          make_api_request(
+            "#{@api_master_path}/#{blogger.id}?fields[blogger]=follower_count",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+        assert body["data"]["attributes"]["follower_count"] == 2
+      end
+
+      test "tenant admin can access follower_count for their site's blogger", %{
+        tenant_admin: tenant_admin,
+        site: site,
+        site1_user: site1_user
+      } do
+        token = sign_in_tenant(tenant_admin)
+
+        blogger =
+          create_blogger!(
+            site_id: site.id,
+            user_id: site1_user.id,
+            display_name: "Tenant Blogger",
+            slug: "tenant-blogger"
+          )
+
+        # Create a follower
+        MishkaBlog.BloggerFollower
+        |> Ash.Changeset.for_create(
+          :create,
+          %{
+            blogger_id: blogger.id
+          },
+          tenant: site.id,
+          authorize?: false,
+          actor: tenant_admin
+        )
+        |> Ash.create!()
+
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/#{blogger.id}?fields[blogger]=follower_count",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+        assert body["data"]["attributes"]["follower_count"] == 1
+      end
+    end
+
     describe "DELETE - Permanent deletion" do
       test "master admin can permanently delete any blogger", %{
         master_user: master_user,
@@ -1207,6 +1334,60 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         body = Jason.decode!(response.resp_body)
         assert body["data"]["id"] == active_blogger.id
         assert body["data"]["attributes"]["slug"] == "slug-blogger"
+      end
+
+      test "public endpoint includes follower_count when requested", %{
+        site: site,
+        site1_user: site1_user,
+        tenant_admin: tenant_admin
+      } do
+        blogger =
+          create_blogger!(
+            site_id: site.id,
+            user_id: site1_user.id,
+            display_name: "Popular Public Blogger",
+            slug: "popular-public-blogger"
+          )
+
+        # Create followers
+        _follower1 =
+          MishkaBlog.BloggerFollower
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              blogger_id: blogger.id
+            },
+            tenant: site.id,
+            authorize?: false,
+            actor: tenant_admin
+          )
+          |> Ash.create!()
+
+        _follower2 =
+          MishkaBlog.BloggerFollower
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              blogger_id: blogger.id
+            },
+            tenant: site.id,
+            authorize?: false,
+            actor: site1_user
+          )
+          |> Ash.create!()
+
+        response =
+          make_api_request(
+            "#{@api_public_path}/#{blogger.id}?fields[blogger]=display_name,slug,follower_count",
+            %{},
+            method: :get,
+            headers: []
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+        assert body["data"]["attributes"]["follower_count"] == 2
+        assert body["data"]["attributes"]["display_name"] == "Popular Public Blogger"
       end
 
       test "archived bloggers are not accessible via public endpoints", %{

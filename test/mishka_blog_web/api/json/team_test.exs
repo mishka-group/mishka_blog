@@ -1146,6 +1146,69 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         assert body["data"]["attributes"]["member_count"] == 3
       end
 
+      test "master admin can get team with follower_count", %{
+        master_user: master_user,
+        site: site,
+        tenant_admin: tenant_admin,
+        tenant_user: tenant_user
+      } do
+        token = sign_in_master(master_user)
+
+        # Create team
+        team = create_team!(site_id: site.id, name: "Test Team", slug: "test-team")
+
+        # Add followers to team
+        create_team_follower!(team_id: team.id, follower_user_id: tenant_admin.id)
+        create_team_follower!(team_id: team.id, follower_user_id: tenant_user.id)
+
+        # Get team with follower_count calculation
+        response =
+          make_api_request(
+            "#{@api_master_path}/#{team.id}?fields[team]=name,slug,follower_count",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+        assert body["data"]["attributes"]["follower_count"] == 2
+      end
+
+      test "master admin can get team with both member_count and follower_count", %{
+        master_user: master_user,
+        site: site,
+        tenant_admin: tenant_admin
+      } do
+        token = sign_in_master(master_user)
+
+        # Create team
+        team = create_team!(site_id: site.id, name: "Test Team", slug: "test-team")
+
+        # Create bloggers and add as members
+        blogger1 = create_blogger!(site_id: site.id, name: "Blogger 1", slug: "blogger-1")
+        blogger2 = create_blogger!(site_id: site.id, name: "Blogger 2", slug: "blogger-2")
+        create_team_member!(team_id: team.id, blogger_id: blogger1.id)
+        create_team_member!(team_id: team.id, blogger_id: blogger2.id)
+
+        # Add followers
+        create_team_follower!(team_id: team.id, follower_user_id: tenant_admin.id)
+
+        # Get team with both calculations
+        response =
+          make_api_request(
+            "#{@api_master_path}/#{team.id}?fields[team]=name,slug,member_count,follower_count",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+        assert body["data"]["attributes"]["member_count"] == 2
+        assert body["data"]["attributes"]["follower_count"] == 1
+      end
+
       test "tenant admin can get team with member_count", %{
         tenant_admin: tenant_admin,
         site: site
@@ -1176,6 +1239,65 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         assert body["data"]["attributes"]["member_count"] == 2
       end
 
+      test "tenant admin can get team with follower_count", %{
+        tenant_admin: tenant_admin,
+        tenant_user: tenant_user,
+        site: site
+      } do
+        token = sign_in_tenant(tenant_admin, site)
+
+        # Create team
+        team = create_team!(site_id: site.id, name: "Test Team", slug: "test-team")
+
+        # Add followers
+        create_team_follower!(team_id: team.id, follower_user_id: tenant_admin.id)
+        create_team_follower!(team_id: team.id, follower_user_id: tenant_user.id)
+
+        # Get team with follower_count calculation
+        response =
+          make_api_request(
+            "#{@api_tenant_path}/#{team.id}?fields[team]=name,slug,follower_count",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "false"}],
+            host: site.host
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+        assert body["data"]["attributes"]["follower_count"] == 2
+      end
+
+      test "public can get team with member_count and follower_count", %{site: site} do
+        # Create active team
+        team =
+          create_team!(
+            site_id: site.id,
+            name: "Public Team",
+            slug: "public-team",
+            status: :active
+          )
+
+        # Create bloggers and add as members
+        blogger1 = create_blogger!(site_id: site.id, display_name: "Blogger 1", slug: "blogger-1")
+        create_team_member!(team_id: team.id, blogger_id: blogger1.id)
+
+        # Get team with both calculations (no auth)
+        response =
+          make_api_request(
+            "#{@api_public_path}/#{team.id}?fields[team]=name,slug,member_count,follower_count",
+            %{},
+            method: :get,
+            headers: [],
+            host: site.host
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+        assert body["data"]["attributes"]["member_count"] == 1
+        assert body["data"]["attributes"]["follower_count"] == 0
+      end
+
       test "member_count returns 0 when team has no members", %{
         master_user: master_user,
         site: site
@@ -1196,6 +1318,28 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
         assert body["data"]["attributes"]["member_count"] == 0
+      end
+
+      test "follower_count returns 0 when team has no followers", %{
+        master_user: master_user,
+        site: site
+      } do
+        token = sign_in_master(master_user)
+
+        # Create team without followers
+        team = create_team!(site_id: site.id, name: "No Followers Team", slug: "no-followers")
+
+        response =
+          make_api_request(
+            "#{@api_master_path}/#{team.id}?fields[team]=name,slug,follower_count",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+          )
+
+        assert response.status == 200
+        body = Jason.decode!(response.resp_body)
+        assert body["data"]["attributes"]["follower_count"] == 0
       end
     end
 

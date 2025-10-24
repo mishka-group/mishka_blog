@@ -228,7 +228,7 @@ defmodule MishkaBlog.Team do
 
       source do
         preload do
-          always [:site, :version_count, :member_count]
+          always [:site, :version_count, :member_count, :follower_count]
           tenant tenant_members: :members
           master master_members: :members
         end
@@ -368,7 +368,7 @@ defmodule MishkaBlog.Team do
 
         column :stats_info do
           static true
-          requires [:member_count, :version_count]
+          requires [:member_count, :follower_count, :version_count]
           label fn -> dgettext("mishka_gervaz", "Stats") end
           visible fn state -> state.template.name() == :table end
 
@@ -379,6 +379,7 @@ defmodule MishkaBlog.Team do
           render fn record ->
             assigns = %{
               member_count: record.member_count || 0,
+              follower_count: record.follower_count || 0,
               version_count: record.version_count || 0
             }
 
@@ -387,6 +388,10 @@ defmodule MishkaBlog.Team do
               <span class="inline-flex items-center gap-[5px]" title={gettext("Members")}>
                 <.icon name="hero-user-group" class="size-[13px] text-[#c3c0b8]" />
                 {@member_count}
+              </span>
+              <span class="inline-flex items-center gap-[5px]" title={gettext("Followers")}>
+                <.icon name="hero-users" class="size-[13px] text-[#c3c0b8]" />
+                {@follower_count}
               </span>
               <span class="inline-flex items-center gap-[5px]" title={gettext("Versions")}>
                 <.icon name="hero-clock" class="size-[13px] text-[#c3c0b8]" />
@@ -1859,6 +1864,12 @@ defmodule MishkaBlog.Team do
       filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
     end
 
+    has_many :followers, MishkaBlog.TeamFollower do
+      public? true
+      destination_attribute :team_id
+      description "Users following this team"
+    end
+
     # Version history relationship
     # Loaded through `:sorted_versions` as whoever runs the read. A version query handed to a load
     # is left unbuilt (`Ash.Query.new/1`) so that this action builds it for that reader.
@@ -1926,6 +1937,11 @@ defmodule MishkaBlog.Team do
       public? true
       authorize? false
       multitenancy :bypass
+    end
+
+    count :follower_count, :followers do
+      public? true
+      authorize? false
     end
 
     count :version_count, :sorted_versions do

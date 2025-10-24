@@ -313,6 +313,21 @@ defmodule MishkaBlog do
         delete :remove
       end
 
+      base_route "/v1/user/mishka-blog/blogger-follow", MishkaBlog.BloggerFollower do
+        index :by_user, route: "/my-follows"
+        index :by_blogger, route: "/followers"
+        post :create
+        patch :toggle_notifications
+        delete :unfollow
+      end
+
+      base_route "/v1/user/mishka-blog/team-follow", MishkaBlog.TeamFollower do
+        index :my_following, route: "/my-following"
+        post :create
+        patch :toggle_notifications
+        delete :unfollow
+      end
+
       base_route "/v1/user/mishka-blog/post-rating", MishkaBlog.PostRating do
         index :my_ratings, route: "/my-ratings"
         post :create
@@ -416,11 +431,13 @@ defmodule MishkaBlog do
     resource MishkaBlog.PostView
     resource MishkaBlog.Blogger
     resource MishkaBlog.PostBlogger
+    resource MishkaBlog.BloggerFollower
     resource MishkaBlog.Comment
     resource MishkaBlog.CommentVote
     resource MishkaBlog.PostBookmark
     resource MishkaBlog.Team
     resource MishkaBlog.TeamPermission
     resource MishkaBlog.TeamMember
+    resource MishkaBlog.TeamFollower
   end
 end

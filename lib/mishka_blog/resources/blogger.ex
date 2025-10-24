@@ -230,7 +230,7 @@ defmodule MishkaBlog.Blogger do
 
       source do
         preload do
-          always [:site, :version_count, :post_count, :user]
+          always [:site, :version_count, :follower_count, :post_count, :user]
         end
       end
 
@@ -373,7 +373,7 @@ defmodule MishkaBlog.Blogger do
 
         column :stats_info do
           static true
-          requires [:post_count, :version_count]
+          requires [:post_count, :follower_count, :version_count]
           label fn -> dgettext("mishka_gervaz", "Stats") end
           visible fn state -> state.template.name() == :table end
 
@@ -384,6 +384,7 @@ defmodule MishkaBlog.Blogger do
           render fn record ->
             assigns = %{
               post_count: record.post_count || 0,
+              follower_count: record.follower_count || 0,
               version_count: record.version_count || 0
             }
 
@@ -392,6 +393,10 @@ defmodule MishkaBlog.Blogger do
               <span class="inline-flex items-center gap-[5px]" title={dgettext("mishka_gervaz", "Posts")}>
                 <.icon name="hero-document-text" class="size-[13px] text-[#c3c0b8]" />
                 {@post_count}
+              </span>
+              <span class="inline-flex items-center gap-[5px]" title={dgettext("mishka_gervaz", "Followers")}>
+                <.icon name="hero-users" class="size-[13px] text-[#c3c0b8]" />
+                {@follower_count}
               </span>
               <span class="inline-flex items-center gap-[5px]" title={dgettext("mishka_gervaz", "Versions")}>
                 <.icon name="hero-clock" class="size-[13px] text-[#c3c0b8]" />
@@ -1986,6 +1991,12 @@ defmodule MishkaBlog.Blogger do
       filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
     end
 
+    has_many :followers, MishkaBlog.BloggerFollower do
+      public? true
+      destination_attribute :blogger_id
+      description "Users following this blogger"
+    end
+
     # Loaded through `:sorted_versions` as whoever runs the read. A version query handed to a load
     # is left unbuilt (`Ash.Query.new/1`) so that this action builds it for that reader.
     has_many :sorted_versions, MishkaBlog.Blogger.Version do
@@ -2056,6 +2067,11 @@ defmodule MishkaBlog.Blogger do
   end
 
   aggregates do
+    count :follower_count, :followers do
+      public? true
+      authorize? false
+    end
+
     count :version_count, :sorted_versions do
       public? true
       multitenancy :bypass

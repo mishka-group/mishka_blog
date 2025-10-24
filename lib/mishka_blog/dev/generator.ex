@@ -102,6 +102,36 @@ defmodule MishkaBlog.Dev.Generator do
     )
   end
 
+  def blogger_follower(opts \\ [], actor \\ nil) do
+    changeset_generator(
+      MishkaBlog.BloggerFollower,
+      :create,
+      authorize?: false,
+      defaults: [
+        blogger_id: nil,
+        follower_user_id: nil,
+        notification_enabled: true
+      ],
+      overrides: opts,
+      actor: actor
+    )
+  end
+
+  def team_follower(opts \\ [], actor \\ nil) do
+    changeset_generator(
+      MishkaBlog.TeamFollower,
+      :create,
+      authorize?: false,
+      defaults: [
+        team_id: nil,
+        follower_user_id: nil,
+        notification_enabled: true
+      ],
+      overrides: opts,
+      actor: actor
+    )
+  end
+
   def team_member(opts \\ []) do
     changeset_generator(
       MishkaBlog.TeamMember,
