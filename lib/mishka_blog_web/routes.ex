@@ -9,7 +9,8 @@ defmodule MishkaBlogWeb.Routes do
   def routes(:admin) do
     [
       {:live, "/blog", MishkaBlogWeb.Live.Admin.Dashboard.Home.Index, :index},
-      {:live, "/blog/posts", MishkaBlogWeb.Live.Admin.Dashboard.Post.Index, :index}
+      {:live, "/blog/posts", MishkaBlogWeb.Live.Admin.Dashboard.Post.Index, :index},
+      {:live, "/blog/collections", MishkaBlogWeb.Live.Admin.Dashboard.Collection.Index, :index}
     ]
   end
 

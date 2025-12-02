@@ -47,6 +47,15 @@ defmodule MishkaBlogWeb.SidebarMenu do
                module: MishkaBlogWeb.Live.Admin.Dashboard.Post.Index,
                nav: false,
                permissions: @editorial
+             },
+             %{
+               extension: :mishka_blog,
+               key: "blog.collections",
+               label: gettext_noop("Collections"),
+               path: "/admin/dashboard/blog/collections",
+               module: MishkaBlogWeb.Live.Admin.Dashboard.Collection.Index,
+               nav: false,
+               permissions: @editorial
              }
            ],
            &Item.new!/1

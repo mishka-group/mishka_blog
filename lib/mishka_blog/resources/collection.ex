@@ -35,7 +35,7 @@ defmodule MishkaBlog.Collection do
       MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
     ]
 
-  import Phoenix.Component, only: [sigil_H: 2]
+  import Phoenix.Component, only: [sigil_H: 2, link: 1]
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
   require Ash.Query
@@ -250,7 +250,12 @@ defmodule MishkaBlog.Collection do
 
             ~H"""
             <div class="min-w-0">
-              <span class="block truncate text-[13.5px] font-semibold text-[#17161a]">{@name}</span>
+              <.link
+                navigate={MishkaBlogWeb.Templates.CollectionCard.posts_path(%{id: @id})}
+                class="block truncate text-[13.5px] font-semibold text-[#17161a] transition-colors hover:text-[#4f4bcc]"
+              >
+                {@name}
+              </.link>
               <div class="mt-[2px] flex items-center gap-[5px]">
                 <span class="truncate font-['Space_Grotesk'] text-[11px] font-medium text-[#a8a5a0]">
                   /{@slug}
@@ -795,6 +800,16 @@ defmodule MishkaBlog.Collection do
 
       empty_state message: dgettext_noop("mishka_gervaz", "No collections found"),
                   icon: "hero-folder"
+
+      presentation do
+        template MishkaBlogWeb.Templates.CollectionCard
+        ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
+
+        switchable_templates [
+          MishkaGervaz.Table.Templates.Table,
+          MishkaBlogWeb.Templates.CollectionCard
+        ]
+      end
     end
 
     form do
