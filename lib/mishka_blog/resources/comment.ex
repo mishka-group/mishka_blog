@@ -214,6 +214,54 @@ defmodule MishkaBlog.Comment do
       end
 
       columns do
+        # The author's initial tile and name, at the row's scale — the same pair the card leads
+        # with; see `MishkaBlogWeb.Templates.CommentCard.author/1` for who the name is.
+        column :author_info do
+          static true
+          requires [:id, :author, :author_id, :author_profile, :author_master?, :inserted_at]
+          label fn -> dgettext("mishka_gervaz", "Author") end
+          visible fn state -> state.template.name() == :table end
+
+          ui do
+            width "minmax(170px,1.3fr)"
+          end
+
+          render fn record ->
+            author = MishkaBlogWeb.Templates.CommentCard.author(record)
+
+            assigns = %{
+              id: record.id,
+              author: author,
+              initial: author |> String.first() |> String.upcase(),
+              date:
+                MishkaBlogWeb.Live.Admin.Dashboard.Home.Index.strftime(
+                  record.inserted_at,
+                  "%b %d, %Y"
+                )
+            }
+
+            ~H"""
+            <div class="flex min-w-0 items-center gap-2.5">
+              <div class="grid size-8 flex-none place-items-center rounded-full bg-[#eef1fc]">
+                <span id={"comment-author-initial-#{@id}"} class="text-[12px] font-bold text-[#4f4bcc]">
+                  {@initial}
+                </span>
+              </div>
+              <div class="min-w-0">
+                <div
+                  id={"comment-author-#{@id}"}
+                  class="truncate text-[12.5px] font-semibold text-[#17161a]"
+                  title={@author}
+                >
+                  {@author}
+                </div>
+                <div class="text-[11px] font-medium text-[#a8a5a0]">{@date}</div>
+              </div>
+            </div>
+            """
+          end
+        end
+
         # The row's widest cell by design: everything else on it is a chip or a name, and the comment
         # is the only thing a moderator actually reads.
         column :content do
@@ -793,6 +841,16 @@ defmodule MishkaBlog.Comment do
 
       empty_state message: dgettext_noop("mishka_gervaz", "No comments found"),
                   icon: "hero-chat-bubble-left-right"
+
+      presentation do
+        template MishkaBlogWeb.Templates.CommentCard
+        ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
+
+        switchable_templates [
+          MishkaGervaz.Table.Templates.Table,
+          MishkaBlogWeb.Templates.CommentCard
+        ]
+      end
     end
 
     form do

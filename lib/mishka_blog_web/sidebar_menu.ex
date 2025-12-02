@@ -74,6 +74,15 @@ defmodule MishkaBlogWeb.SidebarMenu do
                module: MishkaBlogWeb.Live.Admin.Dashboard.Blogger.Index,
                nav: false,
                permissions: @editorial
+             },
+             %{
+               extension: :mishka_blog,
+               key: "blog.comments",
+               label: gettext_noop("Comments"),
+               path: "/admin/dashboard/blog/comments",
+               module: MishkaBlogWeb.Live.Admin.Dashboard.Comment.Index,
+               nav: false,
+               permissions: @moderation
              }
            ],
            &Item.new!/1
