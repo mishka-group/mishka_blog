@@ -1,0 +1,24 @@
+<div>
+  <.link
+    navigate={path(@socket, "/admin/dashboard/blog")}
+    class="mb-[18px] inline-flex items-center gap-[7px] text-[12.5px] font-semibold text-[#8a877f] transition-colors hover:text-[#1b1a18]"
+  >
+    <.icon name="hero-chevron-left" class="size-[15px] rtl:rotate-180" /> {gettext(
+      "Back to Blog Dashboard"
+    )}
+  </.link>
+
+  <.header>
+    {gettext("Auto Posting")}
+    <:subtitle>{gettext("Schedule and automate your content publishing.")}</:subtitle>
+  </.header>
+
+  <.live_component
+    :if={@url_state}
+    module={MishkaGervaz.Table.Web.Live}
+    id="auto-postings-table"
+    resource={MishkaBlog.AutoPosting}
+    current_user={@current_user}
+    url_state={@url_state}
+  />
+</div>

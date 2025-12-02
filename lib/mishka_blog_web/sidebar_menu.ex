@@ -92,6 +92,15 @@ defmodule MishkaBlogWeb.SidebarMenu do
                module: MishkaBlogWeb.Live.Admin.Dashboard.Team.Index,
                nav: false,
                permissions: @editorial
+             },
+             %{
+               extension: :mishka_blog,
+               key: "blog.auto_posting",
+               label: gettext_noop("Auto Posting"),
+               path: "/admin/dashboard/blog/auto-posting",
+               module: MishkaBlogWeb.Live.Admin.Dashboard.AutoPosting.Index,
+               nav: false,
+               permissions: @editorial
              }
            ],
            &Item.new!/1
