@@ -289,7 +289,11 @@ defmodule MishkaBlog.AutoPosting do
 
             assigns = %{
               site: (state.master_user? && site_name) || nil,
-              date: Calendar.strftime(record.inserted_at, "%b %d, %Y")
+              date:
+                MishkaBlogWeb.Live.Admin.Dashboard.Home.Index.strftime(
+                  record.inserted_at,
+                  "%b %d, %Y"
+                )
             }
 
             ~H"""

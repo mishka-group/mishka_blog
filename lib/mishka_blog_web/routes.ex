@@ -7,7 +7,9 @@ defmodule MishkaBlogWeb.Routes do
 
   @impl true
   def routes(:admin) do
-    []
+    [
+      {:live, "/blog", MishkaBlogWeb.Live.Admin.Dashboard.Home.Index, :index}
+    ]
   end
 
   def routes(:public), do: []

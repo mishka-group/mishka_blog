@@ -7,12 +7,17 @@ defmodule MishkaBlog.Application do
 
   def dashboard_widgets, do: []
 
+  # Contributes this extension's entry to the admin sidebar (a `sidebar:menus` plugin).
+  @sidebar_menus [
+    MishkaBlogWeb.SidebarMenu
+  ]
+
   @doc """
   Every mishka_installer plugin this extension ships, and exactly what `start/2` supervises. A plugin
   left out of it never registers, so the event it listens on never reaches it.
   """
   @spec plugins() :: [module()]
-  def plugins, do: []
+  def plugins, do: @sidebar_menus
 
   @impl true
   def start(_type, _args) do

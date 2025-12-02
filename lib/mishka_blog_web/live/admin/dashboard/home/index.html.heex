@@ -1,0 +1,399 @@
+<div>
+  <div>
+    <%!-- Header --%>
+    <div
+      data-role="blog-head"
+      class="mb-[22px] flex flex-wrap items-start justify-between gap-5 max-[560px]:flex-col!"
+    >
+      <div>
+        <div class="mb-2 text-[11.5px] font-semibold uppercase tracking-[0.14em] text-[#5b57d6]">
+          {gettext("Blog")}
+        </div>
+        <h1 class="m-0 font-['Newsreader'] text-[32px] font-medium leading-[1.05] tracking-[-0.01em] text-[#17161a]">
+          MishkaBlog
+        </h1>
+        <div class="mt-2 max-w-[600px] text-[13.5px] font-medium text-[#7c7a75]">
+          {gettext("Comprehensive blog management system.")}
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2.5 max-[560px]:w-full!">
+        <.link
+          :if={@blog_areas.post}
+          id="blog-analytics-btn"
+          navigate={path(@socket, "/admin/dashboard/blog/analytics")}
+          class="inline-flex h-10 items-center gap-2 rounded-[11px] border border-[#ecebe6] bg-white px-4 text-[13px] font-semibold text-[#5c5a54] transition-colors hover:bg-[#f7f6f3] max-[560px]:flex-1! max-[560px]:justify-center!"
+        >
+          <.icon name="hero-chart-bar" class="size-[15px]" /> {gettext("Analytics")}
+        </.link>
+        <.link
+          :if={@blog_areas.post}
+          id="blog-new-post-btn"
+          navigate={path(@socket, "/admin/dashboard/blog/posts")}
+          class="inline-flex h-10 items-center gap-2 rounded-[11px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-[18px] text-[13px] font-semibold text-white shadow-[0_5px_14px_rgba(79,75,204,0.3)] transition-opacity hover:opacity-95 max-[560px]:flex-1! max-[560px]:justify-center!"
+        >
+          <.icon name="hero-plus" class="size-[15px]" /> {gettext("New Post")}
+        </.link>
+      </div>
+    </div>
+
+    <%!-- KPI cards. Two per row on a phone rather than the design's three: at three the value and
+          its note both wrap. --%>
+    <div
+      data-role="blog-kpis"
+      class="mb-5 grid grid-cols-5 gap-4 max-[1180px]:grid-cols-3! max-[980px]:grid-cols-2!"
+    >
+      <div
+        :for={{label, icon, tone, value, note, note_tone} <- kpi_cards(@stats, @blog_areas)}
+        class="rounded-2xl border border-[#ecebe6] bg-white px-5 py-[18px] shadow-[0_1px_2px_rgba(30,28,24,0.04)]"
+      >
+        <%!-- Below a phone the icon steps above the label instead of beside it: two cards to a row
+              leaves the text about eighty pixels, and "Active Bloggers" does not fit in eighty. --%>
+        <div class="flex items-center gap-3 max-[560px]:flex-col! max-[560px]:items-start! max-[560px]:gap-2!">
+          <span class={["grid size-10 flex-none place-items-center rounded-[11px]", tone]}>
+            <.icon name={icon} class="size-[19px]" />
+          </span>
+          <div class="min-w-0">
+            <div class="truncate text-[11.5px] font-semibold text-[#8a877f]">{label}</div>
+            <div class="mt-0.5 font-['Space_Grotesk'] text-[24px] font-semibold leading-[1.1] tracking-[-0.02em] text-[#17161a]">
+              {value}
+            </div>
+          </div>
+        </div>
+        <div class={["mt-[11px] truncate text-[11px] font-semibold", note_tone]}>{note}</div>
+      </div>
+    </div>
+
+    <%!-- Logs and Calendar share one control row: the Calendar toggle rides in the feed's own
+          toggle row, as the design draws the two dropdowns side by side. --%>
+    <ActivityFeed.feed :if={@blog_areas.post} setup={@activity_feed}>
+      <:toggles>
+        <button
+          type="button"
+          id="toggle-calendar-btn"
+          phx-click="toggle_calendar"
+          aria-expanded={to_string(@show_calendar)}
+          aria-controls="blog-calendar"
+          class={[
+            "inline-flex h-9 items-center gap-2 rounded-[11px] border bg-white px-3.5 text-[12.5px] font-semibold text-[#3a382f] shadow-[0_1px_2px_rgba(30,28,24,0.04)] transition-colors hover:bg-[#f7f6f3]",
+            (@show_calendar && "border-[#dcdbf5]") || "border-[#ecebe6]"
+          ]}
+        >
+          <.icon name="hero-calendar-days" class="size-3.5 text-[#5b57d6]" /> {gettext("Calendar")}
+          <.icon
+            name="hero-chevron-down"
+            class={"size-3.5 text-[#a8a5a0] transition-transform #{if @show_calendar, do: "rotate-180"}"}
+          />
+        </button>
+      </:toggles>
+    </ActivityFeed.feed>
+
+    <%!-- Editorial calendar: real posts, placed on the day they went out or are due to. --%>
+    <div
+      :if={@show_calendar}
+      id="blog-calendar"
+      data-role="blog-calendar"
+      class="mb-5 rounded-[18px] border border-[#ecebe6] bg-white px-[22px] py-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)]"
+    >
+      <div class="mb-[18px] flex flex-wrap items-start justify-between gap-4">
+        <div class="flex items-center gap-[11px]">
+          <span class="grid size-8 place-items-center rounded-[9px] bg-[#f2f1fc] text-[#5b57d6]">
+            <.icon name="hero-calendar-days" class="size-4" />
+          </span>
+          <div>
+            <div class="font-['Space_Grotesk'] text-[16px] font-bold text-[#17161a]">
+              {month_label(@month)}
+            </div>
+            <div class="mt-px text-[12px] font-medium text-[#8a877f]">
+              {gettext("Published and scheduled posts")}
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            id="calendar-prev-btn"
+            phx-click="shift_month"
+            phx-value-step="-1"
+            title={gettext("Previous month")}
+            class="grid size-9 place-items-center rounded-[9px] border border-[#ecebe6] bg-white text-[#6d6a63] transition-colors hover:bg-[#f7f6f3]"
+          >
+            <.icon name="hero-chevron-left" class="size-4 rtl:rotate-180" />
+          </button>
+          <button
+            type="button"
+            id="calendar-today-btn"
+            phx-click="this_month"
+            class="h-9 rounded-[9px] border border-[#ecebe6] bg-white px-3.5 text-[12px] font-semibold text-[#6d6a63] transition-colors hover:bg-[#f7f6f3]"
+          >
+            {gettext("Today")}
+          </button>
+          <button
+            type="button"
+            id="calendar-next-btn"
+            phx-click="shift_month"
+            phx-value-step="1"
+            title={gettext("Next month")}
+            class="grid size-9 place-items-center rounded-[9px] border border-[#ecebe6] bg-white text-[#6d6a63] transition-colors hover:bg-[#f7f6f3]"
+          >
+            <.icon name="hero-chevron-right" class="size-4 rtl:rotate-180" />
+          </button>
+        </div>
+      </div>
+
+      <CardChrome.loading :if={!@calendar} text={gettext("Reading the calendar…")} />
+
+      <div
+        :if={@calendar}
+        class="grid grid-cols-[minmax(0,1fr)_300px] items-start gap-[22px] max-[980px]:grid-cols-1!"
+      >
+        <div class="overflow-hidden rounded-[14px] border border-[#f0efea]">
+          <div class="grid grid-cols-7 border-b border-[#f0efea] bg-[#faf9f6]">
+            <div
+              :for={
+                day <- [
+                  gettext("Sun"),
+                  gettext("Mon"),
+                  gettext("Tue"),
+                  gettext("Wed"),
+                  gettext("Thu"),
+                  gettext("Fri"),
+                  gettext("Sat")
+                ]
+              }
+              class="py-2.5 text-center text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#a8a5a0]"
+            >
+              {day}
+            </div>
+          </div>
+
+          <%!-- `contents` so each cell is still a direct grid child: only the days of the month are
+                buttons, and the padding squares are inert rather than 11 unnamed controls. --%>
+          <div class="grid grid-cols-7">
+            <div :for={cell <- @calendar.cells} class="contents">
+              <div
+                :if={!cell.date}
+                aria-hidden="true"
+                class="min-h-[92px] border-b border-e border-[#f0efea] bg-[#faf9f6] max-[560px]:min-h-[62px]!"
+              />
+
+              <button
+                :if={cell.date}
+                type="button"
+                phx-click="select_day"
+                phx-value-date={Date.to_iso8601(cell.date)}
+                aria-label={day_label(cell.date)}
+                aria-pressed={to_string(cell.date == @selected_date)}
+                aria-current={(cell.today? && "date") || nil}
+                class={[
+                  "flex min-h-[92px] flex-col items-stretch gap-1 border-b border-e border-[#f0efea] p-1.5 text-start transition-colors max-[560px]:min-h-[62px]!",
+                  cell_tone(cell, @selected_date)
+                ]}
+              >
+                <span class={[
+                  "text-[11.5px] font-semibold",
+                  (cell.today? && "text-[#177a53]") || "text-[#6d6a63]"
+                ]}>
+                  {cell.day}
+                </span>
+
+                <span
+                  :for={post <- Enum.take(cell.posts, 2)}
+                  class={[
+                    "truncate rounded-[5px] px-1.5 py-[3px] text-[10px] font-semibold max-[560px]:hidden!",
+                    status_tone(post.status)
+                  ]}
+                  title={post.title}
+                >
+                  {post.title}
+                </span>
+
+                <%!-- A phone cell is too narrow for a title, so it carries the count instead. --%>
+                <span
+                  :if={cell.posts != []}
+                  class="hidden w-fit rounded-full bg-[#eeedfb] px-[7px] py-px text-[10px] font-bold text-[#5b57d6] max-[560px]:inline-block!"
+                >
+                  {length(cell.posts)}
+                </span>
+
+                <span
+                  :if={length(cell.posts) > 2}
+                  class="text-[10px] font-semibold text-[#a8a5a0] max-[560px]:hidden!"
+                >
+                  {gettext("+%{count} more", count: length(cell.posts) - 2)}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
+            {day_label(@selected_date)}
+          </div>
+          <div class="mt-px text-[11.5px] font-medium text-[#a8a5a0]">
+            {day_count_label(length(posts_on(@calendar, @selected_date)))}
+          </div>
+
+          <div class="mt-3.5 flex max-h-[420px] flex-col gap-2 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div
+              :for={post <- posts_on(@calendar, @selected_date)}
+              class="rounded-[12px] border border-[#f0efea] bg-[#fdfdfc] p-3"
+            >
+              <div class="flex items-start justify-between gap-2">
+                <span class="text-[12.5px] font-bold leading-snug text-[#1b1a18]">{post.title}</span>
+                <span class={[
+                  "flex-none rounded-md px-2 py-[3px] text-[9px] font-bold uppercase tracking-[0.04em]",
+                  status_tone(post.status)
+                ]}>
+                  {status_label(post.status)}
+                </span>
+              </div>
+              <div class="mt-1.5 flex items-center gap-2 text-[11px] font-medium text-[#a8a5a0]">
+                <span>{post_time(post)}</span>
+                <span class="uppercase">{post.language}</span>
+              </div>
+            </div>
+
+            <div
+              :if={posts_on(@calendar, @selected_date) == []}
+              class="flex flex-col items-center justify-center gap-2.5 rounded-[12px] border border-dashed border-[#e6e4de] py-9 text-center"
+            >
+              <span class="grid size-10 place-items-center rounded-[11px] bg-[#f2f1ec] text-[#a8a5a0]">
+                <.icon name="hero-calendar-days" class="size-[18px]" />
+              </span>
+              <div class="text-[12px] font-medium text-[#8a877f]">
+                {gettext("Nothing on this day.")}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%!-- Section cards. Four across, then three, then two — two all the way down a phone, and one
+          only on the narrowest handsets, where the row label and its number stop sharing a line. --%>
+    <div
+      data-role="blog-cards"
+      class="mt-[18px] mb-[22px] grid grid-cols-4 gap-4 max-[1180px]:grid-cols-3! max-[980px]:grid-cols-2! max-[360px]:grid-cols-1!"
+    >
+      <.link
+        :for={{title, description, link, icon, tone, rows} <- section_cards(@stats, @blog_areas)}
+        navigate={path(@socket, link)}
+        class="block rounded-[18px] border border-[#ecebe6] bg-white p-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)] transition-shadow hover:border-[#dcdbf5] hover:shadow-[0_8px_24px_rgba(30,28,24,0.08)] max-[560px]:p-4!"
+      >
+        <div class="flex items-start justify-between">
+          <span class={[
+            "grid size-[46px] place-items-center rounded-[13px] max-[560px]:size-10!",
+            tone
+          ]}>
+            <.icon name={icon} class="size-[22px]" />
+          </span>
+          <.icon name="hero-chevron-right" class="size-[18px] text-[#c3c0b8] rtl:rotate-180" />
+        </div>
+
+        <div class="mt-4 font-['Space_Grotesk'] text-[17px] font-semibold text-[#17161a]">
+          {title}
+        </div>
+        <%!-- Two lines' worth of room whether the description needs it or not, so the rule below
+              lands on the same baseline across the row. --%>
+        <div class="mt-1 min-h-[36px] text-[12.5px] font-medium leading-[1.45] text-[#8a877f]">
+          {description}
+        </div>
+
+        <div class="mt-4 flex flex-col gap-[9px] border-t border-[#f4f3ee] pt-3.5">
+          <div
+            :for={{label, value, value_tone} <- rows}
+            class="flex items-center justify-between gap-2"
+          >
+            <span class="truncate text-[12.5px] font-medium text-[#8a877f]">{label}</span>
+            <span class={["flex-none font-['Space_Grotesk'] text-[13px] font-bold", value_tone]}>
+              {value}
+            </span>
+          </div>
+        </div>
+      </.link>
+    </div>
+
+    <%!-- Recent activity / This month / Quick actions --%>
+    <div data-role="blog-bottom" class="grid grid-cols-3 gap-4 max-[980px]:grid-cols-1!">
+      <div class="rounded-[18px] border border-[#ecebe6] bg-white p-[22px] shadow-[0_1px_2px_rgba(30,28,24,0.04)]">
+        <div class="font-['Space_Grotesk'] text-[16px] font-semibold text-[#17161a]">
+          {gettext("Recent Activity")}
+        </div>
+        <div class="mt-[3px] text-[12px] font-medium text-[#8a877f]">
+          {gettext("Latest updates across your blog")}
+        </div>
+
+        <div class="mt-[18px] flex flex-col gap-4">
+          <div :for={entry <- (@stats && @stats.activity) || []} class="flex gap-3">
+            <span class={["mt-1 size-[9px] flex-none rounded-full", activity_tone(entry.kind)]} />
+            <div class="min-w-0">
+              <div class="text-[13px] font-semibold text-[#1b1a18]">
+                {activity_label(entry.kind, entry.status)}
+              </div>
+              <div class="mt-px truncate text-[12px] font-medium text-[#6d6a63]">
+                {entry.title}
+              </div>
+              <div class="mt-0.5 text-[11px] font-medium text-[#a8a5a0]">{ago(entry.at)}</div>
+            </div>
+          </div>
+
+          <div :if={!@stats} class="text-[12px] font-medium text-[#a8a5a0]">
+            {gettext("Reading activity…")}
+          </div>
+
+          <div
+            :if={@stats && @stats.activity == []}
+            class="text-[12px] font-medium text-[#a8a5a0]"
+          >
+            {gettext("Nothing has happened yet.")}
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-[18px] border border-[#ecebe6] bg-white p-[22px] shadow-[0_1px_2px_rgba(30,28,24,0.04)]">
+        <div class="font-['Space_Grotesk'] text-[16px] font-semibold text-[#17161a]">
+          {gettext("This Month")}
+        </div>
+        <div class="mt-[3px] text-[12px] font-medium text-[#8a877f]">
+          {gettext("Key performance metrics")}
+        </div>
+
+        <div class="mt-[18px] flex flex-col">
+          <div
+            :for={{label, value, tone} <- month_rows(@stats, @blog_areas)}
+            class="flex items-center justify-between gap-2 border-b border-[#f4f3ee] py-3 last:border-b-0"
+          >
+            <span class="text-[12.5px] font-medium text-[#6d6a63]">{label}</span>
+            <span class={["font-['Space_Grotesk'] text-[15px] font-bold", tone]}>{value}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-[18px] border border-[#ecebe6] bg-white p-[22px] shadow-[0_1px_2px_rgba(30,28,24,0.04)]">
+        <div class="font-['Space_Grotesk'] text-[16px] font-semibold text-[#17161a]">
+          {gettext("Quick Actions")}
+        </div>
+        <div class="mt-[3px] text-[12px] font-medium text-[#8a877f]">
+          {gettext("Common tasks and shortcuts")}
+        </div>
+
+        <div class="mt-[18px] flex flex-col gap-2.5">
+          <.link
+            :for={{label, icon, link, primary?} <- quick_actions(@blog_areas)}
+            navigate={path(@socket, link)}
+            class={[
+              "flex h-[46px] items-center gap-[11px] rounded-xl border px-[15px] text-[12.5px] font-semibold transition-colors",
+              (primary? && "border-[#dcdbf5] bg-[#f2f1fc] text-[#4f4bcc] hover:bg-[#e9e7fb]") ||
+                "border-[#ecebe6] bg-white text-[#3a382f] hover:bg-[#f6f5f2]"
+            ]}
+          >
+            <.icon name={icon} class={(primary? && "size-4") || "size-4 text-[#6d6a63]"} /> {label}
+          </.link>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
