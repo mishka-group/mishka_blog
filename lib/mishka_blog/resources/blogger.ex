@@ -681,6 +681,16 @@ defmodule MishkaBlog.Blogger do
 
       empty_state message: dgettext_noop("mishka_gervaz", "No bloggers found"),
                   icon: "hero-user-circle"
+
+      presentation do
+        template MishkaBlogWeb.Templates.BloggerCard
+        ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
+
+        switchable_templates [
+          MishkaGervaz.Table.Templates.Table,
+          MishkaBlogWeb.Templates.BloggerCard
+        ]
+      end
     end
 
     form do
