@@ -594,6 +594,16 @@ defmodule MishkaBlog.Tag do
       end
 
       empty_state message: dgettext_noop("mishka_gervaz", "No tags found"), icon: "hero-tag"
+
+      presentation do
+        template MishkaBlogWeb.Templates.TagCard
+        ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
+
+        switchable_templates [
+          MishkaGervaz.Table.Templates.Table,
+          MishkaBlogWeb.Templates.TagCard
+        ]
+      end
     end
 
     form do
