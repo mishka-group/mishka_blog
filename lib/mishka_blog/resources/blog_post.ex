@@ -946,6 +946,16 @@ defmodule MishkaBlog.BlogPost do
 
       empty_state message: dgettext_noop("mishka_gervaz", "No blog posts found"),
                   icon: "hero-newspaper"
+
+      presentation do
+        template MishkaBlogWeb.Templates.PostCard
+        ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
+
+        switchable_templates [
+          MishkaGervaz.Table.Templates.Table,
+          MishkaBlogWeb.Templates.PostCard
+        ]
+      end
     end
 
     form do

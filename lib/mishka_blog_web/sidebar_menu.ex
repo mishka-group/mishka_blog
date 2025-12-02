@@ -38,6 +38,15 @@ defmodule MishkaBlogWeb.SidebarMenu do
                permissions: @either,
                credit_name: "Mishka Blog",
                credit_url: "https://mishka.tools/cms/extensions/blog"
+             },
+             %{
+               extension: :mishka_blog,
+               key: "blog.posts",
+               label: gettext_noop("Posts"),
+               path: "/admin/dashboard/blog/posts",
+               module: MishkaBlogWeb.Live.Admin.Dashboard.Post.Index,
+               nav: false,
+               permissions: @editorial
              }
            ],
            &Item.new!/1
