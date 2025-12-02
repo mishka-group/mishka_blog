@@ -83,6 +83,15 @@ defmodule MishkaBlogWeb.SidebarMenu do
                module: MishkaBlogWeb.Live.Admin.Dashboard.Comment.Index,
                nav: false,
                permissions: @moderation
+             },
+             %{
+               extension: :mishka_blog,
+               key: "blog.teams",
+               label: gettext_noop("Teams"),
+               path: "/admin/dashboard/blog/teams",
+               module: MishkaBlogWeb.Live.Admin.Dashboard.Team.Index,
+               nav: false,
+               permissions: @editorial
              }
            ],
            &Item.new!/1

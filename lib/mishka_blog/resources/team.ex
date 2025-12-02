@@ -365,7 +365,8 @@ defmodule MishkaBlog.Team do
 
             extra %{
               max_items: 3,
-              label_field: :display_name
+              label_field: :display_name,
+              tints: MishkaBlogWeb.Templates.TeamCard.member_tints()
             }
           end
         end
@@ -744,6 +745,16 @@ defmodule MishkaBlog.Team do
 
       empty_state message: dgettext_noop("mishka_gervaz", "No teams found"),
                   icon: "hero-user-group"
+
+      presentation do
+        template MishkaBlogWeb.Templates.TeamCard
+        ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
+
+        switchable_templates [
+          MishkaGervaz.Table.Templates.Table,
+          MishkaBlogWeb.Templates.TeamCard
+        ]
+      end
     end
 
     form do
