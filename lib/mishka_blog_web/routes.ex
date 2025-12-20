@@ -15,7 +15,8 @@ defmodule MishkaBlogWeb.Routes do
       {:live, "/blog/bloggers", MishkaBlogWeb.Live.Admin.Dashboard.Blogger.Index, :index},
       {:live, "/blog/comments", MishkaBlogWeb.Live.Admin.Dashboard.Comment.Index, :index},
       {:live, "/blog/teams", MishkaBlogWeb.Live.Admin.Dashboard.Team.Index, :index},
-      {:live, "/blog/auto-posting", MishkaBlogWeb.Live.Admin.Dashboard.AutoPosting.Index, :index}
+      {:live, "/blog/auto-posting", MishkaBlogWeb.Live.Admin.Dashboard.AutoPosting.Index, :index},
+      {:live, "/blog/analytics", MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index, :index}
     ]
   end
 
