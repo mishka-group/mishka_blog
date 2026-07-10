@@ -21,6 +21,14 @@ defmodule MishkaBlog.Application do
   @spec dashboard_widgets() :: [module()]
   def dashboard_widgets, do: @dashboard_widgets
 
+  # Notification producers (a tenant and a master publish fire different events) + their Settings
+  # toggle (mishka_installer hook plugins).
+  @notify_plugins [
+    MishkaBlog.Notifiers.PostPublished,
+    MishkaBlog.Notifiers.PostMasterPublished,
+    MishkaBlog.Notifiers.NotifySettings
+  ]
+
   # Registers the blog widgets' settings under the Blog tab (a `settings:register` plugin).
   @settings_plugins [
     MishkaBlog.Dashboard.WidgetSettings
@@ -36,7 +44,8 @@ defmodule MishkaBlog.Application do
   left out of it never registers, so the event it listens on never reaches it.
   """
   @spec plugins() :: [module()]
-  def plugins, do: @dashboard_widgets ++ @settings_plugins ++ @sidebar_menus
+  def plugins,
+    do: @dashboard_widgets ++ @notify_plugins ++ @settings_plugins ++ @sidebar_menus
 
   @impl true
   def start(_type, _args) do
