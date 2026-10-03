@@ -244,6 +244,7 @@ defmodule MishkaBlog.Dev.Generator do
         name: sequence(:name, &"Test Tag #{&1}"),
         slug: sequence(:slug, &"test-tag-#{&1}"),
         description: sequence(:description, &"Test tag description #{&1}"),
+        seo_tags: [],
         permissions: [],
         language: "en",
         language_group_id: nil,

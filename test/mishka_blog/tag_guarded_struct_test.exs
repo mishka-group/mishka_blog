@@ -15,6 +15,7 @@ defmodule MishkaBlog.Test.TagGuardedStructTest do
                  :name,
                  :slug,
                  :description,
+                 :seo_tags,
                  :permissions,
                  :language,
                  :language_group_id
@@ -63,6 +64,22 @@ defmodule MishkaBlog.Test.TagGuardedStructTest do
           assert Enum.any?(errs, &match?(%{field: :language, action: :language_code}, &1)),
                  "expected :language_code rejection for #{inspect(bad)}, got #{inspect(errs)}"
         end
+      end
+
+      test "seo_tags: a list accepted, a non-list rejected" do
+        assert {:ok, %{seo_tags: [%{tag: "meta", attrs: %{name: "robots"}, content: "noindex"}]}} =
+                 Tag.__guarded_change__(%{
+                   seo_tags: [%{tag: "meta", attrs: %{name: "robots"}, content: "noindex"}]
+                 })
+
+        assert {:error,
+                [
+                  %{
+                    field: :seo_tags,
+                    action: :list,
+                    message: _
+                  }
+                ]} = Tag.__guarded_change__(%{seo_tags: "not a list"})
       end
 
       test "permissions: trim + downcase + reject empties + uniq" do

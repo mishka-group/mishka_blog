@@ -34,6 +34,10 @@ children = [
   MishkaCmsCore.Runtime.States.TranslationsState,
   MishkaCmsCore.Runtime.States.ViewerState,
   MishkaCmsCore.Runtime.States.RateLimitState,
+  # THE ONE ASSET CACHE THIS SUITE STARTS, the sitemap's store.
+  # `MishkaBlog.Plugins.SitemapUrlsTest` reads what this extension adds to a sitemap
+  # the way core's build reads it, and the build keeps the sitemap it makes there.
+  MishkaCmsCore.Runtime.States.AssetsState,
   # THIS EXTENSION SHIPS COMPONENTS NOW, and a component is only a row until something compiles it.
   # `MishkaBlog.LiveComponentsRenderTest` renders the four out of the database for real — the same
   # lazy compile a visitor's first request triggers — and that needs the gate, the registry that

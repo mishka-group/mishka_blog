@@ -46,6 +46,12 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.Installer
   ]
 
+  # Adds the blog's posts, categories and tags to each site's sitemap (a `seo:sitemap:urls`
+  # plugin).
+  @seo_plugins [
+    MishkaBlog.Plugins.SitemapUrls
+  ]
+
   @doc """
   Every mishka_installer plugin this extension ships, and exactly what `start/2` supervises. A plugin
   left out of it never registers, so the event it listens on never reaches it.
@@ -55,7 +61,7 @@ defmodule MishkaBlog.Application do
     do:
       @dashboard_widgets ++
         @notify_plugins ++
-        @settings_plugins ++ @sidebar_menus ++ @provision_plugins
+        @settings_plugins ++ @sidebar_menus ++ @provision_plugins ++ @seo_plugins
 
   @impl true
   def start(_type, _args) do

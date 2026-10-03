@@ -32,7 +32,8 @@ defmodule MishkaBlog.Tag do
     authorizers: [Ash.Policy.Authorizer],
     notifiers: [
       Ash.Notifier.PubSub,
-      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
+      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
+      MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh
     ]
 
   import Phoenix.Component, only: [sigil_H: 2]
@@ -70,6 +71,7 @@ defmodule MishkaBlog.Tag do
     :slug,
     :description,
     :parent_tag_id,
+    :seo_tags,
     :permissions,
     :language,
     :language_group_id,
@@ -724,6 +726,45 @@ defmodule MishkaBlog.Tag do
           end
         end
 
+        field :seo_tags, :nested do
+          ui do
+            label fn -> dgettext("mishka_gervaz", "SEO Tags") end
+            add_label fn -> dgettext("mishka_gervaz", "+ Add SEO Tag") end
+            remove_label fn -> dgettext("mishka_gervaz", "Remove") end
+
+            description fn ->
+              dgettext(
+                "mishka_gervaz",
+                "A title replaces the page's title; meta and link tags each replace the default with the same name. A value may name a variable such as {{page.title}}."
+              )
+            end
+          end
+
+          nested_field :tag, :select do
+            options [{"title", "title"}, {"meta", "meta"}, {"link", "link"}]
+
+            ui do
+              label fn -> dgettext("mishka_gervaz", "Tag") end
+              placeholder fn -> dgettext("mishka_gervaz", "Choose a tag") end
+            end
+          end
+
+          nested_field :attrs, :json do
+            ui do
+              label fn -> dgettext("mishka_gervaz", "Attributes") end
+              placeholder ~s({"name": "description", "property": "og:title"})
+            end
+          end
+
+          nested_field :content, :textarea do
+            ui do
+              label fn -> dgettext("mishka_gervaz", "Content") end
+              placeholder fn -> dgettext("mishka_gervaz", "Tag content text...") end
+              rows 3
+            end
+          end
+        end
+
         # WHO MAY OPEN THE TAG ON ITS PAGE: any of the permission names that exist, stored by name.
         # Empty, it is public. `MishkaBlog.Plugins.PageSeo` answers them, and
         # `MishkaCmsWeb.RuntimeLive` asks for them after the page's own.
@@ -777,7 +818,7 @@ defmodule MishkaBlog.Tag do
         end
 
         group :data do
-          fields [:permissions]
+          fields [:seo_tags, :permissions]
 
           ui do
             columns 1
@@ -802,6 +843,7 @@ defmodule MishkaBlog.Tag do
       derives: "sanitize(trim) validate(string, not_empty, min_len=1, max_len=255)"
 
     field :description, :string, derives: "sanitize(strip_tags, trim) validate(optional=[string])"
+    field :seo_tags, {:array, :map}, derives: "validate(list)"
 
     field :permissions, {:array, :string},
       derives: "sanitize(each=[trim, downcase], reject_empty, uniq) validate(list)"
@@ -1607,6 +1649,30 @@ defmodule MishkaBlog.Tag do
       allow_nil? true
       public? true
       description "Description of the tag's purpose and usage"
+    end
+
+    attribute :seo_tags, {:array, :map} do
+      default []
+      public? true
+
+      constraints items: [
+                    fields: [
+                      tag: [
+                        type: :string,
+                        allow_nil?: false
+                      ],
+                      attrs: [
+                        type: :map,
+                        allow_nil?: false
+                      ],
+                      content: [
+                        type: :string,
+                        allow_nil?: true
+                      ]
+                    ]
+                  ]
+
+      description "SEO meta tags and structured data"
     end
 
     attribute :permissions, {:array, :string} do

@@ -136,6 +136,20 @@ defmodule MishkaBlog.Test.TagTest do
         assert tag.description == "Technology related topics"
       end
 
+      test "accepts optional seo_tags, none by default" do
+        site = create_site!()
+
+        seo_tags = [
+          %{tag: "meta", attrs: %{"name" => "description"}, content: "SEO description"},
+          %{tag: "meta", attrs: %{"property" => "og:title"}, content: "Open Graph Title"}
+        ]
+
+        tag = create_blog_tag!(seo_tags: seo_tags, site_id: site.id)
+
+        assert tag.seo_tags == seo_tags
+        assert create_blog_tag!(site_id: site.id).seo_tags == []
+      end
+
       test "accepts permissions, each trimmed and downcased, repeats dropped" do
         site = create_site!()
 
