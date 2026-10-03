@@ -1,4 +1,20 @@
-<div>
+<%!-- INSTEAD OF THE DASHBOARD, until this site has been set up. A dashboard for an extension a
+      site has never installed is a page of zeroes over pages that do not exist. --%>
+<ExtensionInstallerPanel.first_run_screen
+  :if={@showing_installer?}
+  setup={@extension_install}
+  id="blog-provision"
+  sites={@provision_sites}
+  allowed?={@may_provision?}
+  title={gettext("The blog")}
+  blurb={
+    gettext(
+      "Posts, categories and tags, with the pages that read them. Setting it up adds the blog's permission names, and installs its components and its sample pages on this site."
+    )
+  }
+/>
+
+<div :if={!@showing_installer?}>
   <div>
     <%!-- Header --%>
     <div
@@ -18,6 +34,21 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2.5 max-[560px]:w-full!">
+        <%!-- SAYS SO WHERE THE ADMIN IS ALREADY LOOKING, for a site that was skipped past: the
+              dashboard is empty and nothing else on it explains why. --%>
+        <ExtensionInstallerPanel.badge
+          setup={@extension_install}
+          id="blog-provision"
+          allowed?={@may_provision?}
+        />
+        <%!-- AND ON A SITE THAT IS SET UP, the other half: where it stands against this version,
+              and the way to put back anything it has lost. A modal, because a set-up site needs
+              neither until the day it does. --%>
+        <ExtensionInstallerPanel.doctor_button
+          setup={@extension_install}
+          id="blog-kit-upgrade"
+          allowed?={@may_provision?}
+        />
         <.link
           :if={@blog_areas.post}
           id="blog-analytics-btn"
@@ -394,6 +425,17 @@
           </.link>
         </div>
       </div>
+
+      <ExtensionInstallerPanel.doctor_modal
+        id="blog-kit-upgrade"
+        install_id="blog-provision"
+        setup={@extension_install}
+        kit={@kit_upgrade}
+        sites={@provision_sites}
+        site_name={@provision_site_name}
+        allowed?={@may_provision?}
+        title={gettext("The blog on this site")}
+      />
     </div>
   </div>
 </div>

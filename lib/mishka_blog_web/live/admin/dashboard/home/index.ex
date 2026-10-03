@@ -25,6 +25,11 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   figures divide comments by views, so they need both. A card, a row or a link whose area the
   viewer does not hold is not drawn, and `MishkaBlog.Dashboard.Overview` does not read its data.
 
+  Setting the blog up, the Doctor and the kit upgrade write pages, components and a snippet, and
+  read the site they are for, so they need all three of `admin:dashboard:runtime:page` (the pages
+  and the page builder's snippet), `admin:dashboard:runtime:component` and
+  `admin:dashboard:runtime:site`.
+
   See `MishkaBlog.Dashboard.Overview` for the queries.
   """
   use MishkaCmsCore.ExtensionLiveView
@@ -32,9 +37,20 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   require Logger
 
   alias MishkaBlog.Dashboard.Overview
+  alias MishkaBlog.Kit
+  alias MishkaCmsCore.Runtime.{ExtensionProvision, Site}
   alias MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed
+  alias MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel
+  alias MishkaCmsCoreWeb.Live.Admin.Components.KitUpgradePanel
   alias MishkaCmsCoreWeb.Templates.CardChrome
 
+  require Ash.Query
+
+  # WHAT THE BUTTON WRITES IS WHAT GATES IT, every name of it, as the provision itself asks
+  # (`ExtensionProvision.allowed?/2`): setting a site up (and the Doctor's Repair) writes components,
+  # pages and the sidebar snippet, and reads the site; the kit check and upgrade read the site and
+  # its pages and write components. This is asked again in `handle_event/3`, because hiding a button
+  # hides nothing from a socket.
   @blog_resources [
     MishkaBlog.BlogPost,
     MishkaBlog.Collection,
@@ -106,7 +122,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   ]
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     today = Date.utc_today()
     areas = Overview.areas(socket.assigns[:current_user])
 
@@ -121,6 +137,16 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
         show_calendar: false,
         month: Date.beginning_of_month(today),
         selected_date: today
+      )
+      |> assign_provision(session)
+      |> ExtensionInstallerPanel.setup(app: :mishka_blog, noun: gettext("blog"))
+      |> then(&ExtensionInstallerPanel.start_on(&1, &1.assigns.provision_site_id))
+      |> gate()
+      |> KitUpgradePanel.setup(
+        bundle: Kit.bundle_path(),
+        noun: gettext("blog components"),
+        pages: &MishkaBlog.Provision.sample_pages/2,
+        draft_label: gettext("Blog sample page")
       )
       |> load_stats()
 
@@ -166,6 +192,59 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
 
   def handle_event("select_day", %{"date" => date}, socket) do
     {:noreply, assign(socket, :selected_date, Date.from_iso8601!(date))}
+  end
+
+  def handle_event("extension_install", params, socket) do
+    allowed? = socket.assigns.may_provision?
+
+    {:noreply,
+     gate(ExtensionInstallerPanel.install(socket, chosen_site(socket, params), allowed?))}
+  end
+
+  def handle_event("extension_site", params, socket) do
+    {:noreply, gate(ExtensionInstallerPanel.choose(socket, chosen_site(socket, params)))}
+  end
+
+  # THE ANSWER TO A CLASH, which is the same install with the addresses the admin chose — so a
+  # second run writes what the first could not and leaves everything else exactly as it was.
+  def handle_event("extension_retry", params, socket) do
+    allowed? = socket.assigns.may_provision?
+    answers = Map.take(params, ["paths", "prefix"])
+
+    {:noreply,
+     gate(ExtensionInstallerPanel.install(socket, chosen_site(socket, params), allowed?, answers))}
+  end
+
+  def handle_event("extension_open", _params, socket) do
+    {:noreply, gate(ExtensionInstallerPanel.open(socket))}
+  end
+
+  def handle_event("extension_skip", _params, socket) do
+    {:noreply, gate(ExtensionInstallerPanel.close(socket))}
+  end
+
+  # THE SAME TWO QUESTIONS REPAIR ASKS, and the same answers: which site, and may this
+  # admin write its runtime. Everything after them — what is outdated, what carries an edit, what is
+  # written — is `MishkaCmsCoreWeb.Live.Admin.Components.KitUpgradePanel`, so the document dashboard
+  # says all of it in the same words.
+  # ONE PICKER FOR THE WHOLE MODAL, so the Repair button under the standings writes to the site
+  # those standings are about. Both halves are told the same answer here rather than each keeping
+  # its own, which is how a master could read one site and repair another.
+  def handle_event("kit_check", params, socket) do
+    site_id = chosen_site(socket, params)
+
+    {:noreply,
+     socket
+     |> ExtensionInstallerPanel.choose(site_id)
+     |> KitUpgradePanel.check(site_id, socket.assigns.may_provision?)}
+  end
+
+  def handle_event("kit_upgrade", %{"mode" => mode}, socket) do
+    {:noreply, KitUpgradePanel.upgrade(socket, mode, socket.assigns.may_provision?)}
+  end
+
+  def handle_event("page_drafts", _params, socket) do
+    {:noreply, KitUpgradePanel.offer(socket, socket.assigns.may_provision?)}
   end
 
   @impl true
@@ -441,11 +520,104 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
     )
   end
 
+  # THE GATE, ANSWERED ON EVERY RENDER rather than once at mount: an install, a skip or the badge all
+  # change it, and each of them is an event. `MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel`
+  # pins the answer once an admin has said, so this follows what they said rather than re-deciding.
+  defp gate(socket),
+    do: assign(socket, :showing_installer?, ExtensionInstallerPanel.showing_installer?(socket))
+
+  # A MASTER PICKS THE SITE; A TENANT ADMIN HAS ONE. The picker's options are the sites this
+  # deployment has, and the one the admin is looking at — the host their request resolved to — is
+  # preselected, because that is the site they mean. Read from the table rather than from
+  # `SiteState`'s cache: a site created a moment ago has to be offerable at once, and the button
+  # exists precisely for a site that has just appeared.
+  defp assign_provision(socket, session) do
+    user = socket.assigns[:current_user]
+    allowed? = may_provision?(user)
+
+    {sites, chosen} =
+      cond do
+        not allowed? -> {[], nil}
+        is_binary(user.site_id) -> {[], user.site_id}
+        true -> offered_sites(session)
+      end
+
+    assign(socket,
+      may_provision?: allowed?,
+      provision_sites: sites,
+      provision_site_id: chosen,
+      provision_site_name: (sites == [] && site_name(chosen)) || nil
+    )
+  end
+
+  defp may_provision?(user),
+    do: ExtensionProvision.allowed?(MishkaBlog.Provision.manifest(), user)
+
   # The Logs panel is the editorial resources' history, so it is a post holder's.
   defp activity_feed(socket, %{post: true}),
     do: ActivityFeed.setup(socket, resources: @blog_resources, feed_id: "blog-activity")
 
   defp activity_feed(socket, _areas), do: assign(socket, :activity_feed, nil)
+
+  # WHAT TO CALL THE SITE WHEN THERE IS NO PICKER. A tenant admin is offered no list — their site
+  # is the only one this page will ever write to — so the modal says which site that is instead of
+  # drawing a dropdown that cannot move.
+  defp site_name(site_id) when is_binary(site_id) do
+    Site
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(id == ^site_id)
+    |> Ash.Query.select([:name])
+    |> Ash.read_one(authorize?: false)
+    |> case do
+      {:ok, %{name: name}} -> name
+      _no_such_site -> nil
+    end
+  end
+
+  defp site_name(_no_site), do: nil
+
+  defp offered_sites(session) do
+    sites =
+      Site
+      |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+      |> Ash.Query.filter(active == true)
+      |> Ash.Query.sort(name: :asc)
+      |> Ash.Query.select([:id, :name])
+      |> Ash.read!(authorize?: false)
+      |> Enum.map(&{&1.name, &1.id})
+
+    ids = Enum.map(sites, &elem(&1, 1))
+
+    current =
+      case session do
+        %{"current_site" => %{id: id}} -> id
+        _no_site_in_session -> nil
+      end
+
+    {sites, (current in ids && current) || List.first(ids)}
+  end
+
+  # NEVER THE PARAMETER ON ITS OWN. A tenant admin provisions their own site whatever the form said,
+  # and a master's choice has to be one this page offered — a `site_id` typed into a socket message
+  # is not an authorization to write pages to that site.
+  #
+  # A SITE THAT WAS NOT OFFERED IS NOT A SITE NOBODY PICKED. They are two different answers and they
+  # get two different ones back: a form that submitted nothing is a form to fill in, while a site id
+  # this page never listed is a refusal, and telling somebody to choose a site when they did choose
+  # one reads as a bug in the page rather than as the check it is.
+  defp chosen_site(%{assigns: %{current_user: %{site_id: site_id}}}, _params)
+       when is_binary(site_id),
+       do: site_id
+
+  defp chosen_site(%{assigns: %{provision_sites: sites}}, params) do
+    case params["site_id"] do
+      asked when is_binary(asked) and asked != "" ->
+        Enum.find_value(sites, :refused, fn {_name, id} -> id == asked && id end)
+
+      _nothing_chosen ->
+        :none
+    end
+  end
 
   defp load_stats(socket) do
     user = socket.assigns.current_user

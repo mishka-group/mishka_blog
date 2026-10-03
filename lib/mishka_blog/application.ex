@@ -39,13 +39,23 @@ defmodule MishkaBlog.Application do
     MishkaBlogWeb.SidebarMenu
   ]
 
+  # Installs this extension onto a site when an admin asks for it — the `installer:extension:install`
+  # event. Subscribing is also how the installer's own registry learns this extension exists, so
+  # there is nothing else to register: see `MishkaCmsCore.Install.Extensions`.
+  @provision_plugins [
+    MishkaBlog.Plugins.Installer
+  ]
+
   @doc """
   Every mishka_installer plugin this extension ships, and exactly what `start/2` supervises. A plugin
   left out of it never registers, so the event it listens on never reaches it.
   """
   @spec plugins() :: [module()]
   def plugins,
-    do: @dashboard_widgets ++ @notify_plugins ++ @settings_plugins ++ @sidebar_menus
+    do:
+      @dashboard_widgets ++
+        @notify_plugins ++
+        @settings_plugins ++ @sidebar_menus ++ @provision_plugins
 
   @impl true
   def start(_type, _args) do
