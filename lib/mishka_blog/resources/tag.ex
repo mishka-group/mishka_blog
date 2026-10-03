@@ -70,6 +70,7 @@ defmodule MishkaBlog.Tag do
     :slug,
     :description,
     :parent_tag_id,
+    :permissions,
     :language,
     :language_group_id,
     :site_id
@@ -722,6 +723,29 @@ defmodule MishkaBlog.Tag do
             rows 3
           end
         end
+
+        # WHO MAY OPEN THE TAG ON ITS PAGE: any of the permission names that exist, stored by name.
+        # Empty, it is public. `MishkaBlog.Plugins.PageSeo` answers them, and
+        # `MishkaCmsWeb.RuntimeLive` asks for them after the page's own.
+        field :permissions, :relation do
+          resource MishkaCmsCore.Accounts.Permission
+          display_field :name
+          search_field :name
+          value_field :name
+          mode :search_multi
+          page_size 15
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Permissions") end
+
+            description fn ->
+              dgettext(
+                "mishka_gervaz",
+                "Who may open this tag: anyone holding one of these. None: everyone."
+              )
+            end
+          end
+        end
       end
 
       groups do
@@ -751,6 +775,15 @@ defmodule MishkaBlog.Tag do
             columns 1
           end
         end
+
+        group :data do
+          fields [:permissions]
+
+          ui do
+            columns 1
+            class ""
+          end
+        end
       end
 
       hooks do
@@ -769,6 +802,9 @@ defmodule MishkaBlog.Tag do
       derives: "sanitize(trim) validate(string, not_empty, min_len=1, max_len=255)"
 
     field :description, :string, derives: "sanitize(strip_tags, trim) validate(optional=[string])"
+
+    field :permissions, {:array, :string},
+      derives: "sanitize(each=[trim, downcase], reject_empty, uniq) validate(list)"
 
     field :language, :string,
       derives: "sanitize(trim, downcase) validate(string, not_empty, max_len=10, language_code)"
@@ -1001,6 +1037,7 @@ defmodule MishkaBlog.Tag do
     read :public_list do
       description "Public endpoint to list all tags with pagination (no authentication required)"
       pagination offset?: true, default_limit: 20, max_page_size: 100, countable: true
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :tag}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
     end
@@ -1008,6 +1045,7 @@ defmodule MishkaBlog.Tag do
     read :public_get do
       description "Public endpoint to get a single tag by ID (no authentication required)"
       get? true
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :tag}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
     end
@@ -1569,6 +1607,12 @@ defmodule MishkaBlog.Tag do
       allow_nil? true
       public? true
       description "Description of the tag's purpose and usage"
+    end
+
+    attribute :permissions, {:array, :string} do
+      default []
+      public? true
+      description "Permission strings required to open this tag on its page"
     end
 
     attribute :language, :string do

@@ -75,6 +75,15 @@ defmodule MishkaBlog.CommentVote do
                 resource: MishkaBlog.Comment,
                 message:
                   dgettext_noop("errors", "Comment not found or does not belong to your site.")}
+
+      # A comment on a post its actor may not open takes no vote from them, as though not there.
+      validate {MishkaBlog.Resources.Validations.OpenToActor,
+                field: :comment_id,
+                resource: MishkaBlog.Comment,
+                lock: :effective_permissions,
+                message:
+                  dgettext_noop("errors", "Comment not found or does not belong to your site.")}
+
       change relate_actor(:user, allow_nil?: true)
     end
 

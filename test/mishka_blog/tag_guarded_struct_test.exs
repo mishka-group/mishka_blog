@@ -15,6 +15,7 @@ defmodule MishkaBlog.Test.TagGuardedStructTest do
                  :name,
                  :slug,
                  :description,
+                 :permissions,
                  :language,
                  :language_group_id
                ]) == Tag.__guarded_field_name_set__()
@@ -62,6 +63,24 @@ defmodule MishkaBlog.Test.TagGuardedStructTest do
           assert Enum.any?(errs, &match?(%{field: :language, action: :language_code}, &1)),
                  "expected :language_code rejection for #{inspect(bad)}, got #{inspect(errs)}"
         end
+      end
+
+      test "permissions: trim + downcase + reject empties + uniq" do
+        assert {:ok, %{permissions: ["members:read", "members:write"]}} =
+                 Tag.__guarded_change__(%{
+                   permissions: ["  MEMBERS:READ  ", "Members:Read", "", "MEMBERS:WRITE"]
+                 })
+      end
+
+      test "permissions: non-list is rejected" do
+        assert {:error,
+                [
+                  %{
+                    field: :permissions,
+                    action: :list,
+                    message: _
+                  }
+                ]} = Tag.__guarded_change__(%{permissions: "not a list"})
       end
     end
   end

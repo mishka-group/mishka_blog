@@ -90,6 +90,7 @@ defmodule MishkaBlog.BlogPost do
     :scheduled_publish_at,
     :schema,
     :seo_tags,
+    :permissions,
     :featured,
     :language,
     :language_group_id,
@@ -1258,6 +1259,29 @@ defmodule MishkaBlog.BlogPost do
             placeholder ~s([{"@type": "BlogPosting", "name": "My Post"}])
           end
         end
+
+        # WHO MAY OPEN THE POST ON ITS PAGE: any of the permission names that exist, stored by name.
+        # Empty, it is public. `MishkaBlog.Plugins.PageSeo` answers them, and
+        # `MishkaCmsWeb.RuntimeLive` asks for them after the page's own.
+        field :permissions, :relation do
+          resource MishkaCmsCore.Accounts.Permission
+          display_field :name
+          search_field :name
+          value_field :name
+          mode :search_multi
+          page_size 15
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Permissions") end
+
+            description fn ->
+              dgettext(
+                "mishka_gervaz",
+                "Who may open this post: anyone holding one of these. None: everyone."
+              )
+            end
+          end
+        end
       end
 
       groups do
@@ -1297,7 +1321,7 @@ defmodule MishkaBlog.BlogPost do
         end
 
         group :data do
-          fields [:seo_tags, :schema]
+          fields [:seo_tags, :schema, :permissions]
 
           ui do
             columns 1
@@ -1340,6 +1364,9 @@ defmodule MishkaBlog.BlogPost do
 
     field :schema, {:array, :map}, derives: "validate(list)"
     field :seo_tags, {:array, :map}, derives: "validate(list)"
+
+    field :permissions, {:array, :string},
+      derives: "sanitize(each=[trim, downcase], reject_empty, uniq) validate(list)"
 
     field :featured, :boolean, derives: "validate(boolean)"
 
@@ -1798,6 +1825,7 @@ defmodule MishkaBlog.BlogPost do
     read :public_list do
       description "Public endpoint to list all published blog posts (no authentication required)"
       filter expr(status == :published)
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :post}
       pagination offset?: true, default_limit: 20, max_page_size: 100, countable: true
     end
 
@@ -1805,6 +1833,7 @@ defmodule MishkaBlog.BlogPost do
       description "Public endpoint to get a single published blog post by ID (no authentication required)"
       get? true
       filter expr(status == :published)
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :post}
     end
 
     read :master_read do
@@ -2838,6 +2867,12 @@ defmodule MishkaBlog.BlogPost do
       description "SEO meta tags and structured data"
     end
 
+    attribute :permissions, {:array, :string} do
+      default []
+      public? true
+      description "Permission strings required to open this post on its page"
+    end
+
     attribute :featured, :boolean do
       default false
       public? true
@@ -3031,6 +3066,11 @@ defmodule MishkaBlog.BlogPost do
     calculate :rendered_content,
               :string,
               {MishkaCmsCore.Runtime.Resources.Calculations.RenderContent, source: :content}
+
+    # Who may open the post: its own permissions, else its categories'.
+    calculate :effective_permissions,
+              {:array, :string},
+              {MishkaBlog.Resources.Calculations.EffectivePermissions, kind: :post}
 
     calculate :reading_time_minutes, :integer do
       public? true

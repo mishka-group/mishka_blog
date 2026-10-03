@@ -188,6 +188,18 @@ defmodule MishkaBlog.Test.BlogPostTest do
         assert blog_post.seo_tags == seo_tags
       end
 
+      test "accepts permissions, each trimmed and downcased, repeats dropped" do
+        site = create_site!()
+
+        blog_post =
+          create_blog_post!(
+            permissions: ["  Members:Read  ", "members:read", "EDITORS:READ"],
+            site_id: site.id
+          )
+
+        assert blog_post.permissions == ["members:read", "editors:read"]
+      end
+
       test "accepts optional schema" do
         site = create_site!()
 
@@ -737,6 +749,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
         assert blog_post.featured == false
         assert blog_post.schema == []
         assert blog_post.seo_tags == []
+        assert blog_post.permissions == []
       end
     end
 

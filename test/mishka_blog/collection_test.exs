@@ -178,6 +178,18 @@ defmodule MishkaBlog.Test.CollectionTest do
         assert collection.seo_tags == seo_tags
       end
 
+      test "accepts permissions, each trimmed and downcased, repeats dropped" do
+        site = create_site!()
+
+        collection =
+          create_collection!(
+            permissions: ["  Members:Read  ", "members:read", "EDITORS:READ"],
+            site_id: site.id
+          )
+
+        assert collection.permissions == ["members:read", "editors:read"]
+      end
+
       test "accepts optional schema" do
         site = create_site!()
 
@@ -834,6 +846,7 @@ defmodule MishkaBlog.Test.CollectionTest do
         assert collection.display_order == 0
         assert collection.schema == []
         assert collection.seo_tags == []
+        assert collection.permissions == []
       end
     end
 

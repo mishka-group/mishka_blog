@@ -84,6 +84,7 @@ defmodule MishkaBlog.Collection do
     :status,
     :schema,
     :seo_tags,
+    :permissions,
     :featured,
     :display_order,
     :language,
@@ -1001,6 +1002,29 @@ defmodule MishkaBlog.Collection do
             placeholder ~s([{"@type": "CollectionPage", "name": "My Collection"}])
           end
         end
+
+        # WHO MAY OPEN THE CATEGORY ON ITS PAGE: any of the permission names that exist, stored by
+        # name. Empty, it is public. `MishkaBlog.Plugins.PageSeo` answers them, and
+        # `MishkaCmsWeb.RuntimeLive` asks for them after the page's own.
+        field :permissions, :relation do
+          resource MishkaCmsCore.Accounts.Permission
+          display_field :name
+          search_field :name
+          value_field :name
+          mode :search_multi
+          page_size 15
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Permissions") end
+
+            description fn ->
+              dgettext(
+                "mishka_gervaz",
+                "Who may open this category: anyone holding one of these. None: everyone."
+              )
+            end
+          end
+        end
       end
 
       groups do
@@ -1033,7 +1057,7 @@ defmodule MishkaBlog.Collection do
         end
 
         group :data do
-          fields [:seo_tags, :schema]
+          fields [:seo_tags, :schema, :permissions]
 
           ui do
             columns 1
@@ -1064,6 +1088,9 @@ defmodule MishkaBlog.Collection do
 
     field :schema, {:array, :map}, derives: "validate(list)"
     field :seo_tags, {:array, :map}, derives: "validate(list)"
+
+    field :permissions, {:array, :string},
+      derives: "sanitize(each=[trim, downcase], reject_empty, uniq) validate(list)"
 
     field :featured, :boolean, derives: "validate(boolean)"
     field :display_order, :integer, derives: "validate(optional=[integer, min_len=0])"
@@ -1281,6 +1308,7 @@ defmodule MishkaBlog.Collection do
     read :public_list do
       description "Public endpoint to list all active collections (no authentication required)"
       filter expr(status == :active)
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :category}
 
       pagination offset?: true,
                  default_limit: 20,
@@ -1293,6 +1321,7 @@ defmodule MishkaBlog.Collection do
       description "Public endpoint to get a single active collection by ID (no authentication required)"
       get? true
       filter expr(status == :active)
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :category}
     end
 
     read :archived do
@@ -1928,6 +1957,12 @@ defmodule MishkaBlog.Collection do
       description "SEO meta tags and structured data"
     end
 
+    attribute :permissions, {:array, :string} do
+      default []
+      public? true
+      description "Permission strings required to open this category on its page"
+    end
+
     attribute :featured, :boolean do
       default false
       public? true
@@ -2054,6 +2089,11 @@ defmodule MishkaBlog.Collection do
   end
 
   calculations do
+    # Who may open the category: its own permissions, else its nearest parent's.
+    calculate :effective_permissions,
+              {:array, :string},
+              {MishkaBlog.Resources.Calculations.EffectivePermissions, kind: :collection}
+
     calculate :version_count, :integer do
       description "Total number of versions for this collection"
       public? true

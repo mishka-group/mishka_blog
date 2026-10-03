@@ -1114,6 +1114,14 @@ defmodule MishkaBlog.Comment do
                 message:
                   dgettext_noop("errors", "Post not found or does not belong to your site.")}
 
+      # A post its actor may not open takes nothing from them, as though it were not there.
+      validate {MishkaBlog.Resources.Validations.OpenToActor,
+                field: :post_id,
+                resource: MishkaBlog.BlogPost,
+                lock: :effective_permissions,
+                message:
+                  dgettext_noop("errors", "Post not found or does not belong to your site.")}
+
       # Auto-set site_id from tenant
       change fn changeset, context ->
         Ash.Changeset.force_change_attribute(changeset, :site_id, context.tenant)
@@ -1207,6 +1215,8 @@ defmodule MishkaBlog.Comment do
       description "Reads all approved comments for a specific post (public)"
       argument :post_id, :uuid, allow_nil?: false
       filter expr(post_id == ^arg(:post_id) and status == :approved)
+
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :comment}
 
       pagination offset?: true, default_limit: 20, max_page_size: 100, countable: true
     end
@@ -1755,6 +1765,11 @@ defmodule MishkaBlog.Comment do
   end
 
   calculations do
+    # Who may reach the comment: whoever may open its post.
+    calculate :effective_permissions,
+              {:array, :string},
+              {MishkaBlog.Resources.Calculations.EffectivePermissions, kind: :comment}
+
     # the_content / onContentPrepare equivalent for comment bodies.
     calculate :rendered_content,
               :string,

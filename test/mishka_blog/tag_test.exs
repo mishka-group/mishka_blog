@@ -136,6 +136,19 @@ defmodule MishkaBlog.Test.TagTest do
         assert tag.description == "Technology related topics"
       end
 
+      test "accepts permissions, each trimmed and downcased, repeats dropped" do
+        site = create_site!()
+
+        tag =
+          create_blog_tag!(
+            permissions: ["  Members:Read  ", "members:read", "EDITORS:READ"],
+            site_id: site.id
+          )
+
+        assert tag.permissions == ["members:read", "editors:read"]
+        assert create_blog_tag!(site_id: site.id).permissions == []
+      end
+
       test "accepts parent_tag_id for hierarchical tags" do
         site = create_site!()
         parent_tag = create_blog_tag!(name: "Programming", site_id: site.id)

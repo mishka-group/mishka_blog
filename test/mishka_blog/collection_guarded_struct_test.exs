@@ -18,6 +18,7 @@ defmodule MishkaBlog.Test.CollectionGuardedStructTest do
                  :status,
                  :schema,
                  :seo_tags,
+                 :permissions,
                  :featured,
                  :display_order,
                  :language,
@@ -63,6 +64,24 @@ defmodule MishkaBlog.Test.CollectionGuardedStructTest do
                     message: "The minimum number the display_order field is 0" <> _
                   }
                 ]} = Collection.__guarded_change__(%{display_order: -1})
+      end
+
+      test "permissions: trim + downcase + reject empties + uniq" do
+        assert {:ok, %{permissions: ["members:read", "members:write"]}} =
+                 Collection.__guarded_change__(%{
+                   permissions: ["  MEMBERS:READ  ", "Members:Read", "", "MEMBERS:WRITE"]
+                 })
+      end
+
+      test "permissions: non-list is rejected" do
+        assert {:error,
+                [
+                  %{
+                    field: :permissions,
+                    action: :list,
+                    message: _
+                  }
+                ]} = Collection.__guarded_change__(%{permissions: "not a list"})
       end
     end
   end

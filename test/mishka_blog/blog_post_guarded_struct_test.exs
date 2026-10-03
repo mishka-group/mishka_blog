@@ -25,6 +25,7 @@ defmodule MishkaBlog.Test.BlogPostGuardedStructTest do
                  :scheduled_publish_at,
                  :schema,
                  :seo_tags,
+                 :permissions,
                  :featured,
                  :language,
                  :language_group_id
@@ -77,6 +78,24 @@ defmodule MishkaBlog.Test.BlogPostGuardedStructTest do
                     message: "The maximum number of characters in the title field is 500" <> _
                   }
                 ]} = BlogPost.__guarded_change__(%{title: long})
+      end
+
+      test "permissions: trim + downcase + reject empties + uniq" do
+        assert {:ok, %{permissions: ["members:read", "members:write"]}} =
+                 BlogPost.__guarded_change__(%{
+                   permissions: ["  MEMBERS:READ  ", "Members:Read", "", "MEMBERS:WRITE"]
+                 })
+      end
+
+      test "permissions: non-list is rejected" do
+        assert {:error,
+                [
+                  %{
+                    field: :permissions,
+                    action: :list,
+                    message: _
+                  }
+                ]} = BlogPost.__guarded_change__(%{permissions: "not a list"})
       end
     end
   end

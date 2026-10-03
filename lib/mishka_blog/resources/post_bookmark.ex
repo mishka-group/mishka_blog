@@ -65,6 +65,15 @@ defmodule MishkaBlog.PostBookmark do
                 resource: MishkaBlog.BlogPost,
                 message:
                   dgettext_noop("errors", "Post not found or does not belong to your site.")}
+
+      # A post its actor may not open takes nothing from them, as though it were not there.
+      validate {MishkaBlog.Resources.Validations.OpenToActor,
+                field: :post_id,
+                resource: MishkaBlog.BlogPost,
+                lock: :effective_permissions,
+                message:
+                  dgettext_noop("errors", "Post not found or does not belong to your site.")}
+
       change relate_actor(:user, allow_nil?: true)
     end
 
