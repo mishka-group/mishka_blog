@@ -96,3 +96,20 @@ config :mishka_installer, project_env: :dev
 config :mishka_installer, MishkaInstaller.MnesiaRepo,
   mnesia_dir: Path.expand(".mnesia/test"),
   essential: [MishkaInstaller.Event.Event, MishkaInstaller.Installer.Installer]
+
+# The runtime asset compilers read these even when a test never invokes the binaries; without them
+# every compile logs "esbuild/tailwind version is not configured". The profile names follow
+# `:"#{host_app}_js"` / `:"#{host_app}_css"` — the CMS names its own `mishka_cms_js` / `mishka_cms_css`.
+config :esbuild,
+  version: "0.28.2",
+  mishka_blog_js: [
+    args: [],
+    env: %{"NODE_PATH" => Path.expand("../priv/static/temp/js_assets/node_modules", __DIR__)}
+  ]
+
+config :tailwind,
+  version: "4.3.3",
+  mishka_blog_css: [
+    args: ~w(),
+    cd: Path.expand("..", __DIR__)
+  ]

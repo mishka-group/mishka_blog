@@ -20,6 +20,11 @@
 Ecto.Migrator.up(MishkaBlog.Repo, 0, MishkaBlog.Test.ObanMigration, log: false)
 :ok = Supervisor.stop(MishkaBlog.Repo)
 
+# THE COUNTER THE PARTITION SUPERVISOR PICKS A PARTITION WITH. `ModuleCompilerHandler` reads it
+# from `:persistent_term` on every compile, and the CMS's own application puts it there at boot —
+# so a suite that compiles components has to put it there itself.
+:persistent_term.put(:module_compiler_partition_counter, :atomics.new(1, signed: false))
+
 children = [
   MishkaBlog.Repo,
   {Oban, Application.fetch_env!(:mishka_blog, Oban)},
@@ -29,6 +34,20 @@ children = [
   MishkaCmsCore.Runtime.States.TranslationsState,
   MishkaCmsCore.Runtime.States.ViewerState,
   MishkaCmsCore.Runtime.States.RateLimitState,
+  # THIS EXTENSION SHIPS COMPONENTS NOW, and a component is only a row until something compiles it.
+  # `MishkaBlog.LiveComponentsRenderTest` renders the four out of the database for real — the same
+  # lazy compile a visitor's first request triggers — and that needs the gate, the registry that
+  # names each compile, and the supervisor those compiles run under. The CMS's own suite starts the
+  # same three for the same reason.
+  #
+  # Everything else the comment at the top of this file leaves out stays out: these three are what
+  # rendering a stored component costs, and nothing more.
+  MishkaCmsCore.Runtime.Handlers.CompileGate,
+  {Registry, keys: :unique, name: MishkaCms.ModuleCompilerHandlerRegistry},
+  {PartitionSupervisor,
+   child_spec: DynamicSupervisor,
+   name: MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandlerPartition,
+   partitions: System.schedulers_online()},
   {AshAuthentication.Supervisor, [otp_app: :mishka_blog]},
   MishkaBlog.TestEndpoint
 ]
