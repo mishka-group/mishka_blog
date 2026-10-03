@@ -1,0 +1,65 @@
+defmodule MishkaBlog.Plugins.PageRecords do
+  @moduledoc """
+  Names the kinds of record the blog's pages show — a post, a collection, a tag — on the
+  `runtime:page:records` mishka_installer hook, for a page's "This page shows each" choice (see
+  `MishkaCmsCore.Runtime.Seo.record_types/1`), each with a few of the site's own to preview a page
+  with. Each is labelled as the blog's admin names it, where its Permissions and SEO Tags are set.
+  `MishkaBlog.Plugins.PageSeo` answers for the same kinds.
+
+  A module because a mishka_installer hook is one. Registered in `MishkaBlog.Application`.
+  """
+
+  use Gettext, backend: MishkaCmsCore.Gettext
+  use MishkaInstaller.Event.Hook, event: "runtime:page:records", initial: %{priority: 50}
+
+  alias MishkaBlog.{BlogPost, Collection, Tag}
+  alias MishkaCmsCore.Runtime.Languages
+
+  @samples 8
+
+  @impl true
+  def call(%{records: records} = state) when is_list(records),
+    do: {:reply, %{state | records: records ++ types(Map.get(state, :site_id))}}
+
+  def call(state), do: {:reply, state}
+
+  @doc "The blog's kinds of record for `site_id`, with its latest of each as samples."
+  @spec types(String.t() | nil) :: [map()]
+  def types(site_id) do
+    [
+      type("blog:post", gettext("Post"), samples(BlogPost, :title, :published_at, site_id)),
+      type(
+        "blog:category",
+        gettext("Collection"),
+        samples(Collection, :name, :updated_at, site_id)
+      ),
+      type("blog:tag", gettext("Tag"), samples(Tag, :name, :updated_at, site_id))
+    ]
+  end
+
+  defp type(id, label, samples),
+    do: %{id: id, group: gettext("Blog"), label: label, captures: ["slug"], samples: samples}
+
+  # The latest a reader may open, each with the captures that open it.
+  defp samples(resource, name, newest, site_id) when is_binary(site_id) do
+    resource
+    |> Ash.Query.for_read(:public_list, %{}, tenant: site_id, authorize?: false)
+    |> Ash.Query.select([name, :slug, :language])
+    |> Ash.Query.sort([{newest, :desc}])
+    |> Ash.read(tenant: site_id, authorize?: false, page: [limit: @samples])
+    |> case do
+      {:ok, %{results: rows}} ->
+        for %{slug: slug, language: language} = row <- rows,
+            is_binary(slug),
+            do: %{
+              label: "#{Map.get(row, name)} · #{language}",
+              params: %{"slug" => slug, Languages.capture() => language}
+            }
+
+      _unreadable ->
+        []
+    end
+  end
+
+  defp samples(_resource, _name, _newest, _no_site), do: []
+end
