@@ -1,0 +1,162 @@
+<div>
+  <div>
+    <div
+      data-role="col-head"
+      class="mb-[22px] flex flex-wrap items-start justify-between gap-6 max-[560px]:flex-col!"
+    >
+      <div>
+        <h1 class="m-0 font-['Newsreader'] text-[30px] font-medium leading-[1.05] tracking-[-0.01em] text-[#17161a]">
+          {gettext("Collections")}
+        </h1>
+        <div class="mt-[7px] text-[13.5px] font-medium text-[#7c7a75]">
+          {gettext("Organize posts into themed collections.")}
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2.5 max-[560px]:w-full!">
+        <.link
+          navigate={path(@socket, "/admin/dashboard/blog")}
+          class="inline-flex h-[42px] items-center gap-[7px] rounded-xl border border-[#ecebe6] bg-white px-[15px] text-[12.5px] font-semibold text-[#5c5a54] transition-colors hover:bg-[#f7f6f3]"
+        >
+          <.icon name="hero-chevron-left" class="size-[15px] rtl:rotate-180" /> {gettext(
+            "Back to Dashboard"
+          )}
+        </.link>
+
+        <button
+          type="button"
+          id="add-collection-btn"
+          phx-click={show_modal("collection-form-modal")}
+          class="inline-flex h-[42px] items-center gap-2 rounded-xl bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-[17px] text-[12.5px] font-bold text-white shadow-[0_5px_14px_rgba(79,75,204,0.28)] transition-opacity hover:opacity-95"
+        >
+          <.icon name="hero-plus" class="size-4" /> {gettext("Add Collection")}
+        </button>
+      </div>
+    </div>
+
+    <%!-- Collection Form Modal (MishkaGervaz) --%>
+    <.modal id="collection-form-modal">
+      <.live_component
+        module={MishkaGervaz.Form.Web.Live}
+        id={MishkaGervaz.Resource.Info.Form.component_id(MishkaBlog.Collection)}
+        resource={MishkaBlog.Collection}
+        current_user={@current_user}
+      />
+    </.modal>
+
+    <%!-- Collections Table/CardGrid Component (MishkaGervaz) --%>
+    <.live_component
+      module={MishkaGervaz.Table.Web.Live}
+      id="collections-table"
+      resource={MishkaBlog.Collection}
+      current_user={@current_user}
+      url_state={@url_state}
+    />
+
+    <.modal
+      id="collection-versions-modal"
+      width_class="max-w-[840px]"
+      padding_class="p-0"
+      on_cancel={JS.push("close_versions")}
+    >
+      <CardChrome.modal_head
+        icon="hero-clock"
+        title={gettext("Version history")}
+        subtitle={@versions_collection_name || gettext("Loading…")}
+      />
+
+      <%!-- Each edition keeps its own history, so the row switches which one the modal is showing
+            rather than merging them — the active language is the one whose versions are listed. --%>
+      <div
+        :if={length(@versions_editions) > 1}
+        class="flex flex-wrap items-center gap-2 border-b border-[#f0efea] px-[22px] py-3"
+      >
+        <span class="text-[9px] font-bold uppercase tracking-[0.05em] text-[#a8a5a0]">
+          {gettext("Languages")}
+        </span>
+        <button
+          :for={edition <- @versions_editions}
+          type="button"
+          phx-click="show_versions_for"
+          phx-value-id={edition.id}
+          aria-pressed={to_string(edition.id == @versions_collection_id)}
+          class={[
+            "inline-flex items-center gap-1 rounded-[20px] border px-2.5 py-1 text-[10px] font-bold transition-colors",
+            (edition.id == @versions_collection_id &&
+               LanguageAccent.for_language(edition.language).chip) ||
+              "border-[#ecebe6] bg-white text-[#8a877f] hover:bg-[#f7f6f3]"
+          ]}
+        >
+          <span class={[
+            "size-1.5 rounded-full",
+            (edition.id == @versions_collection_id &&
+               LanguageAccent.for_language(edition.language).fill) || "bg-[#d5d2c9]"
+          ]}></span>
+          {String.upcase(edition.language)}
+        </button>
+      </div>
+
+      <VersionHistory.panel
+        id="collection-versions"
+        versions={@versions}
+        loading={@versions_loading}
+        page={@versions_page}
+        per_page={@versions_per_page}
+        total={@versions_total}
+        preview_id={@preview_version_id}
+        master_ids={@version_masters}
+        empty_hint={gettext("Edits to this collection will be recorded here.")}
+      />
+    </.modal>
+
+    <.modal
+      id="collection-edition-modal"
+      width_class="max-w-[560px]"
+      padding_class="p-0"
+      on_cancel={JS.push("close_edition")}
+    >
+      <CardChrome.modal_head
+        icon="hero-language"
+        title={gettext("Edit language edition")}
+        subtitle={
+          (@edition && "#{String.upcase(@edition.language || "")} · #{@edition.name}") ||
+            gettext("Loading…")
+        }
+        tone={(@edition && LanguageAccent.of(@edition).tile) || "bg-[#f2f1fc] text-[#5b57d6]"}
+      >
+        <:actions :if={@edition}>
+          <.link
+            navigate={
+              path(
+                @socket,
+                "/admin/dashboard/blog/posts?posts_filter_collection_id=#{@edition.id}"
+              )
+            }
+            class="inline-flex h-9 items-center gap-2 rounded-[10px] border border-[#dcdbf5] bg-[#f2f1fc] px-3 text-[12px] font-semibold text-[#4f4bcc] transition-colors hover:bg-[#e9e7fb]"
+          >
+            <.icon name="hero-document-text" class="size-3.5" />
+            {ngettext("1 post", "%{count} posts", @edition.post_count || 0)}
+          </.link>
+        </:actions>
+      </CardChrome.modal_head>
+
+      <CardChrome.modal_body>
+        <div :if={@edition_loading} class="flex items-center justify-center gap-2.5 py-10">
+          <span class="size-4 animate-spin rounded-full border-2 border-[#e0ddd6] border-t-[#5b57d6]" />
+          <span class="text-[12px] font-medium text-[#8a877f]">
+            {gettext("Loading edition…")}
+          </span>
+        </div>
+
+        <.live_component
+          :if={@edition}
+          module={MishkaGervaz.Form.Web.Live}
+          id={"collection-edition-form-#{@edition.id}"}
+          resource={MishkaBlog.Collection}
+          current_user={@current_user}
+          record_id={@edition.id}
+        />
+      </CardChrome.modal_body>
+    </.modal>
+  </div>
+</div>

@@ -1,0 +1,129 @@
+defmodule MishkaBlog.Kit do
+  @moduledoc """
+  Where this extension's UI kit bundle is, and how to install it.
+
+  ## What is in the bundle, and why it is a bundle
+
+  `priv/cms_ui_kits/mishka_blog.json` carries twelve components of two kinds. Each is complete on
+  its own: its markup, its declarations, and its own code, including the Ash reads it runs. Nothing
+  about them lives in Elixir.
+
+  ### The seven blocks, which are live components
+
+  `blog-post-list`, `blog-featured-posts`, `blog-post-search`, `blog-tag-cloud`,
+  `blog-post-detail`, `blog-category-list` and `blog-post-comments`. Each is a
+  `Phoenix.LiveComponent` that runs its own query, so an author can put any of them on any page, on
+  its own or beside the others, and each holds what it read.
+
+  ### The five pieces, which are function components
+
+  `blog-post-card`, `blog-post-meta`, `blog-term-row`, `blog-pager` and `blog-notice`. These hold
+  nothing and read nothing: they draw what the block above hands them. They are components rather
+  than markup inside one block because more than one block draws them — the card is drawn by the
+  paged list and by the featured strip, the notice by every block but the search box — and an admin
+  who restyles a card restyles it once.
+
+  ## What was split, and what was left alone
+
+  `blog-post-list` used to draw the featured strip as well, through a `featured_only` switch. The
+  strip is `blog-featured-posts` now: it is its own query, so it is its own load and its own place
+  on a page, and an author who wants only it no longer carries a pager, a sort button and a page
+  size to turn off one at a time. The switch stays on the list, because "the featured archive,
+  paged" is a list and because a site provisioned before this still has a page that sets it.
+
+  The sidebar's "Recent posts" is NOT a component of its own, and that is the same rule read the
+  other way. It is the same query, the same paging and the same card as the list — `variant`
+  decides whether a card or a line is drawn, and `blog-post-card` is where that decision lives now.
+  A component for it would be `blog-post-list` with two attributes fixed and a second copy of the
+  read, which is the duplication the split exists to remove rather than an example of it.
+
+  ## Which blocks read in the background, and why not all of them
+
+  A block that runs its own query and can be waited for reads it in a task, and reads it inline in
+  exactly one place: the builder's canvas and the Preview, where
+  `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2` renders a component with no process at all and a
+  task would have nobody to answer. Every block's `cold?/1` asks THAT, not
+  `Phoenix.LiveView.connected?/1`, because a visit renders a page twice — once for the GET, once
+  when the socket connects — and `connected?/1` is false for both. Forking on it meant the HTTP
+  response waited for every block on the page in turn, threw the rows away with that socket, and
+  read them all again a moment later behind a skeleton the reader watched replace them. While it is
+  loading a block draws a skeleton, and when the read fails it draws a line and a button to ask
+  again rather than taking the page down. That is `blog-post-list`, `blog-featured-posts`,
+  `blog-tag-cloud`, `blog-category-list` and `blog-post-comments`.
+
+  WHICH IS A TRADE, AND THE TRADE IS THE POINT: a reader with no JavaScript, and a crawler that
+  does not run any, is served the skeleton of a listing rather than its rows. What it is NOT served
+  a skeleton of is an article — `blog-post-detail` and `blog-post-search` read in step with the
+  page, so every post's own URL answers with its whole text in the HTTP response.
+
+  A block that streams its rows says `phx-update="stream"` only where there is a socket to stream
+  from — `@myself` is nil in a cold render, and a stream container is one the client never removes a
+  child from, so the builder's canvas kept the cards of the previous setting beside the new ones
+  every time the Inspector changed one.
+
+  The grid and the compact list are two containers with two ids, not one id on whichever `variant`
+  chose. The client keeps a stream's bookkeeping against the container's DOM id, and these two are
+  never on the page at the same time, so sharing one would have handed the grid's to the list.
+  What puts the rows INTO the new one is `asked/1`: a streamed row is drawn once and never
+  re-rendered, so everything a row is built from is part of the read's own signature.
+
+  Two read in step with the page instead, and both on purpose:
+
+    * `blog-post-detail` is what the page IS. A skeleton where the article should be is a worse
+      page than one that takes as long as the article does, and a crawler that is served the
+      skeleton is served nothing.
+    * `blog-post-search` reads nothing until the reader types. Its query is already a round trip
+      the reader started, and one run in a task could land after a later one and answer the wrong
+      words.
+
+  They draw themselves in plain HTML and Tailwind and call no other kit. A site that installed this
+  extension and skipped Chelekom renders them; before, every card on the public blog was the
+  runtime's red "failed to render" box.
+
+  That is the same shape Chelekom ships in, and it is the point. A component that arrives as data
+  can be installed one at a time or in batches, can be edited in the admin like any other row, and
+  carries no dependency on a module a third-party importer would not have. An extension that kept
+  its components in compiled code would be asking the CMS to treat it specially.
+
+  ## Installing
+
+      MishkaBlog.Kit.install!(site_id)
+
+  Per SITE rather than globally: these components read posts, and a post belongs to a tenant. The
+  site is baked into the compiled module's own metadata — see `site_id/0` in the bundle's helpers —
+  so a component cannot be edited into reading another site's posts.
+
+  Re-running it upserts by name, which is what makes it safe in a seed.
+
+  ## Updating a site that already has them
+
+  Not with this. `install!/1` writes the bundle's copy over every row an admin ever edited, which is
+  what a seed wants and what an admin does not. The "Blog components" card on the blog dashboard is
+  the other way: `MishkaCmsCore.Runtime.Handlers.UiKitUpgrade` compares each installed row with the
+  version and the fingerprint the installer stamped on it, reports what is behind and what carries
+  an edit, and writes only what the admin chooses.
+
+  ## What this module is not
+
+  It installs, and that is all. There is deliberately no query helper, no render helper and nothing
+  a component's stored code could call: the components are self-contained, and a function here
+  would quietly become part of their contract.
+  """
+
+  alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
+
+  @doc "The bundle's absolute path inside this extension's `priv`."
+  @spec bundle_path() :: String.t()
+  def bundle_path,
+    do: Path.join([:code.priv_dir(:mishka_blog), "cms_ui_kits", "mishka_blog.json"])
+
+  @doc """
+  Installs the bundle for one site, upserting by component name.
+
+  Returns whatever `MishkaCmsCore.Runtime.Handlers.UiKitHandler.install_kit!/2` returns — `{:ok, …}`
+  with the rows, or `{:error, reason}` when the file is not a bundle this CMS reads.
+  """
+  @spec install!(String.t()) :: {:ok, map()} | {:error, term()}
+  def install!(site_id) when is_binary(site_id),
+    do: UiKitHandler.install_kit!(bundle_path(), site_id: site_id)
+end

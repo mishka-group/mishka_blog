@@ -1,0 +1,2969 @@
+{
+  "$schema": "mishka.ui_kit.bundle.v3",
+  "name": "mishka_blog",
+  "version": "3.1.0",
+  "components": [
+    {
+      "name": "blog-post-list",
+      "description": "Published posts, paged, read in the background and streamed in. One category, one tag, one language or the whole archive — as a grid of cards, or as a compact list for a sidebar.",
+      "type": "media",
+      "format": "heex",
+      "stateful": true,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div id={@id} {@rest} data-role=\"blog-post-list\" class=\"text-[#1b1a18]\">\n  <header\n    :if={trimmed(@heading) != \"\" or @filter_row or @show_sort}\n    data-role=\"blog-list-header\"\n    class=\"mb-5 flex items-start justify-between gap-4\"\n  >\n    <div class=\"min-w-0\">\n      <h2\n        :if={@filter_row}\n        data-role=\"blog-list-filter-title\"\n        class=\"text-lg font-bold leading-tight\"\n      >\n        {@filter_row.name}\n      </h2>\n\n      <h2\n        :if={is_nil(@filter_row) and trimmed(@heading) != \"\"}\n        data-role=\"blog-list-heading\"\n        class=\"text-lg font-bold leading-tight\"\n      >\n        {@heading}\n      </h2>\n\n      <p\n        :if={@filter_row && trimmed(@filter_row.description) != \"\"}\n        data-role=\"blog-list-filter-description\"\n        class=\"mt-1 max-w-prose text-sm leading-relaxed text-[#6d6a63]\"\n      >\n        {@filter_row.description}\n      </p>\n    </div>\n\n    <button\n      :if={@show_sort}\n      type=\"button\"\n      data-role=\"blog-list-sort\"\n      data-sort={@sort}\n      phx-click=\"sort\"\n      phx-target={@myself}\n      class=\"flex-none rounded-full border border-[#ecebe6] bg-white px-3 py-1 text-xs font-semibold text-[#6d6a63] hover:border-[#5b57d6] hover:text-[#5b57d6]\"\n    >\n      {if @sort == \"oldest\", do: @oldest_text, else: @newest_text}\n    </button>\n  </header>\n\n  <.component\n    :if={@loading}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"loading\"\n    role=\"blog-list-loading\"\n    text={@loading_text}\n  />\n\n  <.component\n    :if={@failed}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"error\"\n    role=\"blog-list-error\"\n    text={@error_text}\n    retry_text={@retry_text}\n    target={@myself}\n  />\n\n  <.component\n    :if={not @loading and not @failed and @total == 0}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-list-empty\"\n    text={@empty_text}\n  />\n\n  <div\n    :if={not @loading and not @failed and @variant != \"compact\"}\n    id={\"#{@id}-cards\"}\n    phx-update={(@myself && \"stream\") || nil}\n    data-role=\"blog-list-items\"\n    class=\"grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3\"\n  >\n    <div :for={{dom_id, row} <- @streams.posts} id={dom_id} class=\"h-full\">\n      <.component\n        component_name=\"blog-post-card\"\n        site={site_name()}\n        post={row.post}\n        show_excerpt={@show_excerpt}\n        show_date={@show_date}\n        show_read={readable?(@post_base, @base)}\n        navigate={post_navigate(@post_base, row.post.slug, @lang_param, row.post.language)}\n        patch={post_patch(@post_base, @base, @params, @post_param, row.post.slug)}\n        read_text={@read_text}\n        featured_text={@featured_text}\n      />\n    </div>\n  </div>\n\n  <ul\n    :if={not @loading and not @failed and @variant == \"compact\"}\n    id={\"#{@id}-lines\"}\n    phx-update={(@myself && \"stream\") || nil}\n    data-role=\"blog-list-items\"\n    class=\"divide-y divide-[#ecebe6] rounded-[18px] border border-[#ecebe6] bg-white px-4\"\n  >\n    <li :for={{dom_id, row} <- @streams.posts} id={dom_id} class=\"py-2.5\">\n      <.component\n        component_name=\"blog-post-card\"\n        site={site_name()}\n        post={row.post}\n        variant=\"compact\"\n        show_date={@show_date}\n        navigate={post_navigate(@post_base, row.post.slug, @lang_param, row.post.language)}\n        patch={post_patch(@post_base, @base, @params, @post_param, row.post.slug)}\n      />\n    </li>\n  </ul>\n\n  <.component\n    :if={@show_pager and not @loading and not @failed}\n    component_name=\"blog-pager\"\n    site={site_name()}\n    role=\"blog-list-pager\"\n    page={@page}\n    pages={@pages}\n    base={@base}\n    params={@params}\n    page_param={@page_param}\n    target={@myself}\n    first_text={@first_text}\n    previous_text={@previous_text}\n    next_text={@next_text}\n    last_text={@last_text}\n  />\n\n  <p\n    :if={@show_total and @total > 0}\n    data-role=\"blog-list-total\"\n    class=\"mt-3 text-center text-xs text-[#8a877f]\"\n  >\n    {@total} {@total_text}\n  </p>\n</div>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "heading",
+          "type": "string",
+          "opts": {
+            "default": "Latest posts",
+            "doc": "The words above the list. Left empty, no heading is drawn."
+          }
+        },
+        {
+          "name": "variant",
+          "type": "string",
+          "opts": {
+            "default": "grid",
+            "doc": "grid draws a card per post; compact draws a narrow list of titles and dates, which is what a sidebar wants.",
+            "values": [
+              "grid",
+              "compact"
+            ]
+          }
+        },
+        {
+          "name": "per_page",
+          "type": "integer",
+          "opts": {
+            "default": 5,
+            "doc": "How many posts one page holds.",
+            "min": 1,
+            "max": 50
+          }
+        },
+        {
+          "name": "sort",
+          "type": "string",
+          "opts": {
+            "default": "newest",
+            "doc": "Which end of the archive the list starts from.",
+            "values": [
+              "newest",
+              "oldest"
+            ]
+          }
+        },
+        {
+          "name": "language",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "Which edition of each record to show. Left empty, one edition of each — the master, the language it was written in. A code such as fa or ar shows that language only. all shows every translation."
+          }
+        },
+        {
+          "name": "collection",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "A category's slug. Set it and the list holds that category's published posts only."
+          }
+        },
+        {
+          "name": "tag",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "A tag's slug. Set it and the list holds the posts carrying that tag only."
+          }
+        },
+        {
+          "name": "featured_only",
+          "type": "boolean",
+          "opts": {
+            "default": false,
+            "doc": "Only the posts flagged Featured. This is the paged archive of them; blog-featured-posts is the strip, which reads its own handful and pages nothing."
+          }
+        },
+        {
+          "name": "exclude_slug",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "A post to leave out — the one already open on this page, usually."
+          }
+        },
+        {
+          "name": "show_filter_title",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "When a category or a tag narrows the list, head it with that category's or tag's own name and description instead of the heading above."
+          }
+        },
+        {
+          "name": "show_excerpt",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw each post's summary under its title."
+          }
+        },
+        {
+          "name": "show_date",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the date each post was published."
+          }
+        },
+        {
+          "name": "show_pager",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the pager when there is more than one page."
+          }
+        },
+        {
+          "name": "show_sort",
+          "type": "boolean",
+          "opts": {
+            "default": false,
+            "doc": "Let the reader flip the order for themselves."
+          }
+        },
+        {
+          "name": "show_total",
+          "type": "boolean",
+          "opts": {
+            "default": false,
+            "doc": "Draw how many posts the list holds in all."
+          }
+        },
+        {
+          "name": "base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The path the pager writes its links to. Left empty the pager stays on the server, and the page it is on has no URL of its own."
+          }
+        },
+        {
+          "name": "params",
+          "type": "any",
+          "opts": {
+            "default": {},
+            "doc": "The page's own query string, handed straight through, so a link this component writes keeps every key the page already had."
+          }
+        },
+        {
+          "name": "page_param",
+          "type": "any",
+          "opts": {
+            "default": "page",
+            "doc": "The query key this list's page number is written under. Two lists on one page need two keys."
+          }
+        },
+        {
+          "name": "post_param",
+          "type": "any",
+          "opts": {
+            "default": "post",
+            "doc": "The query key a post's slug is written under when the post opens beside the list rather than on a page of its own."
+          }
+        },
+        {
+          "name": "post_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a post lives — /en/blog/post, say. Left empty a title opens the post beside the list through post_param instead. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the row it points at, which is the only way one of them can lead to another language's edition."
+          }
+        },
+        {
+          "name": "lang_param",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The query key that carries the language on the links this component writes — lang, for a site addressed as /blog?lang=fa. Leave it empty on a site whose language is part of the path, where a :lang in the bases carries it instead."
+          }
+        },
+        {
+          "name": "read_text",
+          "type": "string",
+          "opts": {
+            "default": "Read",
+            "doc": "The words on each card's own link."
+          }
+        },
+        {
+          "name": "featured_text",
+          "type": "string",
+          "opts": {
+            "default": "Featured",
+            "doc": "The badge a featured post carries."
+          }
+        },
+        {
+          "name": "first_text",
+          "type": "string",
+          "opts": {
+            "default": "First",
+            "doc": "The pager's jump to the first page."
+          }
+        },
+        {
+          "name": "previous_text",
+          "type": "string",
+          "opts": {
+            "default": "Previous",
+            "doc": "The pager's step back."
+          }
+        },
+        {
+          "name": "next_text",
+          "type": "string",
+          "opts": {
+            "default": "Next",
+            "doc": "The pager's step forward."
+          }
+        },
+        {
+          "name": "last_text",
+          "type": "string",
+          "opts": {
+            "default": "Last",
+            "doc": "The pager's jump to the last page."
+          }
+        },
+        {
+          "name": "total_text",
+          "type": "string",
+          "opts": {
+            "default": "posts",
+            "doc": "What the total is counted in."
+          }
+        },
+        {
+          "name": "newest_text",
+          "type": "string",
+          "opts": {
+            "default": "Newest first",
+            "doc": "What the sort button says while the newest posts are on top."
+          }
+        },
+        {
+          "name": "oldest_text",
+          "type": "string",
+          "opts": {
+            "default": "Oldest first",
+            "doc": "What the sort button says while the oldest posts are on top."
+          }
+        },
+        {
+          "name": "empty_text",
+          "type": "string",
+          "opts": {
+            "default": "Nothing published yet.",
+            "doc": "What a reader is told when nothing matches."
+          }
+        },
+        {
+          "name": "loading_text",
+          "type": "string",
+          "opts": {
+            "default": "Loading posts…",
+            "doc": "What a screen reader is told while the posts are being read."
+          }
+        },
+        {
+          "name": "error_text",
+          "type": "string",
+          "opts": {
+            "default": "These posts could not be loaded.",
+            "doc": "What a reader is told when the read failed."
+          }
+        },
+        {
+          "name": "retry_text",
+          "type": "string",
+          "opts": {
+            "default": "Try again",
+            "doc": "The way out of a failed read."
+          }
+        },
+        {
+          "name": "current_user",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The signed-in reader, handed down by the page as current_user. A record locked to permissions it does not hold is left out; without one, every locked record is."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "mount",
+          "args": "socket",
+          "code": "{:ok,\n socket\n |> Phoenix.Component.assign(\n   asked: nil,\n   loading: true,\n   failed: false,\n   page: 1,\n   total: 0,\n   pages: 1,\n   filter_row: nil\n )\n |> Phoenix.LiveView.stream(:posts, [])}\n"
+        },
+        {
+          "name": "update",
+          "args": "_assigns, socket",
+          "code": "{:ok, load(socket)}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"page\", %{\"to\" => to}, socket",
+          "code": "{:noreply,\n socket\n |> Phoenix.Component.assign(:page, to_page(to))\n |> load()}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"sort\", _params, socket",
+          "code": "{:noreply,\n socket\n |> Phoenix.Component.assign(\n   sort: flip(socket.assigns[:sort]),\n   page: 1\n )\n |> load()}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"retry\", _params, socket",
+          "code": "{:noreply,\n socket\n |> Phoenix.Component.assign(:asked, nil)\n |> load()}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":posts, {:ok, result}, socket",
+          "code": "{:noreply, arrived(socket, result)}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":posts, {:exit, _reason}, socket",
+          "code": "# A READ THAT DIED TAKES THE BLOCK'S OWN STATE WITH IT AND NOTHING ELSE. The task is unlinked\n# before it re-raises — see `Phoenix.LiveView.Async.do_async/5` — so the page around this block is\n# still standing, and this is what it draws instead of the list.\n{:noreply, Phoenix.Component.assign(socket, loading: false, failed: true)}\n"
+        },
+        {
+          "name": "site_id",
+          "args": "",
+          "code": "__MODULE__.__component_information__([:private, :site_id])\n"
+        },
+        {
+          "name": "read_as",
+          "args": "visitor",
+          "code": "# THE VISITOR THE READ IS FOR, named so a post, a category or a tag locked to permissions it\n# does not hold is left out of the rows, the count and the pages.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+        },
+        {
+          "name": "site_name",
+          "args": "",
+          "code": "# THE SITE'S NAME, NOT ITS ID, because that is what a component is addressed by: the runtime hashes\n# a module out of (component name, site name). Every `<.component …/>` below draws a sibling of this\n# one, which lives on the same site as this one and nowhere else.\n__MODULE__.__component_information__([:private, :site])\n"
+        },
+        {
+          "name": "positive",
+          "args": "value, fallback",
+          "code": "cond do\n  is_integer(value) and value > 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number > 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
+        },
+        {
+          "name": "to_page",
+          "args": "value",
+          "code": "cond do\n  is_integer(value) and value > 0 -> value\n  is_binary(value) -> positive(value, 1)\n  true -> 1\nend\n"
+        },
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "href",
+          "args": "base, params, key, value",
+          "code": "query =\n  params\n  |> case do\n    map when is_map(map) -> map\n    _not_a_map -> %{}\n  end\n  |> Map.put(to_string(key), to_string(value))\n  |> URI.encode_query()\n\nto_string(base) <> \"?\" <> query\n"
+        },
+        {
+          "name": "lang_base",
+          "args": "base, language",
+          "code": "# A BASE MAY NAME THE LANGUAGE AS A `:lang` SEGMENT, and on a site whose language is part of the\n# path that is the only form a link to a row in ANOTHER language can be built from: the segment is\n# filled with the language of the row being linked to, not the one the page is being read in. A base\n# without the segment is handed back as written — a query-mode page carries the language in\n# `lang_param` instead. A row whose language cannot be read gets no link rather than a link under\n# somebody else's language.\nsegments = base |> to_string() |> String.split(\"/\")\ncode = trimmed(language)\n\ncond do\n  \":lang\" not in segments -> to_string(base)\n  code == \"\" -> nil\n  true -> Enum.map_join(segments, \"/\", &if(&1 == \":lang\", do: code, else: &1))\nend\n"
+        },
+        {
+          "name": "slug_href",
+          "args": "base, slug, lang_param, language",
+          "code": "case lang_base(base, language) do\n  nil ->\n    nil\n\n  base ->\n    path = base <> \"/\" <> to_string(slug)\n\n    case {trimmed(lang_param), trimmed(language)} do\n      {\"\", _no_key} -> path\n      {_key, \"\"} -> path\n      {key, code} -> path <> \"?\" <> URI.encode_query(%{key => code})\n    end\nend\n"
+        },
+        {
+          "name": "narrow_language",
+          "args": "query, wanted",
+          "code": "require Ash.Query\n\ncase trimmed(wanted) do\n  \"all\" -> query\n  \"\" -> Ash.Query.filter(query, is_nil(language_group_id) or language_group_id == id)\n  code -> Ash.Query.filter(query, language == ^code)\nend\n"
+        },
+        {
+          "name": "first_row",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: [found | _rest]}} -> found\n  {:ok, [found | _rest]} -> found\n  _nothing -> nil\nend\n"
+        },
+        {
+          "name": "paged",
+          "args": "result",
+          "code": "# A TUPLE RATHER THAN A LIST, and that is what the error state is built on: folding an unreadable\n# answer into an empty one leaves a block telling a reader that nothing is published when the truth\n# is that nothing could be read.\ncase result do\n  {:ok, %{results: found, count: count}} -> {:ok, %{rows: found, total: count || length(found)}}\n  {:ok, found} when is_list(found) -> {:ok, %{rows: found, total: length(found)}}\n  {:error, reason} -> {:error, reason}\n  _unreadable -> {:error, :unreadable}\nend\n"
+        },
+        {
+          "name": "direction",
+          "args": "sort",
+          "code": "case sort do\n  \"oldest\" -> :asc\n  _newest -> :desc\nend\n"
+        },
+        {
+          "name": "flip",
+          "args": "sort",
+          "code": "case sort do\n  \"oldest\" -> \"newest\"\n  _newest_or_anything -> \"oldest\"\nend\n"
+        },
+        {
+          "name": "asked_page",
+          "args": "assigns",
+          "code": "key = to_string(assigns[:page_param] || \"page\")\n\ncase assigns[:params] do\n  %{^key => asked} -> to_page(asked)\n  _no_params_or_key -> positive(assigns[:page], 1)\nend\n"
+        },
+        {
+          "name": "post_navigate",
+          "args": "post_base, slug, lang_param, language",
+          "code": "case trimmed(post_base) do\n  \"\" -> nil\n  base -> slug_href(base, slug, lang_param, language)\nend\n"
+        },
+        {
+          "name": "post_patch",
+          "args": "post_base, base, params, key, slug",
+          "code": "case trimmed(post_base) do\n  \"\" -> href(base, params, key, slug)\n  _its_own_page -> nil\nend\n"
+        },
+        {
+          "name": "readable?",
+          "args": "post_base, base",
+          "code": "trimmed(post_base) != \"\" or trimmed(base) != \"\"\n"
+        },
+        {
+          "name": "narrow",
+          "args": "query, asked",
+          "code": "require Ash.Query\n\nquery = narrow_language(query, asked.language)\n\nquery =\n  case asked.featured_only do\n    true -> Ash.Query.filter(query, featured == true)\n    false -> query\n  end\n\n# THE ROW THE HEADING NAMES IS THE ROW THE LIST IS OF. A slug is unique per SITE and not per\n# language, so `filter_row/1` resolves it in the page's language — and narrowed by the slug alone\n# this listed the Persian posts filed under an English category beneath the page's fallback\n# heading, having just decided that category does not exist in Persian. Empty and `all` narrow\n# nothing, the same two answers `only_language/2` gives.\nquery =\n  case {asked.collection, asked.language} do\n    {\"\", _the_whole_archive} ->\n      query\n\n    {wanted, code} when code not in [\"\", \"all\"] ->\n      Ash.Query.filter(\n        query,\n        exists(collections, slug == ^wanted and status == :active and language == ^code)\n      )\n\n    {wanted, _every_language} ->\n      Ash.Query.filter(query, exists(collections, slug == ^wanted and status == :active))\n  end\n\nquery =\n  case {asked.tag, asked.language} do\n    {\"\", _the_whole_archive} ->\n      query\n\n    {wanted, code} when code not in [\"\", \"all\"] ->\n      Ash.Query.filter(query, exists(tags, slug == ^wanted and language == ^code))\n\n    {wanted, _every_language} ->\n      Ash.Query.filter(query, exists(tags, slug == ^wanted))\n  end\n\ncase asked.exclude_slug do\n  \"\" -> query\n  wanted -> Ash.Query.filter(query, slug != ^wanted)\nend\n"
+        },
+        {
+          "name": "only_language",
+          "args": "query, wanted",
+          "code": "# A ROW NAMED BY SLUG IS NARROWED BY THE PAGE'S LANGUAGE, NOT BY THE EDITION RULE. A slug names\n# one category or one tag per site whatever language it is written in, so the master-editions\n# default `narrow_language/2` applies to a listing would be meaningless here — while no narrowing\n# at all headed /fa/blog/category/<english slug> with the English category's name, over the nothing\n# that category holds in Persian.\nrequire Ash.Query\n\ncase trimmed(wanted) do\n  \"\" -> query\n  \"all\" -> query\n  code -> Ash.Query.filter(query, language == ^code)\nend\n"
+        },
+        {
+          "name": "filter_row",
+          "args": "asked",
+          "code": "require Ash.Query\n\nrow =\n  cond do\n    not asked.show_filter_title ->\n      nil\n\n    asked.collection != \"\" ->\n      MishkaBlog.Collection\n      |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n      |> Ash.Query.filter(slug == ^asked.collection)\n      |> only_language(asked.language)\n      |> Ash.Query.select([:id, :name, :description])\n      |> Ash.read(tenant: site_id(), page: [limit: 1])\n      |> first_row()\n\n    asked.tag != \"\" ->\n      MishkaBlog.Tag\n      |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n      |> Ash.Query.filter(slug == ^asked.tag)\n      |> only_language(asked.language)\n      |> Ash.Query.select([:id, :name, :description])\n      |> Ash.read(tenant: site_id(), page: [limit: 1])\n      |> first_row()\n\n    true ->\n      nil\n  end\n\ncase row do\n  nil -> nil\n  found -> %{name: found.name, description: found.description}\nend\n"
+        },
+        {
+          "name": "posts_page",
+          "args": "asked, page, per_page",
+          "code": "require Ash.Query\n\nMishkaBlog.BlogPost\n|> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n|> narrow(asked)\n|> Ash.Query.sort(published_at: direction(asked.sort))\n|> Ash.Query.select([\n  :id,\n  :title,\n  :slug,\n  :language,\n  :excerpt,\n  :published_at,\n  :featured_image_url,\n  :featured\n])\n|> Ash.read(\n  tenant: site_id(),\n  page: [limit: per_page, offset: (page - 1) * per_page, count: true]\n)\n|> paged()\n"
+        },
+        {
+          "name": "asked",
+          "args": "assigns",
+          "code": "# EVERYTHING THE READ DEPENDS ON, AS ONE TERM — AND EVERYTHING A ROW IS DRAWN FROM, which is the\n# same term for a reason. It is the argument the task is handed — a plain map rather than the\n# socket, so nothing of LiveView's is copied into another process — and it is also what says\n# whether anything has to be read at all: `update_many/1` runs on every render of the page holding\n# this block, and a block that re-read on each of them would restart its own load whenever\n# something else on the page moved.\n#\n# A STREAMED ROW IS RENDERED ONCE AND NEVER AGAIN. LiveView prunes `stream.inserts` after each\n# render, so `@streams.posts` is empty on every render that is not a fresh load and the rows\n# already on the page are never rebuilt. An attribute the ROWS read — the variant they are laid out\n# in, the words inside them, the bases their links are built from — therefore cannot reach them by\n# re-rendering, so it goes in here instead: a change to one re-reads and re-streams. Words OUTSIDE\n# the rows (`heading`, `empty_text`, the pager's labels) are free, because those are drawn afresh\n# every render.\n#\n# `params` is the one that stays out, deliberately. The rows take a single key from it — the one\n# naming the open post — and each row overwrites that key with its own slug, so a reader opening a\n# post BESIDE this list changes `params` without changing a single href. In it, every such click\n# would send the whole list back to the database and back to its skeleton.\n%{\n  visitor: assigns[:current_user],\n  language: trimmed(assigns[:language]),\n  featured_only: assigns[:featured_only] == true,\n  collection: trimmed(assigns[:collection]),\n  tag: trimmed(assigns[:tag]),\n  exclude_slug: trimmed(assigns[:exclude_slug]),\n  show_filter_title: assigns[:show_filter_title] == true,\n  sort: trimmed(assigns[:sort]),\n  per_page: positive(assigns[:per_page], 5),\n  page: asked_page(assigns),\n  variant: trimmed(assigns[:variant]),\n  show_excerpt: assigns[:show_excerpt] == true,\n  show_date: assigns[:show_date] == true,\n  read_text: trimmed(assigns[:read_text]),\n  featured_text: trimmed(assigns[:featured_text]),\n  base: trimmed(assigns[:base]),\n  post_base: trimmed(assigns[:post_base]),\n  lang_param: trimmed(assigns[:lang_param]),\n  post_param: trimmed(assigns[:post_param])\n}\n"
+        },
+        {
+          "name": "fetch",
+          "args": "asked",
+          "code": "# RUN IN THE TASK, so nothing here may touch the socket. A page nobody has is clamped to the last\n# one there is, and the answer carries the term it was read for — `arrived/2` stores that rather\n# than what was asked, so a clamp settles instead of asking again on the next render.\nwith {:ok, %{rows: posts, total: total}} <- posts_page(asked, asked.page, asked.per_page) do\n  pages = max(ceil(total / asked.per_page), 1)\n\n  case asked.page > pages do\n    false ->\n      {:ok,\n       %{\n         asked: asked,\n         page: asked.page,\n         posts: posts,\n         total: total,\n         pages: pages,\n         filter_row: filter_row(asked)\n       }}\n\n    true ->\n      with {:ok, %{rows: clamped}} <- posts_page(asked, pages, asked.per_page) do\n        {:ok,\n         %{\n           asked: %{asked | page: pages},\n           page: pages,\n           posts: clamped,\n           total: total,\n           pages: pages,\n           filter_row: filter_row(asked)\n         }}\n      end\n  end\nend\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:ok, data}",
+          "code": "socket\n|> Phoenix.Component.assign(\n  asked: data.asked,\n  loading: false,\n  failed: false,\n  page: data.page,\n  total: data.total,\n  pages: data.pages,\n  filter_row: data.filter_row\n)\n|> Phoenix.LiveView.stream(:posts, rowed(socket, data.posts), reset: true)\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:error, _reason}",
+          "code": "socket\n|> Phoenix.Component.assign(loading: false, failed: true, total: 0, pages: 1, filter_row: nil)\n|> Phoenix.LiveView.stream(:posts, [], reset: true)\n"
+        },
+        {
+          "name": "rowed",
+          "args": "socket, rows",
+          "code": "prefix =\n  case trimmed(socket.assigns[:id]) do\n    \"\" -> \"post\"\n    id -> id <> \"-post\"\n  end\n\nEnum.map(rows, &%{id: prefix <> \"-\" <> to_string(&1.id), post: &1})\n"
+        },
+        {
+          "name": "read_now",
+          "args": "asked",
+          "code": "fetch(asked)\nrescue\n  error -> {:error, error}\ncatch\n  kind, reason -> {:error, {kind, reason}}\n"
+        },
+        {
+          "name": "cold?",
+          "args": "socket",
+          "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
+        },
+        {
+          "name": "load",
+          "args": "socket",
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> Phoenix.LiveView.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [
+        "blog-post-card",
+        "blog-pager",
+        "blog-notice"
+      ],
+      "examples": [],
+      "extra": {
+        "icon": "list",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-featured-posts",
+      "description": "The posts an editor flagged Featured, as a strip of their own. Its own read, run in the background and streamed in, so an author can put it on a page by itself and a slow read of it holds nothing else up.",
+      "type": "media",
+      "format": "heex",
+      "stateful": true,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div id={@id} {@rest} data-role=\"blog-featured-posts\" class=\"text-[#1b1a18]\">\n  <h2\n    :if={trimmed(@heading) != \"\"}\n    data-role=\"blog-featured-heading\"\n    class=\"mb-5 text-lg font-bold leading-tight\"\n  >\n    {@heading}\n  </h2>\n\n  <.component\n    :if={@loading}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"loading\"\n    role=\"blog-featured-loading\"\n    text={@loading_text}\n  />\n\n  <.component\n    :if={@failed}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"error\"\n    role=\"blog-featured-error\"\n    text={@error_text}\n    retry_text={@retry_text}\n    target={@myself}\n  />\n\n  <.component\n    :if={not @loading and not @failed and @total == 0}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-featured-empty\"\n    text={@empty_text}\n  />\n\n  <div\n    :if={not @loading and not @failed and @variant != \"compact\"}\n    id={\"#{@id}-cards\"}\n    phx-update={(@myself && \"stream\") || nil}\n    data-role=\"blog-featured-items\"\n    class=\"grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3\"\n  >\n    <div :for={{dom_id, row} <- @streams.posts} id={dom_id} class=\"h-full\">\n      <.component\n        component_name=\"blog-post-card\"\n        site={site_name()}\n        post={row.post}\n        show_excerpt={@show_excerpt}\n        show_date={@show_date}\n        show_read={readable?(@post_base, @base)}\n        navigate={post_navigate(@post_base, row.post.slug, @lang_param, row.post.language)}\n        patch={post_patch(@post_base, @base, @params, @post_param, row.post.slug)}\n        read_text={@read_text}\n        featured_text={@featured_text}\n      />\n    </div>\n  </div>\n\n  <ul\n    :if={not @loading and not @failed and @variant == \"compact\"}\n    id={\"#{@id}-lines\"}\n    phx-update={(@myself && \"stream\") || nil}\n    data-role=\"blog-featured-items\"\n    class=\"divide-y divide-[#ecebe6] rounded-[18px] border border-[#ecebe6] bg-white px-4\"\n  >\n    <li :for={{dom_id, row} <- @streams.posts} id={dom_id} class=\"py-2.5\">\n      <.component\n        component_name=\"blog-post-card\"\n        site={site_name()}\n        post={row.post}\n        variant=\"compact\"\n        show_date={@show_date}\n        navigate={post_navigate(@post_base, row.post.slug, @lang_param, row.post.language)}\n        patch={post_patch(@post_base, @base, @params, @post_param, row.post.slug)}\n      />\n    </li>\n  </ul>\n</div>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "heading",
+          "type": "string",
+          "opts": {
+            "default": "Featured",
+            "doc": "The words above the strip. Left empty, no heading is drawn."
+          }
+        },
+        {
+          "name": "variant",
+          "type": "string",
+          "opts": {
+            "default": "grid",
+            "doc": "grid draws a card per post; compact draws a narrow list of titles and dates, which is what a sidebar wants.",
+            "values": [
+              "grid",
+              "compact"
+            ]
+          }
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "opts": {
+            "default": 3,
+            "doc": "How many featured posts to draw.",
+            "min": 1,
+            "max": 50
+          }
+        },
+        {
+          "name": "sort",
+          "type": "string",
+          "opts": {
+            "default": "newest",
+            "doc": "Which end of the archive the strip takes its posts from.",
+            "values": [
+              "newest",
+              "oldest"
+            ]
+          }
+        },
+        {
+          "name": "language",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "Which edition of each record to show. Left empty, one edition of each — the master, the language it was written in. A code such as fa or ar shows that language only. all shows every translation."
+          }
+        },
+        {
+          "name": "collection",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "A category's slug. Set it and the strip holds that category's featured posts only."
+          }
+        },
+        {
+          "name": "tag",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "A tag's slug. Set it and the strip holds the featured posts carrying that tag only."
+          }
+        },
+        {
+          "name": "exclude_slug",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "A post to leave out — the one already open on this page, usually."
+          }
+        },
+        {
+          "name": "show_excerpt",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw each post's summary under its title."
+          }
+        },
+        {
+          "name": "show_date",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the date each post was published."
+          }
+        },
+        {
+          "name": "base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The page's own address, which a title is written against when the post opens beside the strip rather than on a page of its own."
+          }
+        },
+        {
+          "name": "params",
+          "type": "any",
+          "opts": {
+            "default": {},
+            "doc": "The page's own query string, handed straight through, so a link this component writes keeps every key the page already had."
+          }
+        },
+        {
+          "name": "post_param",
+          "type": "any",
+          "opts": {
+            "default": "post",
+            "doc": "The query key a post's slug is written under when the post opens beside the strip rather than on a page of its own."
+          }
+        },
+        {
+          "name": "post_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a post lives — /en/blog/post, say. Left empty a title opens the post beside the list through post_param instead. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the row it points at, which is the only way one of them can lead to another language's edition."
+          }
+        },
+        {
+          "name": "lang_param",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The query key that carries the language on the links this component writes — lang, for a site addressed as /blog?lang=fa. Leave it empty on a site whose language is part of the path, where a :lang in the bases carries it instead."
+          }
+        },
+        {
+          "name": "read_text",
+          "type": "string",
+          "opts": {
+            "default": "Read",
+            "doc": "The words on each card's own link."
+          }
+        },
+        {
+          "name": "featured_text",
+          "type": "string",
+          "opts": {
+            "default": "Featured",
+            "doc": "The badge each post carries."
+          }
+        },
+        {
+          "name": "empty_text",
+          "type": "string",
+          "opts": {
+            "default": "Nothing is featured yet.",
+            "doc": "What a reader is told when no post is flagged."
+          }
+        },
+        {
+          "name": "loading_text",
+          "type": "string",
+          "opts": {
+            "default": "Loading featured posts…",
+            "doc": "What a screen reader is told while the posts are being read."
+          }
+        },
+        {
+          "name": "error_text",
+          "type": "string",
+          "opts": {
+            "default": "The featured posts could not be loaded.",
+            "doc": "What a reader is told when the read failed."
+          }
+        },
+        {
+          "name": "retry_text",
+          "type": "string",
+          "opts": {
+            "default": "Try again",
+            "doc": "The way out of a failed read."
+          }
+        },
+        {
+          "name": "current_user",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The signed-in reader, handed down by the page as current_user. A record locked to permissions it does not hold is left out; without one, every locked record is."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "mount",
+          "args": "socket",
+          "code": "{:ok,\n socket\n |> Phoenix.Component.assign(asked: nil, loading: true, failed: false, total: 0)\n |> Phoenix.LiveView.stream(:posts, [])}\n"
+        },
+        {
+          "name": "update",
+          "args": "_assigns, socket",
+          "code": "{:ok, load(socket)}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"retry\", _params, socket",
+          "code": "{:noreply,\n socket\n |> Phoenix.Component.assign(:asked, nil)\n |> load()}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":posts, {:ok, result}, socket",
+          "code": "{:noreply, arrived(socket, result)}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":posts, {:exit, _reason}, socket",
+          "code": "# A READ THAT DIED TAKES THE BLOCK'S OWN STATE WITH IT AND NOTHING ELSE. The task is unlinked\n# before it re-raises — see `Phoenix.LiveView.Async.do_async/5` — so the page around this block is\n# still standing, and this is what it draws instead of the list.\n{:noreply, Phoenix.Component.assign(socket, loading: false, failed: true)}\n"
+        },
+        {
+          "name": "site_id",
+          "args": "",
+          "code": "__MODULE__.__component_information__([:private, :site_id])\n"
+        },
+        {
+          "name": "read_as",
+          "args": "visitor",
+          "code": "# THE VISITOR THE READ IS FOR, named so a post, a category or a tag locked to permissions it\n# does not hold is left out of the rows, the count and the pages.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+        },
+        {
+          "name": "site_name",
+          "args": "",
+          "code": "# THE SITE'S NAME, NOT ITS ID, because that is what a component is addressed by: the runtime hashes\n# a module out of (component name, site name). Every `<.component …/>` below draws a sibling of this\n# one, which lives on the same site as this one and nowhere else.\n__MODULE__.__component_information__([:private, :site])\n"
+        },
+        {
+          "name": "positive",
+          "args": "value, fallback",
+          "code": "cond do\n  is_integer(value) and value > 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number > 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
+        },
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "href",
+          "args": "base, params, key, value",
+          "code": "query =\n  params\n  |> case do\n    map when is_map(map) -> map\n    _not_a_map -> %{}\n  end\n  |> Map.put(to_string(key), to_string(value))\n  |> URI.encode_query()\n\nto_string(base) <> \"?\" <> query\n"
+        },
+        {
+          "name": "lang_base",
+          "args": "base, language",
+          "code": "# A BASE MAY NAME THE LANGUAGE AS A `:lang` SEGMENT, and on a site whose language is part of the\n# path that is the only form a link to a row in ANOTHER language can be built from: the segment is\n# filled with the language of the row being linked to, not the one the page is being read in. A base\n# without the segment is handed back as written — a query-mode page carries the language in\n# `lang_param` instead. A row whose language cannot be read gets no link rather than a link under\n# somebody else's language.\nsegments = base |> to_string() |> String.split(\"/\")\ncode = trimmed(language)\n\ncond do\n  \":lang\" not in segments -> to_string(base)\n  code == \"\" -> nil\n  true -> Enum.map_join(segments, \"/\", &if(&1 == \":lang\", do: code, else: &1))\nend\n"
+        },
+        {
+          "name": "slug_href",
+          "args": "base, slug, lang_param, language",
+          "code": "case lang_base(base, language) do\n  nil ->\n    nil\n\n  base ->\n    path = base <> \"/\" <> to_string(slug)\n\n    case {trimmed(lang_param), trimmed(language)} do\n      {\"\", _no_key} -> path\n      {_key, \"\"} -> path\n      {key, code} -> path <> \"?\" <> URI.encode_query(%{key => code})\n    end\nend\n"
+        },
+        {
+          "name": "narrow_language",
+          "args": "query, wanted",
+          "code": "require Ash.Query\n\ncase trimmed(wanted) do\n  \"all\" -> query\n  \"\" -> Ash.Query.filter(query, is_nil(language_group_id) or language_group_id == id)\n  code -> Ash.Query.filter(query, language == ^code)\nend\n"
+        },
+        {
+          "name": "paged",
+          "args": "result",
+          "code": "# A TUPLE RATHER THAN A LIST, and that is what the error state is built on: folding an unreadable\n# answer into an empty one leaves a block telling a reader that nothing is published when the truth\n# is that nothing could be read.\ncase result do\n  {:ok, %{results: found, count: count}} -> {:ok, %{rows: found, total: count || length(found)}}\n  {:ok, found} when is_list(found) -> {:ok, %{rows: found, total: length(found)}}\n  {:error, reason} -> {:error, reason}\n  _unreadable -> {:error, :unreadable}\nend\n"
+        },
+        {
+          "name": "direction",
+          "args": "sort",
+          "code": "case sort do\n  \"oldest\" -> :asc\n  _newest -> :desc\nend\n"
+        },
+        {
+          "name": "post_navigate",
+          "args": "post_base, slug, lang_param, language",
+          "code": "case trimmed(post_base) do\n  \"\" -> nil\n  base -> slug_href(base, slug, lang_param, language)\nend\n"
+        },
+        {
+          "name": "post_patch",
+          "args": "post_base, base, params, key, slug",
+          "code": "case trimmed(post_base) do\n  \"\" -> href(base, params, key, slug)\n  _its_own_page -> nil\nend\n"
+        },
+        {
+          "name": "readable?",
+          "args": "post_base, base",
+          "code": "trimmed(post_base) != \"\" or trimmed(base) != \"\"\n"
+        },
+        {
+          "name": "narrow",
+          "args": "query, asked",
+          "code": "require Ash.Query\n\nquery =\n  query\n  |> narrow_language(asked.language)\n  |> Ash.Query.filter(featured == true)\n\nquery =\n  case {asked.collection, asked.language} do\n    {\"\", _the_whole_archive} ->\n      query\n\n    {wanted, code} when code not in [\"\", \"all\"] ->\n      Ash.Query.filter(\n        query,\n        exists(collections, slug == ^wanted and status == :active and language == ^code)\n      )\n\n    {wanted, _every_language} ->\n      Ash.Query.filter(query, exists(collections, slug == ^wanted and status == :active))\n  end\n\nquery =\n  case {asked.tag, asked.language} do\n    {\"\", _the_whole_archive} ->\n      query\n\n    {wanted, code} when code not in [\"\", \"all\"] ->\n      Ash.Query.filter(query, exists(tags, slug == ^wanted and language == ^code))\n\n    {wanted, _every_language} ->\n      Ash.Query.filter(query, exists(tags, slug == ^wanted))\n  end\n\ncase asked.exclude_slug do\n  \"\" -> query\n  wanted -> Ash.Query.filter(query, slug != ^wanted)\nend\n"
+        },
+        {
+          "name": "asked",
+          "args": "assigns",
+          "code": "# EVERYTHING THE READ DEPENDS ON, AS ONE TERM — AND EVERYTHING A ROW IS DRAWN FROM, which is the\n# same term for a reason. It is the argument the task is handed — a plain map rather than the\n# socket, so nothing of LiveView's is copied into another process — and it is also what says\n# whether anything has to be read at all: `update_many/1` runs on every render of the page holding\n# this block, and a block that re-read on each of them would restart its own load whenever\n# something else on the page moved.\n#\n# A STREAMED ROW IS RENDERED ONCE AND NEVER AGAIN. LiveView prunes `stream.inserts` after each\n# render, so `@streams.posts` is empty on every render that is not a fresh load and the rows\n# already on the page are never rebuilt. An attribute the ROWS read — the variant they are laid out\n# in, the words inside them, the bases their links are built from — therefore cannot reach them by\n# re-rendering, so it goes in here instead: a change to one re-reads and re-streams. Words OUTSIDE\n# the rows (`heading`, `empty_text`) are free, because those are drawn afresh every render.\n#\n# `params` is the one that stays out, deliberately. The rows take a single key from it — the one\n# naming the open post — and each row overwrites that key with its own slug, so a reader opening a\n# post BESIDE this list changes `params` without changing a single href. In it, every such click\n# would send the whole list back to the database and back to its skeleton.\n%{\n  visitor: assigns[:current_user],\n  language: trimmed(assigns[:language]),\n  collection: trimmed(assigns[:collection]),\n  tag: trimmed(assigns[:tag]),\n  exclude_slug: trimmed(assigns[:exclude_slug]),\n  sort: trimmed(assigns[:sort]),\n  limit: positive(assigns[:limit], 3),\n  variant: trimmed(assigns[:variant]),\n  show_excerpt: assigns[:show_excerpt] == true,\n  show_date: assigns[:show_date] == true,\n  read_text: trimmed(assigns[:read_text]),\n  featured_text: trimmed(assigns[:featured_text]),\n  base: trimmed(assigns[:base]),\n  post_base: trimmed(assigns[:post_base]),\n  lang_param: trimmed(assigns[:lang_param]),\n  post_param: trimmed(assigns[:post_param])\n}\n"
+        },
+        {
+          "name": "fetch",
+          "args": "asked",
+          "code": "require Ash.Query\n\nwith {:ok, %{rows: posts, total: total}} <-\n       MishkaBlog.BlogPost\n       |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n       |> narrow(asked)\n       |> Ash.Query.sort(published_at: direction(asked.sort))\n       |> Ash.Query.select([\n         :id,\n         :title,\n         :slug,\n         :language,\n         :excerpt,\n         :published_at,\n         :featured_image_url,\n         :featured\n       ])\n       |> Ash.read(tenant: site_id(), page: [limit: asked.limit, count: true])\n       |> paged() do\n  {:ok, %{posts: posts, total: total}}\nend\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:ok, data}",
+          "code": "socket\n|> Phoenix.Component.assign(loading: false, failed: false, total: data.total)\n|> Phoenix.LiveView.stream(:posts, rowed(socket, data.posts), reset: true)\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:error, _reason}",
+          "code": "socket\n|> Phoenix.Component.assign(loading: false, failed: true, total: 0)\n|> Phoenix.LiveView.stream(:posts, [], reset: true)\n"
+        },
+        {
+          "name": "rowed",
+          "args": "socket, rows",
+          "code": "prefix =\n  case trimmed(socket.assigns[:id]) do\n    \"\" -> \"post\"\n    id -> id <> \"-post\"\n  end\n\nEnum.map(rows, &%{id: prefix <> \"-\" <> to_string(&1.id), post: &1})\n"
+        },
+        {
+          "name": "read_now",
+          "args": "asked",
+          "code": "fetch(asked)\nrescue\n  error -> {:error, error}\ncatch\n  kind, reason -> {:error, {kind, reason}}\n"
+        },
+        {
+          "name": "cold?",
+          "args": "socket",
+          "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
+        },
+        {
+          "name": "load",
+          "args": "socket",
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> Phoenix.LiveView.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [
+        "blog-post-card",
+        "blog-notice"
+      ],
+      "examples": [],
+      "extra": {
+        "icon": "star",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-post-search",
+      "description": "A search box over published posts, narrowing as the reader types.",
+      "type": "forms",
+      "format": "heex",
+      "stateful": true,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div id={@id} {@rest} data-role=\"blog-post-search\" class=\"text-[#1b1a18]\">\n  <h2\n    :if={trimmed(@heading) != \"\"}\n    data-role=\"blog-search-heading\"\n    class=\"mb-3 text-lg font-bold leading-tight\"\n  >\n    {@heading}\n  </h2>\n\n  <form id={\"#{@id}-form\"} phx-change=\"search\" phx-submit=\"search\" phx-target={@myself}>\n    <input\n      type=\"text\"\n      name=\"q\"\n      value={@query}\n      placeholder={@placeholder}\n      data-role=\"blog-search-input\"\n      autocomplete=\"off\"\n      class=\"w-full rounded-full border border-[#ecebe6] bg-white px-4 py-2 text-sm outline-none placeholder:text-[#a8a5a0] focus:border-[#5b57d6]\"\n    />\n  </form>\n\n  <p\n    :if={String.trim(@query) != \"\" and @posts == []}\n    data-role=\"blog-search-none\"\n    class=\"mt-3 text-sm text-[#6d6a63]\"\n  >\n    {@none_text} “{@query}”.\n  </p>\n\n  <ul\n    :if={@posts != []}\n    data-role=\"blog-search-results\"\n    class=\"mt-3 divide-y divide-[#ecebe6] rounded-[18px] border border-[#ecebe6] bg-white px-4\"\n  >\n    <li\n      :for={post <- @posts}\n      data-role=\"blog-search-result\"\n      id={\"#{@id}-hit-#{post.id}\"}\n      class=\"py-2.5 text-sm font-semibold leading-snug\"\n    >\n      <.link\n        :if={trimmed(@post_base) != \"\"}\n        navigate={slug_href(@post_base, post.slug, @lang_param, post.language)}\n        class=\"hover:underline\"\n      >\n        {post.title}\n      </.link>\n      <span :if={trimmed(@post_base) == \"\"}>{post.title}</span>\n    </li>\n  </ul>\n</div>\n",
+      "body": null,
+      "attrs": [
+        {
+          "name": "heading",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "The words above the box. Left empty, no heading is drawn."
+          }
+        },
+        {
+          "name": "placeholder",
+          "type": "string",
+          "opts": {
+            "default": "Search posts…",
+            "doc": "What the empty box says."
+          }
+        },
+        {
+          "name": "per_page",
+          "type": "integer",
+          "opts": {
+            "default": 8,
+            "doc": "How many results to show at once.",
+            "min": 1,
+            "max": 50
+          }
+        },
+        {
+          "name": "language",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "Which edition of each record to show. Left empty, one edition of each — the master, the language it was written in. A code such as fa or ar shows that language only. all shows every translation."
+          }
+        },
+        {
+          "name": "post_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a post lives — /en/blog/post, say. Left empty a result is a title with no link, because this component does not own the router and will not invent a path. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the row it points at, which is the only way one of them can lead to another language's edition."
+          }
+        },
+        {
+          "name": "lang_param",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The query key that carries the language on the links this component writes — lang, for a site addressed as /blog?lang=fa. Leave it empty on a site whose language is part of the path, where a :lang in the bases carries it instead."
+          }
+        },
+        {
+          "name": "none_text",
+          "type": "string",
+          "opts": {
+            "default": "Nothing matches",
+            "doc": "What a reader is told when the search finds nothing. The words they typed follow it."
+          }
+        },
+        {
+          "name": "current_user",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The signed-in reader, handed down by the page as current_user. A record locked to permissions it does not hold is left out; without one, every locked record is."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "mount",
+          "args": "socket",
+          "code": "{:ok, Phoenix.Component.assign(socket, query: \"\", page: 1, posts: [], total: 0, pages: 1)}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"search\", %{\"q\" => q}, socket when is_binary(q)",
+          "code": "{:noreply,\n socket\n |> Phoenix.Component.assign(query: q, page: 1)\n |> load()}\n"
+        },
+        {
+          "name": "site_id",
+          "args": "",
+          "code": "__MODULE__.__component_information__([:private, :site_id])\n"
+        },
+        {
+          "name": "read_as",
+          "args": "visitor",
+          "code": "# THE VISITOR THE READ IS FOR, named so a post, a category or a tag locked to permissions it\n# does not hold is left out of the rows, the count and the pages.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+        },
+        {
+          "name": "positive",
+          "args": "value, fallback",
+          "code": "cond do\n  is_integer(value) and value > 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number > 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
+        },
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "lang_base",
+          "args": "base, language",
+          "code": "# A BASE MAY NAME THE LANGUAGE AS A `:lang` SEGMENT, and on a site whose language is part of the\n# path that is the only form a link to a row in ANOTHER language can be built from: the segment is\n# filled with the language of the row being linked to, not the one the page is being read in. A base\n# without the segment is handed back as written — a query-mode page carries the language in\n# `lang_param` instead. A row whose language cannot be read gets no link rather than a link under\n# somebody else's language.\nsegments = base |> to_string() |> String.split(\"/\")\ncode = trimmed(language)\n\ncond do\n  \":lang\" not in segments -> to_string(base)\n  code == \"\" -> nil\n  true -> Enum.map_join(segments, \"/\", &if(&1 == \":lang\", do: code, else: &1))\nend\n"
+        },
+        {
+          "name": "slug_href",
+          "args": "base, slug, lang_param, language",
+          "code": "case lang_base(base, language) do\n  nil ->\n    nil\n\n  base ->\n    path = base <> \"/\" <> to_string(slug)\n\n    case {trimmed(lang_param), trimmed(language)} do\n      {\"\", _no_key} -> path\n      {_key, \"\"} -> path\n      {key, code} -> path <> \"?\" <> URI.encode_query(%{key => code})\n    end\nend\n"
+        },
+        {
+          "name": "narrow_language",
+          "args": "query, wanted",
+          "code": "require Ash.Query\n\ncase trimmed(wanted) do\n  \"all\" -> query\n  \"\" -> Ash.Query.filter(query, is_nil(language_group_id) or language_group_id == id)\n  code -> Ash.Query.filter(query, language == ^code)\nend\n"
+        },
+        {
+          "name": "paged",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: found, count: count}} -> %{rows: found, total: count || length(found)}\n  {:ok, found} when is_list(found) -> %{rows: found, total: length(found)}\n  _unreadable -> %{rows: [], total: 0}\nend\n"
+        },
+        {
+          "name": "posts_page",
+          "args": "query, language, page, per_page, visitor",
+          "code": "require Ash.Query\n\ncase String.trim(query) do\n  \"\" ->\n    %{rows: [], total: 0}\n\n  term ->\n    MishkaBlog.BlogPost\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> narrow_language(language)\n    |> Ash.Query.filter(contains(title, ^Ash.CiString.new(term)))\n    |> Ash.Query.sort(published_at: :desc)\n    |> Ash.Query.select([:id, :title, :slug, :language, :excerpt, :published_at])\n    |> Ash.read(\n      tenant: site_id(),\n      page: [limit: per_page, offset: (page - 1) * per_page, count: true]\n    )\n    |> paged()\nend\n"
+        },
+        {
+          "name": "load",
+          "args": "socket",
+          "code": "assigns = socket.assigns\nper_page = positive(assigns[:per_page], 8)\npage = positive(assigns[:page], 1)\nquery = assigns[:query]\nlanguage = assigns[:language]\n\n%{rows: posts, total: total} = posts_page(query, language, page, per_page, assigns[:current_user])\npages = max(ceil(total / per_page), 1)\n\n{page, posts} =\n  case page > pages do\n    false -> {page, posts}\n    true -> {pages, posts_page(query, language, pages, per_page, assigns[:current_user]).rows}\n  end\n\nPhoenix.Component.assign(socket, page: page, posts: posts, total: total, pages: pages)\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [],
+      "examples": [],
+      "extra": {
+        "icon": "search",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-tag-cloud",
+      "description": "The site's tags, biggest first, read in the background. Its own query, so a sidebar full of them never holds the article beside it up.",
+      "type": "navigations",
+      "format": "heex",
+      "stateful": true,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div id={@id} {@rest} data-role=\"blog-tag-cloud\" class=\"text-[#1b1a18]\">\n  <h2\n    :if={trimmed(@heading) != \"\"}\n    data-role=\"blog-tag-heading\"\n    class=\"mb-3 text-lg font-bold leading-tight\"\n  >\n    {@heading}\n  </h2>\n\n  <.component\n    :if={@loading}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"loading\"\n    role=\"blog-tag-loading\"\n    text={@loading_text}\n  />\n\n  <.component\n    :if={@failed}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"error\"\n    role=\"blog-tag-error\"\n    text={@error_text}\n    retry_text={@retry_text}\n    target={@myself}\n  />\n\n  <div\n    :if={not @loading and not @failed and @tags != [] and trimmed(@tag_base) != \"\"}\n    class=\"flex flex-wrap gap-2\"\n  >\n    <.link\n      :for={tag <- @tags}\n      navigate={slug_href(@tag_base, tag.slug, @lang_param, tag.language)}\n      data-role=\"blog-tag\"\n      data-selected={to_string(tag.slug == @selected)}\n      id={\"#{@id}-tag-#{tag.id}\"}\n      class={[\n        \"inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold\",\n        (tag.slug == @selected && \"border-[#5b57d6] bg-[#f2f1fc] text-[#5b57d6]\") ||\n          \"border-[#ecebe6] bg-white text-[#6d6a63] hover:border-[#5b57d6] hover:text-[#5b57d6]\"\n      ]}\n    >\n      {tag.name}\n      <span :if={@show_count} data-role=\"blog-tag-count\" class=\"text-[10px] text-[#a8a5a0]\">\n        {tag.count}\n      </span>\n    </.link>\n  </div>\n\n  <div\n    :if={not @loading and not @failed and @tags != [] and trimmed(@tag_base) == \"\"}\n    class=\"flex flex-wrap gap-2\"\n  >\n    <span\n      :for={tag <- @tags}\n      data-role=\"blog-tag\"\n      data-selected={to_string(tag.slug == @selected)}\n      id={\"#{@id}-tag-#{tag.id}\"}\n      class=\"inline-flex items-center gap-1 rounded-full border border-[#ecebe6] bg-white px-3 py-1 text-xs font-semibold text-[#6d6a63]\"\n    >\n      {tag.name}\n      <span :if={@show_count} data-role=\"blog-tag-count\" class=\"text-[10px] text-[#a8a5a0]\">\n        {tag.count}\n      </span>\n    </span>\n  </div>\n\n  <.component\n    :if={not @loading and not @failed and @tags == []}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-tag-empty\"\n    text={@empty_text}\n    quiet={true}\n  />\n</div>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "heading",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "The words above the cloud. Left empty, no heading is drawn."
+          }
+        },
+        {
+          "name": "tag_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a tag's posts live — /en/blog/tag, say. Left empty the tags are drawn as plain words, because this component does not own the router and will not invent a path. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the row it points at, which is the only way one of them can lead to another language's edition."
+          }
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "opts": {
+            "default": 20,
+            "doc": "How many tags at most. A hundred is the ceiling, because that is everything one public read hands back.",
+            "min": 1,
+            "max": 100
+          }
+        },
+        {
+          "name": "language",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "Which edition of each record to show. Left empty, one edition of each — the master, the language it was written in. A code such as fa or ar shows that language only. all shows every translation."
+          }
+        },
+        {
+          "name": "sort",
+          "type": "string",
+          "opts": {
+            "default": "popular",
+            "doc": "Which tags come first. popular counts the same posts the number beside a tag does, whatever language they are written in.",
+            "values": [
+              "popular",
+              "name",
+              "recent"
+            ]
+          }
+        },
+        {
+          "name": "show_count",
+          "type": "boolean",
+          "opts": {
+            "default": false,
+            "doc": "Draw how many published posts carry each tag — all of them, whatever language the post itself is written in."
+          }
+        },
+        {
+          "name": "hide_empty",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Leave out the tags no published post carries."
+          }
+        },
+        {
+          "name": "params",
+          "type": "any",
+          "opts": {
+            "default": {},
+            "doc": "The page's own captures and query string, read for the one key selected_param names and for nothing else. Hand it over only from a page whose key holds a TAG: a category and a tag may carry the same slug, and the cloud would mark a tag the reader is not on."
+          }
+        },
+        {
+          "name": "selected_param",
+          "type": "any",
+          "opts": {
+            "default": "slug",
+            "doc": "The key in params holding the tag the reader is already on, so the cloud can mark it."
+          }
+        },
+        {
+          "name": "lang_param",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The query key that carries the language on the links this component writes — lang, for a site addressed as /blog?lang=fa. Leave it empty on a site whose language is part of the path, where a :lang in the bases carries it instead."
+          }
+        },
+        {
+          "name": "empty_text",
+          "type": "string",
+          "opts": {
+            "default": "No tags yet.",
+            "doc": "What a reader is told when the site has no public tags."
+          }
+        },
+        {
+          "name": "loading_text",
+          "type": "string",
+          "opts": {
+            "default": "Loading tags…",
+            "doc": "What a screen reader is told while the read is running."
+          }
+        },
+        {
+          "name": "error_text",
+          "type": "string",
+          "opts": {
+            "default": "The tags could not be loaded.",
+            "doc": "What a reader is told when the read failed."
+          }
+        },
+        {
+          "name": "retry_text",
+          "type": "string",
+          "opts": {
+            "default": "Try again",
+            "doc": "The way out of a failed read."
+          }
+        },
+        {
+          "name": "current_user",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The signed-in reader, handed down by the page as current_user. A record locked to permissions it does not hold is left out; without one, every locked record is."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "mount",
+          "args": "socket",
+          "code": "{:ok, Phoenix.Component.assign(socket, asked: nil, loading: true, failed: false, tags: [], selected: \"\")}\n"
+        },
+        {
+          "name": "update",
+          "args": "_assigns, socket",
+          "code": "# WHICH TAG THE READER IS ON IS NOT PART OF THE READ. It comes off the page's params, changes\n# whenever they navigate, and re-reading the whole cloud to notice would put the block back into its\n# skeleton every time.\n{:ok,\n socket\n |> Phoenix.Component.assign(:selected, selected(socket.assigns))\n |> load()}\n"
+        },
+        {
+          "name": "site_id",
+          "args": "",
+          "code": "__MODULE__.__component_information__([:private, :site_id])\n"
+        },
+        {
+          "name": "read_as",
+          "args": "visitor",
+          "code": "# THE VISITOR THE READ IS FOR, named so a post, a category or a tag locked to permissions it\n# does not hold is left out of the rows, the count and the pages.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+        },
+        {
+          "name": "positive",
+          "args": "value, fallback",
+          "code": "cond do\n  is_integer(value) and value > 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number > 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
+        },
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "lang_base",
+          "args": "base, language",
+          "code": "# A BASE MAY NAME THE LANGUAGE AS A `:lang` SEGMENT, and on a site whose language is part of the\n# path that is the only form a link to a row in ANOTHER language can be built from: the segment is\n# filled with the language of the row being linked to, not the one the page is being read in. A base\n# without the segment is handed back as written — a query-mode page carries the language in\n# `lang_param` instead. A row whose language cannot be read gets no link rather than a link under\n# somebody else's language.\nsegments = base |> to_string() |> String.split(\"/\")\ncode = trimmed(language)\n\ncond do\n  \":lang\" not in segments -> to_string(base)\n  code == \"\" -> nil\n  true -> Enum.map_join(segments, \"/\", &if(&1 == \":lang\", do: code, else: &1))\nend\n"
+        },
+        {
+          "name": "slug_href",
+          "args": "base, slug, lang_param, language",
+          "code": "case lang_base(base, language) do\n  nil ->\n    nil\n\n  base ->\n    path = base <> \"/\" <> to_string(slug)\n\n    case {trimmed(lang_param), trimmed(language)} do\n      {\"\", _no_key} -> path\n      {_key, \"\"} -> path\n      {key, code} -> path <> \"?\" <> URI.encode_query(%{key => code})\n    end\nend\n"
+        },
+        {
+          "name": "narrow_language",
+          "args": "query, wanted",
+          "code": "require Ash.Query\n\ncase trimmed(wanted) do\n  \"all\" -> query\n  \"\" -> Ash.Query.filter(query, is_nil(language_group_id) or language_group_id == id)\n  code -> Ash.Query.filter(query, language == ^code)\nend\n"
+        },
+        {
+          "name": "rows",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: found}} -> {:ok, found}\n  {:ok, found} when is_list(found) -> {:ok, found}\n  {:error, reason} -> {:error, reason}\n  _unreadable -> {:error, :unreadable}\nend\n"
+        },
+        {
+          "name": "selected",
+          "args": "assigns",
+          "code": "key = to_string(assigns[:selected_param] || \"slug\")\n\ncase assigns[:params] do\n  %{^key => asked} -> to_string(asked)\n  _no_params_or_key -> \"\"\nend\n"
+        },
+        {
+          "name": "with_public_post",
+          "args": "query, wanted",
+          "code": "require Ash.Query\n\n# THE SAME EDITION RULE THE ROWS THEMSELVES FOLLOW. `published_post_count` counts every post filed\n# under the row whatever language it is written in, so hiding by it offered a Persian reader a row\n# whose only public post is English — a link that opens empty.\ncase trimmed(wanted) do\n  \"all\" ->\n    Ash.Query.filter(query, exists(tenant_posts, status == :published))\n\n  \"\" ->\n    Ash.Query.filter(\n      query,\n      exists(\n        tenant_posts,\n        status == :published and (is_nil(language_group_id) or language_group_id == id)\n      )\n    )\n\n  code ->\n    Ash.Query.filter(query, exists(tenant_posts, status == :published and language == ^code))\nend\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"retry\", _params, socket",
+          "code": "{:noreply,\n socket\n |> Phoenix.Component.assign(:asked, nil)\n |> load()}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":tags, {:ok, result}, socket",
+          "code": "{:noreply, arrived(socket, result)}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":tags, {:exit, _reason}, socket",
+          "code": "# A READ THAT DIED TAKES THE BLOCK'S OWN STATE WITH IT AND NOTHING ELSE. The task is unlinked\n# before it re-raises — see `Phoenix.LiveView.Async.do_async/5` — so the page around this block is\n# still standing, and this is what it draws instead of the list.\n{:noreply, Phoenix.Component.assign(socket, loading: false, failed: true)}\n"
+        },
+        {
+          "name": "site_name",
+          "args": "",
+          "code": "# THE SITE'S NAME, NOT ITS ID, because that is what a component is addressed by: the runtime hashes\n# a module out of (component name, site name). Every `<.component …/>` below draws a sibling of this\n# one, which lives on the same site as this one and nowhere else.\n__MODULE__.__component_information__([:private, :site])\n"
+        },
+        {
+          "name": "asked",
+          "args": "assigns",
+          "code": "%{\n  visitor: assigns[:current_user],\n  language: trimmed(assigns[:language]),\n  hide_empty: assigns[:hide_empty] != false,\n  sort: trimmed(assigns[:sort]),\n  limit: positive(assigns[:limit], 20)\n}\n"
+        },
+        {
+          "name": "fetch",
+          "args": "asked",
+          "code": "require Ash.Query\n\nquery =\n  MishkaBlog.Tag\n  |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n  |> narrow_language(asked.language)\n  |> Ash.Query.select([:id, :name, :slug, :language])\n  |> Ash.Query.load(:published_post_count)\n\nquery =\n  case asked.hide_empty do\n    false -> query\n    true -> with_public_post(query, asked.language)\n  end\n\nquery =\n  case asked.sort do\n    \"name\" -> Ash.Query.sort(query, name: :asc)\n    \"recent\" -> Ash.Query.sort(query, inserted_at: :desc)\n    _popular -> Ash.Query.sort(query, published_post_count: :desc, name: :asc)\n  end\n\nwith {:ok, found} <- query |> Ash.read(tenant: site_id(), page: [limit: asked.limit]) |> rows() do\n  {:ok,\n   %{\n     tags:\n       Enum.map(\n         found,\n         &%{\n           id: &1.id,\n           name: &1.name,\n           slug: &1.slug,\n           language: &1.language,\n           count: &1.published_post_count\n         }\n       )\n   }}\nend\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:ok, data}",
+          "code": "Phoenix.Component.assign(socket, loading: false, failed: false, tags: data.tags)\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:error, _reason}",
+          "code": "Phoenix.Component.assign(socket, loading: false, failed: true, tags: [])\n"
+        },
+        {
+          "name": "read_now",
+          "args": "asked",
+          "code": "fetch(asked)\nrescue\n  error -> {:error, error}\ncatch\n  kind, reason -> {:error, {kind, reason}}\n"
+        },
+        {
+          "name": "cold?",
+          "args": "socket",
+          "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
+        },
+        {
+          "name": "load",
+          "args": "socket",
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> Phoenix.LiveView.start_async(:tags, fn -> fetch(asked) end)\n    end\nend\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [
+        "blog-notice"
+      ],
+      "examples": [],
+      "extra": {
+        "icon": "tip",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-post-detail",
+      "description": "One published post, in full — its cover, its text, who wrote it, and the rows of categories, tags and translations that lead out of it. Read in step with the page, because it is what the page is.",
+      "type": "media",
+      "format": "heex",
+      "stateful": true,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div id={@id} {@rest} data-role=\"blog-post-detail\" class=\"text-[#1b1a18]\">\n  <.component\n    :if={@post == nil and @slug in [nil, \"\"]}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-detail-idle\"\n    text={@idle_text}\n    quiet={true}\n  />\n\n  <.component\n    :if={@post == nil and @slug not in [nil, \"\"]}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-detail-missing\"\n    text={@missing_text}\n  />\n\n  <article\n    :if={@post}\n    data-role=\"blog-detail-article\"\n    lang={@post.language}\n    dir={text_direction(@post.language)}\n    class=\"rounded-[18px] border border-[#ecebe6] bg-white p-5 sm:p-7\"\n  >\n    <h1 data-role=\"blog-detail-title\" class=\"mb-2 text-2xl font-bold leading-tight sm:text-3xl\">\n      {@post.title}\n    </h1>\n\n    <div class=\"mb-5 flex flex-wrap items-center gap-3 text-xs text-[#8a877f]\">\n      <time\n        :if={@show_date and @post.published_at}\n        data-role=\"blog-detail-date\"\n        datetime={to_string(@post.published_at)}\n      >\n        {Calendar.strftime(@post.published_at, \"%d %b %Y\")}\n      </time>\n\n      <span :if={@show_date and updated?(@post)} data-role=\"blog-detail-updated\">\n        {@updated_text} {Calendar.strftime(@post.updated_at, \"%d %b %Y\")}\n      </span>\n\n      <span :if={@show_reading_time and @post.reading_time_minutes} data-role=\"blog-detail-reading\">\n        {@post.reading_time_minutes} {@reading_text}\n      </span>\n\n      <span\n        :if={@show_authors and @authors != []}\n        data-role=\"blog-detail-authors\"\n        class=\"flex flex-wrap items-center gap-1\"\n      >\n        {@authors_text}\n        <span :for={blogger <- @authors} data-role=\"blog-detail-author\" class=\"font-semibold\">\n          {blogger.display_name}\n        </span>\n      </span>\n\n      <span\n        :if={@post.featured}\n        data-role=\"blog-detail-featured\"\n        class=\"rounded-full bg-[#fbf1dc] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#8a5514]\"\n      >\n        {@featured_text}\n      </span>\n\n      <.link\n        :if={trimmed(@base) != \"\"}\n        patch={close_href(@base, @params, @post_param)}\n        data-role=\"blog-detail-close\"\n        class=\"ml-auto underline hover:text-[#5b57d6]\"\n      >\n        {@close_text}\n      </.link>\n    </div>\n\n    <img\n      :if={@show_cover and @post.featured_image_url}\n      data-role=\"blog-detail-cover\"\n      src={@post.featured_image_url}\n      alt={@post.title}\n      class=\"mb-5 h-64 w-full rounded-[14px] object-cover\"\n    />\n\n    <p\n      :if={@show_excerpt and @post.excerpt}\n      data-role=\"blog-detail-excerpt\"\n      class=\"mb-4 text-base font-medium leading-relaxed text-[#3a382f]\"\n    >\n      {@post.excerpt}\n    </p>\n\n    <hr class=\"border-[#ecebe6]\" />\n\n    <div\n      data-role=\"blog-detail-body\"\n      class=\"prose prose-sm mt-4 max-w-none leading-relaxed [&_a]:underline [&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:mt-4 [&_h3]:font-semibold [&_img]:rounded-lg [&_li]:ml-5 [&_li]:list-disc [&_p]:mb-3\"\n    >\n      {body_html(@post.rendered_content)}\n    </div>\n\n    <.component\n      :if={@show_categories}\n      component_name=\"blog-term-row\"\n      site={site_name()}\n      label={@categories_text}\n      role=\"blog-detail-categories\"\n      item_role=\"blog-detail-category\"\n      spaced={true}\n      terms={term_links(@categories, @category_base, @lang_param)}\n    />\n\n    <.component\n      :if={@show_tags}\n      component_name=\"blog-term-row\"\n      site={site_name()}\n      label={@tags_text}\n      role=\"blog-detail-tags\"\n      item_role=\"blog-detail-tag\"\n      terms={term_links(@tags, @tag_base, @lang_param)}\n    />\n\n    <.component\n      :if={@show_translations}\n      component_name=\"blog-term-row\"\n      site={site_name()}\n      label={@translations_text}\n      role=\"blog-detail-translations\"\n      item_role=\"blog-detail-translation\"\n      uppercase={true}\n      terms={\n        translation_links(@translations, @post_base, @base, @params, @post_param, @lang_param)\n      }\n    />\n\n    <p :if={trimmed(@post_base) != \"\" and trimmed(@base) != \"\"} class=\"mt-6\">\n      <.link\n        data-role=\"blog-detail-permalink\"\n        navigate={slug_href(@post_base, @post.slug, @lang_param, @post.language)}\n        class=\"text-sm underline hover:text-[#5b57d6]\"\n      >\n        {@permalink_text}\n      </.link>\n    </p>\n  </article>\n</div>\n",
+      "body": null,
+      "attrs": [
+        {
+          "name": "slug",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The post to draw, named outright. A page that carries the slug in its URL should leave this alone and use post_param instead."
+          }
+        },
+        {
+          "name": "base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The path this post's own page links back to, when the post is opened beside a list rather than on a page of its own."
+          }
+        },
+        {
+          "name": "params",
+          "type": "any",
+          "opts": {
+            "default": {},
+            "doc": "The page's own query string, handed straight through, so a link this component writes keeps every key the page already had."
+          }
+        },
+        {
+          "name": "post_param",
+          "type": "any",
+          "opts": {
+            "default": "post",
+            "doc": "The key in params holding the post's slug — post for /blog?post=x, slug for a page stored at /:lang/blog/:slug."
+          }
+        },
+        {
+          "name": "language",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "Only a post written in this language is served here — fa on a page stored at /fa/blog/:slug, so the English edition of the same article is not answered under the Persian URL. Left empty, or all, the slug alone decides, whichever language the post turns out to be in."
+          }
+        },
+        {
+          "name": "post_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a post lives — /en/blog/post, say. It is what a translation and the permalink are built from. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the row it points at, which is the only way one of them can lead to another language's edition."
+          }
+        },
+        {
+          "name": "category_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a category's posts live — /en/blog/category, say. Left empty the categories are drawn as plain words. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the row it points at, which is the only way one of them can lead to another language's edition."
+          }
+        },
+        {
+          "name": "tag_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a tag's posts live — /en/blog/tag, say. Left empty the tags are drawn as plain words. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the row it points at, which is the only way one of them can lead to another language's edition."
+          }
+        },
+        {
+          "name": "lang_param",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The query key that carries the language on the links this component writes — lang, for a site addressed as /blog?lang=fa. Leave it empty on a site whose language is part of the path, where a :lang in the bases carries it instead."
+          }
+        },
+        {
+          "name": "show_cover",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the post's cover image."
+          }
+        },
+        {
+          "name": "show_excerpt",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the post's summary above the body."
+          }
+        },
+        {
+          "name": "show_date",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the date it was published, and the date it was last edited when that is later."
+          }
+        },
+        {
+          "name": "show_reading_time",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw how long the post takes to read."
+          }
+        },
+        {
+          "name": "show_authors",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the bloggers credited with the post."
+          }
+        },
+        {
+          "name": "show_categories",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the categories the post belongs to."
+          }
+        },
+        {
+          "name": "show_tags",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the tags the post carries."
+          }
+        },
+        {
+          "name": "show_translations",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw a link to every published translation of this post."
+          }
+        },
+        {
+          "name": "idle_text",
+          "type": "string",
+          "opts": {
+            "default": "Pick a post to read it here.",
+            "doc": "What is shown while the URL names no post at all."
+          }
+        },
+        {
+          "name": "missing_text",
+          "type": "string",
+          "opts": {
+            "default": "That post is not published, or no longer exists.",
+            "doc": "What is shown when the URL names a post nobody can read."
+          }
+        },
+        {
+          "name": "featured_text",
+          "type": "string",
+          "opts": {
+            "default": "Featured",
+            "doc": "The badge a featured post carries."
+          }
+        },
+        {
+          "name": "close_text",
+          "type": "string",
+          "opts": {
+            "default": "Close",
+            "doc": "The words on the link back to the list, when the post is open beside one."
+          }
+        },
+        {
+          "name": "permalink_text",
+          "type": "string",
+          "opts": {
+            "default": "Open this post on its own page",
+            "doc": "The words on the link to the post's own page."
+          }
+        },
+        {
+          "name": "reading_text",
+          "type": "string",
+          "opts": {
+            "default": "min read",
+            "doc": "What the reading time is counted in."
+          }
+        },
+        {
+          "name": "updated_text",
+          "type": "string",
+          "opts": {
+            "default": "Updated",
+            "doc": "What precedes the date of the last edit."
+          }
+        },
+        {
+          "name": "authors_text",
+          "type": "string",
+          "opts": {
+            "default": "By",
+            "doc": "What precedes the author names."
+          }
+        },
+        {
+          "name": "categories_text",
+          "type": "string",
+          "opts": {
+            "default": "In",
+            "doc": "What precedes the categories."
+          }
+        },
+        {
+          "name": "tags_text",
+          "type": "string",
+          "opts": {
+            "default": "Tags",
+            "doc": "What precedes the tags."
+          }
+        },
+        {
+          "name": "translations_text",
+          "type": "string",
+          "opts": {
+            "default": "Also in",
+            "doc": "What precedes the other languages."
+          }
+        },
+        {
+          "name": "current_user",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The signed-in reader, handed down by the page as current_user. A record locked to permissions it does not hold is left out; without one, every locked record is."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "mount",
+          "args": "socket",
+          "code": "{:ok,\n Phoenix.Component.assign(socket,\n   post: nil,\n   tags: [],\n   categories: [],\n   authors: [],\n   translations: []\n )}\n"
+        },
+        {
+          "name": "update",
+          "args": "_assigns, socket",
+          "code": "{:ok, load_post(socket)}\n"
+        },
+        {
+          "name": "site_id",
+          "args": "",
+          "code": "__MODULE__.__component_information__([:private, :site_id])\n"
+        },
+        {
+          "name": "read_as",
+          "args": "visitor",
+          "code": "# THE VISITOR THE READ IS FOR, named so a post, a category or a tag locked to permissions it\n# does not hold is left out of the rows, the count and the pages.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+        },
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "href",
+          "args": "base, params, key, value",
+          "code": "query =\n  params\n  |> case do\n    map when is_map(map) -> map\n    _not_a_map -> %{}\n  end\n  |> Map.put(to_string(key), to_string(value))\n  |> URI.encode_query()\n\nto_string(base) <> \"?\" <> query\n"
+        },
+        {
+          "name": "lang_base",
+          "args": "base, language",
+          "code": "# A BASE MAY NAME THE LANGUAGE AS A `:lang` SEGMENT, and on a site whose language is part of the\n# path that is the only form a link to a row in ANOTHER language can be built from: the segment is\n# filled with the language of the row being linked to, not the one the page is being read in. A base\n# without the segment is handed back as written — a query-mode page carries the language in\n# `lang_param` instead. A row whose language cannot be read gets no link rather than a link under\n# somebody else's language.\nsegments = base |> to_string() |> String.split(\"/\")\ncode = trimmed(language)\n\ncond do\n  \":lang\" not in segments -> to_string(base)\n  code == \"\" -> nil\n  true -> Enum.map_join(segments, \"/\", &if(&1 == \":lang\", do: code, else: &1))\nend\n"
+        },
+        {
+          "name": "served?",
+          "args": "base, language",
+          "code": "# WHETHER THIS SITE HAS A URL FOR A ROW IN THIS LANGUAGE. This asks the list\n# `MishkaCmsCore.Runtime.Languages.admits?/3` holds the `:lang` capture to, so a link is offered\n# exactly when the router would answer it: a post translated into Arabic on a site publishing\n# English and Persian cannot be addressed here at all, and is said as a word instead of linked to a\n# 404. A base with no `:lang` in it makes no language claim, so everything is addressable\n# through it.\nnot String.contains?(to_string(base), \":lang\") or\n  trimmed(language) in MishkaCmsCore.Runtime.Languages.site(site_id())\n",
+          "attrs": [],
+          "slots": [],
+          "signature": null,
+          "discriminators": []
+        },
+        {
+          "name": "slug_href",
+          "args": "base, slug, lang_param, language",
+          "code": "case lang_base(base, language) do\n  nil ->\n    nil\n\n  base ->\n    path = base <> \"/\" <> to_string(slug)\n\n    case {trimmed(lang_param), trimmed(language)} do\n      {\"\", _no_key} -> path\n      {_key, \"\"} -> path\n      {key, code} -> path <> \"?\" <> URI.encode_query(%{key => code})\n    end\nend\n"
+        },
+        {
+          "name": "first_row",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: [found | _rest]}} -> found\n  {:ok, [found | _rest]} -> found\n  _nothing -> nil\nend\n"
+        },
+        {
+          "name": "rows",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: found}} -> found\n  {:ok, found} when is_list(found) -> found\n  _unreadable -> []\nend\n"
+        },
+        {
+          "name": "asked_slug",
+          "args": "assigns",
+          "code": "key = to_string(assigns[:post_param] || \"post\")\n\ncase assigns[:params] do\n  %{^key => asked} -> asked\n  _no_params_or_key -> assigns[:slug]\nend\n"
+        },
+        {
+          "name": "from_url?",
+          "args": "assigns",
+          "code": "# WHETHER THE ADDRESS ASKED FOR THIS POST, or an author did. `asked_slug/1` prefers the URL's own\n# capture and falls back to the `slug` attribute; only the first is the page's subject, and only the\n# page's subject decides what the response is.\nkey = to_string(assigns[:post_param] || \"post\")\n\nmatch?(%{^key => _asked}, assigns[:params])\n"
+        },
+        {
+          "name": "missing!",
+          "args": "socket",
+          "code": "# NOTHING ANSWERS AT AN ADDRESS THAT NAMED SOMETHING. On the very first render there is no socket\n# to send anything over, so this raises and Phoenix draws the 404 page with a 404 status, exactly as\n# it does for a controller.\n#\n# ONCE CONNECTED IT ASKS THE PAGE TO ASK AGAIN. Raising into a live render crashes the view, and on\n# a `patch` the client remounts straight back into the same missing subject and crashes again. A\n# LiveComponent has no `handle_params/3` of its own, so it tells the LiveView the way the guides say\n# to — `send/2` — and `MishkaCmsWeb.Live.RuntimeLive` answers with a full load of the same address,\n# which arrives here as the first-render case above.\nif Phoenix.LiveView.connected?(socket) do\n  # THE PAGE KNOWS ITS OWN ADDRESS AND THIS DOES NOT: a LiveComponent's assigns are its own, not\n  # the LiveView's, so the message carries nothing and the answer is given where the path lives.\n  send(self(), :mishka_runtime_not_found)\n  socket\nelse\n  raise MishkaCmsCore.ErrorsExceptions.NotFoundError,\n    message: \"Sorry, the page you are looking for does not exist or has been moved.\"\nend\n"
+        },
+        {
+          "name": "text_direction",
+          "args": "language",
+          "code": "case trimmed(language) do\n  code when code in ~w(fa ar he ur ps ckb dv yi) -> \"rtl\"\n  _left_to_right_or_unknown -> \"auto\"\nend\n"
+        },
+        {
+          "name": "body_html",
+          "args": "content",
+          "code": "case is_binary(content) do\n  true -> Phoenix.HTML.raw(HtmlSanitizeEx.html5(content))\n  false -> Phoenix.HTML.raw(\"\")\nend\n"
+        },
+        {
+          "name": "updated?",
+          "args": "post",
+          "code": "case {post.updated_at, post.published_at} do\n  {nil, _never_written} ->\n    false\n\n  {_updated, nil} ->\n    false\n\n  {updated, published} ->\n    Date.compare(DateTime.to_date(updated), DateTime.to_date(published)) == :gt\nend\n"
+        },
+        {
+          "name": "close_href",
+          "args": "base, params, key",
+          "code": "query =\n  params\n  |> case do\n    map when is_map(map) -> map\n    _not_a_map -> %{}\n  end\n  |> Map.delete(to_string(key))\n  |> URI.encode_query()\n\ncase query do\n  \"\" -> to_string(base)\n  some -> to_string(base) <> \"?\" <> some\nend\n"
+        },
+        {
+          "name": "translations",
+          "args": "post, visitor",
+          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  %{language_group_id: nil} ->\n    []\n\n  %{language_group_id: group, id: post_id} ->\n    MishkaBlog.BlogPost\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(language_group_id == ^group and id != ^post_id)\n    |> Ash.Query.sort(language: :asc)\n    |> Ash.Query.select([:id, :slug, :language])\n    |> Ash.read(tenant: site_id(), page: [limit: 20])\n    |> rows()\nend\n"
+        },
+        {
+          "name": "tags_of",
+          "args": "post, visitor",
+          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  %{id: post_id} ->\n    MishkaBlog.Tag\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(name: :asc)\n    |> Ash.Query.select([:id, :name, :slug, :language])\n    |> Ash.read(tenant: site_id(), page: [limit: 50])\n    |> rows()\nend\n"
+        },
+        {
+          "name": "categories_of",
+          "args": "post, visitor",
+          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  %{id: post_id} ->\n    MishkaBlog.Collection\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(display_order: :asc, name: :asc)\n    |> Ash.Query.select([:id, :name, :slug, :language])\n    |> Ash.read(tenant: site_id(), page: [limit: 50])\n    |> rows()\nend\n"
+        },
+        {
+          "name": "authors_of",
+          "args": "post",
+          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  %{id: post_id} ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_list, %{}, authorize?: false)\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(display_name: :asc)\n    |> Ash.Query.select([:id, :display_name])\n    |> Ash.read(tenant: site_id(), page: [limit: 20])\n    |> rows()\nend\n"
+        },
+        {
+          "name": "only_language",
+          "args": "query, wanted",
+          "code": "# A PAGE WRITTEN IN ONE LANGUAGE SERVES THAT LANGUAGE'S EDITION AND NO OTHER. A slug belongs to one\n# edition, so without this /fa/blog/<english-slug> answers the English article inside a Persian,\n# right-to-left page, with a Persian sidebar around it and nothing saying the URL was wrong. Left\n# empty the component sits on a page that does not address languages at all, and the slug decides on\n# its own.\nrequire Ash.Query\n\ncase trimmed(wanted) do\n  \"\" -> query\n  \"all\" -> query\n  code -> Ash.Query.filter(query, language == ^code)\nend\n"
+        },
+        {
+          "name": "load_post",
+          "args": "socket",
+          "code": "require Ash.Query\n\nassigns = socket.assigns\nslug = asked_slug(assigns)\n\npost =\n  case slug in [nil, \"\"] do\n    true ->\n      nil\n\n    false ->\n      MishkaBlog.BlogPost\n      |> Ash.Query.for_read(:public_list, %{}, read_as(assigns[:current_user]))\n      |> Ash.Query.filter(slug == ^to_string(slug))\n      |> only_language(assigns[:language])\n      |> Ash.Query.select([\n        :id,\n        :title,\n        :slug,\n        :excerpt,\n        :content,\n        :published_at,\n        :updated_at,\n        :featured_image_url,\n        :featured,\n        :language,\n        :language_group_id\n      ])\n      |> Ash.Query.load([:rendered_content, :reading_time_minutes])\n      |> Ash.read(tenant: site_id(), page: [limit: 1])\n      |> first_row()\n  end\n\n# A SLUG THE URL NAMED AND NOTHING ANSWERS IS A MISSING PAGE, not a page with a notice on it.\n# The address was a post; there is no post; 404 is the honest answer and the one a crawler needs —\n# see `MishkaCmsCore.ErrorsExceptions.NotFoundError`, which every other \"not here\" in this CMS\n# raises. LiveView converts it exactly as a controller does: on the HTTP render Phoenix's error view\n# draws the 404 page, and on a connected render the client reloads into that same answer.\n#\n# ONLY WHEN THE URL NAMED IT. A slug an author typed into the `slug` attribute of an embedded card\n# is their content mistake, and taking the whole page down for it would be a worse answer than the\n# notice — so that case still draws `missing_text`.\nif post == nil and slug not in [nil, \"\"] and from_url?(assigns) do\n  missing!(socket)\nend\n\n# NOTHING IS READ FOR A PART THE PAGE TURNED OFF. `update/2` runs again on every re-render of the\n# page holding this component, so a page drawing the body alone paid for four reads it never showed,\n# every single time.\nsocket\n|> Phoenix.Component.assign(:slug, slug)\n|> Phoenix.Component.assign(:post, post)\n|> Phoenix.Component.assign(:tags, (assigns[:show_tags] && tags_of(post, assigns[:current_user])) || [])\n|> Phoenix.Component.assign(:categories, (assigns[:show_categories] && categories_of(post, assigns[:current_user])) || [])\n|> Phoenix.Component.assign(:authors, (assigns[:show_authors] && authors_of(post)) || [])\n|> Phoenix.Component.assign(\n  :translations,\n  (assigns[:show_translations] && translations(post, assigns[:current_user])) || []\n)\n"
+        },
+        {
+          "name": "site_name",
+          "args": "",
+          "code": "# THE SITE'S NAME, NOT ITS ID, because that is what a component is addressed by: the runtime hashes\n# a module out of (component name, site name). Every `<.component …/>` below draws a sibling of this\n# one, which lives on the same site as this one and nowhere else.\n__MODULE__.__component_information__([:private, :site])\n"
+        },
+        {
+          "name": "term_links",
+          "args": "rows, base, lang_param",
+          "code": "# THE ROWS `blog-term-row` DRAWS, prepared here because only this block knows which base each\n# kind of row is addressed under. A base nobody gave means a word rather than a link, which is what\n# a block that does not own the router can honestly offer. Neither kind ever patches: a category\n# and a tag lead to a page of their own or to nothing.\ncase trimmed(base) do\n  \"\" ->\n    Enum.map(rows, &%{name: &1.name, href: nil, patch: nil, hreflang: nil})\n\n  address ->\n    Enum.map(\n      rows,\n      &%{\n        name: &1.name,\n        href: slug_href(address, &1.slug, lang_param, &1.language),\n        patch: nil,\n        hreflang: nil\n      }\n    )\nend\n"
+        },
+        {
+          "name": "translation_links",
+          "args": "rows, post_base, base, params, post_param, lang_param",
+          "code": "# AN EDITION LEADS TO ITS OWN LANGUAGE'S ADDRESS where posts have pages of their own, and opens\n# beside this one where they do not — and the second is a PATCH, which is what keeps the page\n# holding this block mounted while the article under it changes. `navigate` would remount it, and\n# the two are the same href, so nothing but the reload says which one was drawn.\n#\n# A TRANSLATIONS ROW SAYS WHAT EXISTS, so an edition this site has no URL for stays in it as a word\n# — see `served?/2`. That is the truth about it: the translation was written, this site does not\n# serve it. Offering it as a link would send the reader to a 404 instead.\nEnum.map(rows, fn row ->\n  {address, beside} =\n    case {trimmed(post_base), trimmed(base)} do\n      {\"\", \"\"} -> {nil, nil}\n      {\"\", _beside_this_one} -> {nil, href(base, params, post_param, row.slug)}\n      {own_page, _either} -> {slug_href(own_page, row.slug, lang_param, row.language), nil}\n    end\n\n  %{\n    name: row.language,\n    href: (served?(post_base, row.language) && address) || nil,\n    patch: beside,\n    hreflang: row.language\n  }\nend)\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [
+        "blog-term-row",
+        "blog-notice"
+      ],
+      "examples": [],
+      "extra": {
+        "icon": "document",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-category-list",
+      "description": "The blog's categories, read in the background — as a menu for a sidebar or as cards for an index, each with what is newest under it.",
+      "type": "navigations",
+      "format": "heex",
+      "stateful": true,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div id={@id} {@rest} data-role=\"blog-category-list\" class=\"text-[#1b1a18]\">\n  <h2\n    :if={trimmed(@heading) != \"\"}\n    data-role=\"blog-category-heading\"\n    class=\"mb-3 text-lg font-bold leading-tight\"\n  >\n    {@heading}\n  </h2>\n\n  <.component\n    :if={@loading}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"loading\"\n    role=\"blog-category-loading\"\n    text={@loading_text}\n  />\n\n  <.component\n    :if={@failed}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"error\"\n    role=\"blog-category-error\"\n    text={@error_text}\n    retry_text={@retry_text}\n    target={@myself}\n  />\n\n  <.component\n    :if={not @loading and not @failed and @categories == []}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-category-empty\"\n    text={@empty_text}\n  />\n\n  <div\n    :if={not @loading and not @failed and @categories != []}\n    data-role=\"blog-category-items\"\n    class={[\n      (@variant == \"cards\" && \"grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3\") ||\n        \"divide-y divide-[#ecebe6] rounded-[18px] border border-[#ecebe6] bg-white px-4\"\n    ]}\n  >\n    <section\n      :for={category <- @categories}\n      data-role=\"blog-category\"\n      data-selected={to_string(category.slug == @selected)}\n      id={\"#{@id}-category-#{category.id}\"}\n      class={[\n        (@variant == \"cards\" && \"rounded-[18px] border border-[#ecebe6] bg-white p-4\") || \"py-3\",\n        category.slug == @selected && \"text-[#5b57d6]\"\n      ]}\n    >\n      <div class=\"flex items-baseline justify-between gap-2\">\n        <.link\n          :if={trimmed(@category_base) != \"\"}\n          navigate={slug_href(@category_base, category.slug, @lang_param, category.language)}\n          data-role=\"blog-category-name\"\n          class=\"text-sm font-semibold leading-snug hover:underline\"\n        >\n          {category.name}\n        </.link>\n\n        <span\n          :if={trimmed(@category_base) == \"\"}\n          data-role=\"blog-category-name\"\n          class=\"text-sm font-semibold leading-snug\"\n        >\n          {category.name}\n        </span>\n\n        <span\n          :if={@show_count}\n          data-role=\"blog-category-count\"\n          class=\"flex-none text-xs text-[#a8a5a0]\"\n        >\n          {category.count}\n        </span>\n      </div>\n\n      <p\n        :if={@show_description and trimmed(category.description) != \"\"}\n        data-role=\"blog-category-description\"\n        class=\"mt-1 text-xs leading-relaxed text-[#6d6a63]\"\n      >\n        {category.description}\n      </p>\n\n      <ul\n        :if={category.posts != []}\n        data-role=\"blog-category-posts\"\n        class=\"mt-2 flex flex-col gap-1\"\n      >\n        <li :for={post <- category.posts} class=\"text-xs leading-snug text-[#6d6a63]\">\n          <.link\n            :if={trimmed(@post_base) != \"\"}\n            navigate={slug_href(@post_base, post.slug, @lang_param, post.language)}\n            data-role=\"blog-category-post\"\n            class=\"hover:underline\"\n          >\n            {post.title}\n          </.link>\n\n          <span :if={trimmed(@post_base) == \"\"} data-role=\"blog-category-post\">{post.title}</span>\n        </li>\n      </ul>\n    </section>\n  </div>\n</div>\n",
+      "body": null,
+      "attrs": [
+        {
+          "name": "heading",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "The words above the categories. Left empty, no heading is drawn."
+          }
+        },
+        {
+          "name": "variant",
+          "type": "string",
+          "opts": {
+            "default": "list",
+            "doc": "list draws a narrow column, which is what a sidebar wants; cards draws one panel per category.",
+            "values": [
+              "list",
+              "cards"
+            ]
+          }
+        },
+        {
+          "name": "category_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a category's posts live — /en/blog/category, say. Left empty the categories are drawn as plain words, because this component does not own the router and will not invent a path. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the row it points at, which is the only way one of them can lead to another language's edition."
+          }
+        },
+        {
+          "name": "post_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a post lives — /en/blog/post, say. It is what the titles under each category link to. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the row it points at, which is the only way one of them can lead to another language's edition."
+          }
+        },
+        {
+          "name": "lang_param",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The query key that carries the language on the links this component writes — lang, for a site addressed as /blog?lang=fa. Leave it empty on a site whose language is part of the path, where a :lang in the bases carries it instead."
+          }
+        },
+        {
+          "name": "language",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "Which edition of each record to show. Left empty, one edition of each — the master, the language it was written in. A code such as fa or ar shows that language only. all shows every translation."
+          }
+        },
+        {
+          "name": "parent",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "Left empty, the categories nothing is nested under. A slug lists that category's children. all lists every category, flat."
+          }
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "opts": {
+            "default": 20,
+            "doc": "How many categories at most.",
+            "min": 1,
+            "max": 100
+          }
+        },
+        {
+          "name": "posts_per_category",
+          "type": "integer",
+          "opts": {
+            "default": 0,
+            "doc": "How many of each category's latest posts to list under it. Zero lists none.",
+            "min": 0,
+            "max": 5
+          }
+        },
+        {
+          "name": "exclude_slug",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "A post to leave out of the titles under each category — the one the reader already has open, on a page showing a single article. Left empty every category lists its own latest."
+          }
+        },
+        {
+          "name": "show_count",
+          "type": "boolean",
+          "opts": {
+            "default": false,
+            "doc": "Draw how many published posts each category holds — all of them, whatever language the post itself is written in."
+          }
+        },
+        {
+          "name": "show_description",
+          "type": "boolean",
+          "opts": {
+            "default": false,
+            "doc": "Draw each category's own description."
+          }
+        },
+        {
+          "name": "hide_empty",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Leave out the categories holding no published post."
+          }
+        },
+        {
+          "name": "params",
+          "type": "any",
+          "opts": {
+            "default": {},
+            "doc": "The page's own captures and query string, read for the one key selected_param names and for nothing else. Hand it over only from a page whose key holds a CATEGORY: a category and a tag may carry the same slug, and the list would mark a category the reader is not on."
+          }
+        },
+        {
+          "name": "selected_param",
+          "type": "any",
+          "opts": {
+            "default": "slug",
+            "doc": "The key in params holding the category the reader is already on, so the list can mark it."
+          }
+        },
+        {
+          "name": "empty_text",
+          "type": "string",
+          "opts": {
+            "default": "No categories yet.",
+            "doc": "What a reader is told when the site has no public categories."
+          }
+        },
+        {
+          "name": "loading_text",
+          "type": "string",
+          "opts": {
+            "default": "Loading categories…",
+            "doc": "What a screen reader is told while the read is running."
+          }
+        },
+        {
+          "name": "error_text",
+          "type": "string",
+          "opts": {
+            "default": "The categories could not be loaded.",
+            "doc": "What a reader is told when the read failed."
+          }
+        },
+        {
+          "name": "retry_text",
+          "type": "string",
+          "opts": {
+            "default": "Try again",
+            "doc": "The way out of a failed read."
+          }
+        },
+        {
+          "name": "current_user",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The signed-in reader, handed down by the page as current_user. A record locked to permissions it does not hold is left out; without one, every locked record is."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "mount",
+          "args": "socket",
+          "code": "{:ok,\n Phoenix.Component.assign(socket,\n   asked: nil,\n   loading: true,\n   failed: false,\n   categories: [],\n   selected: \"\"\n )}\n"
+        },
+        {
+          "name": "update",
+          "args": "_assigns, socket",
+          "code": "# WHICH CATEGORY THE READER IS ON IS NOT PART OF THE READ. It comes off the page's params,\n# changes whenever they navigate, and re-reading the whole menu to notice would put the block back\n# into its skeleton every time.\n{:ok,\n socket\n |> Phoenix.Component.assign(:selected, selected(socket.assigns))\n |> load()}\n"
+        },
+        {
+          "name": "site_id",
+          "args": "",
+          "code": "__MODULE__.__component_information__([:private, :site_id])\n"
+        },
+        {
+          "name": "read_as",
+          "args": "visitor",
+          "code": "# THE VISITOR THE READ IS FOR, named so a post, a category or a tag locked to permissions it\n# does not hold is left out of the rows, the count and the pages.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+        },
+        {
+          "name": "positive",
+          "args": "value, fallback",
+          "code": "cond do\n  is_integer(value) and value > 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number > 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
+        },
+        {
+          "name": "whole",
+          "args": "value, fallback",
+          "code": "cond do\n  is_integer(value) and value >= 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number >= 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
+        },
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "lang_base",
+          "args": "base, language",
+          "code": "# A BASE MAY NAME THE LANGUAGE AS A `:lang` SEGMENT, and on a site whose language is part of the\n# path that is the only form a link to a row in ANOTHER language can be built from: the segment is\n# filled with the language of the row being linked to, not the one the page is being read in. A base\n# without the segment is handed back as written — a query-mode page carries the language in\n# `lang_param` instead. A row whose language cannot be read gets no link rather than a link under\n# somebody else's language.\nsegments = base |> to_string() |> String.split(\"/\")\ncode = trimmed(language)\n\ncond do\n  \":lang\" not in segments -> to_string(base)\n  code == \"\" -> nil\n  true -> Enum.map_join(segments, \"/\", &if(&1 == \":lang\", do: code, else: &1))\nend\n"
+        },
+        {
+          "name": "slug_href",
+          "args": "base, slug, lang_param, language",
+          "code": "case lang_base(base, language) do\n  nil ->\n    nil\n\n  base ->\n    path = base <> \"/\" <> to_string(slug)\n\n    case {trimmed(lang_param), trimmed(language)} do\n      {\"\", _no_key} -> path\n      {_key, \"\"} -> path\n      {key, code} -> path <> \"?\" <> URI.encode_query(%{key => code})\n    end\nend\n"
+        },
+        {
+          "name": "narrow_language",
+          "args": "query, wanted",
+          "code": "require Ash.Query\n\ncase trimmed(wanted) do\n  \"all\" -> query\n  \"\" -> Ash.Query.filter(query, is_nil(language_group_id) or language_group_id == id)\n  code -> Ash.Query.filter(query, language == ^code)\nend\n"
+        },
+        {
+          "name": "first_row",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: [found | _rest]}} -> found\n  {:ok, [found | _rest]} -> found\n  _nothing -> nil\nend\n"
+        },
+        {
+          "name": "rows",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: found}} -> {:ok, found}\n  {:ok, found} when is_list(found) -> {:ok, found}\n  {:error, reason} -> {:error, reason}\n  _unreadable -> {:error, :unreadable}\nend\n"
+        },
+        {
+          "name": "selected",
+          "args": "assigns",
+          "code": "key = to_string(assigns[:selected_param] || \"slug\")\n\ncase assigns[:params] do\n  %{^key => asked} -> to_string(asked)\n  _no_params_or_key -> \"\"\nend\n"
+        },
+        {
+          "name": "only_language",
+          "args": "query, wanted",
+          "code": "# A ROW NAMED BY SLUG IS NARROWED BY THE PAGE'S LANGUAGE, NOT BY THE EDITION RULE. A slug names one\n# category per site whatever language it is written in, so the master-editions default\n# `narrow_language/2` applies to the listing itself would be meaningless here — while no narrowing\n# at all answered a Persian menu's parent with the English category of that name, and hung the\n# Persian children of it underneath.\nrequire Ash.Query\n\ncase trimmed(wanted) do\n  \"\" -> query\n  \"all\" -> query\n  code -> Ash.Query.filter(query, language == ^code)\nend\n"
+        },
+        {
+          "name": "parent_row",
+          "args": "wanted, language, visitor",
+          "code": "require Ash.Query\n\nMishkaBlog.Collection\n|> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n|> Ash.Query.filter(slug == ^wanted)\n|> only_language(language)\n|> Ash.Query.select([:id])\n|> Ash.read(tenant: site_id(), page: [limit: 1])\n|> first_row()\n"
+        },
+        {
+          "name": "with_public_post",
+          "args": "query, wanted",
+          "code": "require Ash.Query\n\n# THE SAME EDITION RULE THE ROWS THEMSELVES FOLLOW. `published_post_count` counts every post filed\n# under the row whatever language it is written in, so hiding by it offered a Persian reader a row\n# whose only public post is English — a link that opens empty.\ncase trimmed(wanted) do\n  \"all\" ->\n    Ash.Query.filter(query, exists(tenant_posts, status == :published))\n\n  \"\" ->\n    Ash.Query.filter(\n      query,\n      exists(\n        tenant_posts,\n        status == :published and (is_nil(language_group_id) or language_group_id == id)\n      )\n    )\n\n  code ->\n    Ash.Query.filter(query, exists(tenant_posts, status == :published and language == ^code))\nend\n"
+        },
+        {
+          "name": "posts_of",
+          "args": "category_id, limit, language, exclude, visitor",
+          "code": "require Ash.Query\n\ncase limit > 0 do\n  false ->\n    []\n\n  true ->\n    query =\n      MishkaBlog.BlogPost\n      |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n      |> narrow_language(language)\n      |> Ash.Query.filter(exists(collections, id == ^category_id))\n\n    # WHAT ELSE THERE IS TO READ. On the page of one article this list is beside it, and a category\n    # offering the reader the article they already have open spends one of its three lines on it.\n    query =\n      case trimmed(exclude) do\n        \"\" -> query\n        wanted -> Ash.Query.filter(query, slug != ^wanted)\n      end\n\n    query\n    |> Ash.Query.sort(published_at: :desc)\n    |> Ash.Query.select([:id, :title, :slug, :language])\n    |> Ash.read(tenant: site_id(), page: [limit: limit])\n    |> rows()\n    |> case do\n      # THE MENU IS WORTH MORE THAN THE THREE LINKS UNDER ONE OF ITS ENTRIES. A category whose\n      # latest posts could not be read is still a category the reader can open.\n      {:ok, found} -> found\n      {:error, _unreadable} -> []\n    end\nend\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"retry\", _params, socket",
+          "code": "{:noreply,\n socket\n |> Phoenix.Component.assign(:asked, nil)\n |> load()}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":categories, {:ok, result}, socket",
+          "code": "{:noreply, arrived(socket, result)}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":categories, {:exit, _reason}, socket",
+          "code": "# A READ THAT DIED TAKES THE BLOCK'S OWN STATE WITH IT AND NOTHING ELSE. The task is unlinked\n# before it re-raises — see `Phoenix.LiveView.Async.do_async/5` — so the page around this block is\n# still standing, and this is what it draws instead of the list.\n{:noreply, Phoenix.Component.assign(socket, loading: false, failed: true)}\n"
+        },
+        {
+          "name": "site_name",
+          "args": "",
+          "code": "# THE SITE'S NAME, NOT ITS ID, because that is what a component is addressed by: the runtime hashes\n# a module out of (component name, site name). Every `<.component …/>` below draws a sibling of this\n# one, which lives on the same site as this one and nowhere else.\n__MODULE__.__component_information__([:private, :site])\n"
+        },
+        {
+          "name": "asked",
+          "args": "assigns",
+          "code": "%{\n  visitor: assigns[:current_user],\n  language: trimmed(assigns[:language]),\n  parent: trimmed(assigns[:parent]),\n  hide_empty: assigns[:hide_empty] != false,\n  limit: positive(assigns[:limit], 20),\n  posts_per_category: whole(assigns[:posts_per_category], 0),\n  exclude_slug: trimmed(assigns[:exclude_slug])\n}\n"
+        },
+        {
+          "name": "fetch",
+          "args": "asked",
+          "code": "require Ash.Query\n\nquery =\n  MishkaBlog.Collection\n  |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n  |> narrow_language(asked.language)\n  |> Ash.Query.sort(display_order: :asc, name: :asc)\n  |> Ash.Query.select([:id, :name, :slug, :language, :description])\n  |> Ash.Query.load(:published_post_count)\n\nquery =\n  case asked.hide_empty do\n    false -> query\n    true -> with_public_post(query, asked.language)\n  end\n\npage = [limit: asked.limit]\n\nfound =\n  case asked.parent do\n    \"all\" ->\n      query |> Ash.read(tenant: site_id(), page: page) |> rows()\n\n    \"\" ->\n      query\n      |> Ash.Query.filter(is_nil(parent_collection_id))\n      |> Ash.read(tenant: site_id(), page: page)\n      |> rows()\n\n    wanted ->\n      case parent_row(wanted, asked.language, asked.visitor) do\n        nil ->\n          {:ok, []}\n\n        parent ->\n          query\n          |> Ash.Query.filter(parent_collection_id == ^parent.id)\n          |> Ash.read(tenant: site_id(), page: page)\n          |> rows()\n      end\n  end\n\nwith {:ok, found} <- found do\n  {:ok,\n   %{\n     categories:\n       Enum.map(found, fn category ->\n         %{\n           id: category.id,\n           name: category.name,\n           slug: category.slug,\n           language: category.language,\n           description: category.description,\n           count: category.published_post_count,\n           posts:\n             posts_of(\n               category.id,\n               asked.posts_per_category,\n               asked.language,\n               asked.exclude_slug,\n               asked.visitor\n             )\n         }\n       end)\n   }}\nend\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:ok, data}",
+          "code": "Phoenix.Component.assign(socket, loading: false, failed: false, categories: data.categories)\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:error, _reason}",
+          "code": "Phoenix.Component.assign(socket, loading: false, failed: true, categories: [])\n"
+        },
+        {
+          "name": "read_now",
+          "args": "asked",
+          "code": "fetch(asked)\nrescue\n  error -> {:error, error}\ncatch\n  kind, reason -> {:error, {kind, reason}}\n"
+        },
+        {
+          "name": "cold?",
+          "args": "socket",
+          "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
+        },
+        {
+          "name": "load",
+          "args": "socket",
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> Phoenix.LiveView.start_async(:categories, fn -> fetch(asked) end)\n    end\nend\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [
+        "blog-notice"
+      ],
+      "examples": [],
+      "extra": {
+        "icon": "folder",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-post-comments",
+      "description": "The approved conversation under one post, read in the background and lengthened rather than paged, with a box for a signed-in reader to add to it.",
+      "type": "forms",
+      "format": "heex",
+      "stateful": true,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div id={@id} {@rest} data-role=\"blog-post-comments\" class=\"text-[#1b1a18]\">\n  <h2\n    :if={not @loading and @post && trimmed(@heading) != \"\"}\n    data-role=\"blog-comments-heading\"\n    class=\"mb-4 text-lg font-bold leading-tight\"\n  >\n    {@heading}\n  </h2>\n\n  <.component\n    :if={@loading and wanted?(@asked)}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"loading\"\n    role=\"blog-comments-loading\"\n    text={@loading_text}\n  />\n\n  <.component\n    :if={@failed}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"error\"\n    role=\"blog-comments-failed\"\n    text={@failed_text}\n    retry_text={@retry_text}\n    target={@myself}\n  />\n\n  <.component\n    :if={not @loading and not @failed and @post && @comments == []}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-comments-empty\"\n    text={@empty_text}\n    quiet={true}\n  />\n\n  <ul\n    :if={not @loading and not @failed and @comments != []}\n    data-role=\"blog-comments-list\"\n    class=\"flex flex-col gap-3\"\n  >\n    <li\n      :for={comment <- @comments}\n      data-role=\"blog-comment\"\n      id={\"#{@id}-comment-#{comment.id}\"}\n      class=\"rounded-[18px] border border-[#ecebe6] bg-white p-4\"\n    >\n      <div class=\"mb-1 flex flex-wrap items-baseline gap-2 text-xs text-[#8a877f]\">\n        <span data-role=\"blog-comment-author\" class=\"font-semibold text-[#1b1a18]\">\n          {comment.author}\n        </span>\n        <time data-role=\"blog-comment-date\" datetime={to_string(comment.at)}>\n          {Calendar.strftime(comment.at, \"%d %b %Y\")}\n        </time>\n        <span\n          :if={comment.pinned}\n          data-role=\"blog-comment-pinned\"\n          class=\"rounded-full bg-[#f2f1fc] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#5b57d6]\"\n        >\n          {@pinned_text}\n        </span>\n      </div>\n\n      <div\n        data-role=\"blog-comment-body\"\n        class=\"whitespace-pre-line text-sm leading-relaxed [&_a]:underline\"\n      >\n        {body_html(comment.body)}\n      </div>\n\n      <button\n        :if={@allow_posting && @current_user}\n        type=\"button\"\n        data-role=\"blog-comment-reply\"\n        phx-click=\"reply\"\n        phx-value-comment={comment.id}\n        phx-target={@myself}\n        class=\"mt-2 text-xs font-semibold text-[#5b57d6] hover:underline\"\n      >\n        {@reply_text}\n      </button>\n\n      <ul\n        :if={comment.replies != []}\n        data-role=\"blog-comment-replies\"\n        class=\"mt-3 flex flex-col gap-3 border-l-2 border-[#ecebe6] pl-4\"\n      >\n        <li\n          :for={reply <- comment.replies}\n          data-role=\"blog-comment\"\n          id={\"#{@id}-comment-#{reply.id}\"}\n        >\n          <div class=\"mb-1 flex flex-wrap items-baseline gap-2 text-xs text-[#8a877f]\">\n            <span data-role=\"blog-comment-author\" class=\"font-semibold text-[#1b1a18]\">\n              {reply.author}\n            </span>\n            <time data-role=\"blog-comment-date\" datetime={to_string(reply.at)}>\n              {Calendar.strftime(reply.at, \"%d %b %Y\")}\n            </time>\n          </div>\n\n          <div\n            data-role=\"blog-comment-body\"\n            class=\"whitespace-pre-line text-sm leading-relaxed [&_a]:underline\"\n          >\n            {body_html(reply.body)}\n          </div>\n        </li>\n      </ul>\n    </li>\n  </ul>\n\n  <button\n    :if={@has_more}\n    type=\"button\"\n    data-role=\"blog-comments-more\"\n    phx-click=\"more\"\n    phx-target={@myself}\n    class=\"mt-4 rounded-full border border-[#ecebe6] bg-white px-4 py-1.5 text-xs font-semibold text-[#6d6a63] hover:border-[#5b57d6] hover:text-[#5b57d6]\"\n  >\n    {@more_text}\n  </button>\n\n  <p\n    :if={@notice == \"pending\"}\n    data-role=\"blog-comments-pending\"\n    class=\"mt-4 rounded-[18px] border border-[#ecebe6] bg-[#f6f5f2] px-4 py-3 text-sm text-[#6d6a63]\"\n  >\n    {@pending_text}\n  </p>\n\n  <p\n    :if={@notice == \"error\"}\n    data-role=\"blog-comments-error\"\n    class=\"mt-4 rounded-[18px] border border-[#e8b7b1] bg-[#fdf6f5] px-4 py-3 text-sm text-[#c0473d]\"\n  >\n    {@error_text}\n  </p>\n\n  <form\n    :if={@allow_posting && @current_user && @post}\n    id={\"#{@id}-form\"}\n    data-role=\"blog-comments-form\"\n    phx-submit=\"submit\"\n    phx-target={@myself}\n    class=\"mt-4 flex flex-col gap-2\"\n  >\n    <p :if={@replying != \"\"} data-role=\"blog-comments-replying\" class=\"text-xs text-[#6d6a63]\">\n      {@reply_text}\n      <button\n        type=\"button\"\n        data-role=\"blog-comments-cancel\"\n        phx-click=\"cancel\"\n        phx-target={@myself}\n        class=\"ml-2 font-semibold text-[#5b57d6] hover:underline\"\n      >\n        {@cancel_text}\n      </button>\n    </p>\n\n    <textarea\n      name=\"content\"\n      rows=\"3\"\n      required\n      data-role=\"blog-comments-input\"\n      placeholder={@placeholder}\n      class=\"w-full rounded-[14px] border border-[#ecebe6] bg-white px-4 py-2 text-sm outline-none placeholder:text-[#a8a5a0] focus:border-[#5b57d6]\"\n    ></textarea>\n\n    <button\n      type=\"submit\"\n      data-role=\"blog-comments-submit\"\n      class=\"self-start rounded-full bg-[#5b57d6] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#4f4bcc]\"\n    >\n      {@submit_text}\n    </button>\n  </form>\n\n  <p\n    :if={@post && @allow_posting && is_nil(@current_user)}\n    data-role=\"blog-comments-login\"\n    class=\"mt-4 text-sm text-[#6d6a63]\"\n  >\n    <.link navigate={@login_href} class=\"font-semibold text-[#5b57d6] hover:underline\">\n      {@login_text}\n    </.link>\n  </p>\n</div>\n",
+      "body": null,
+      "attrs": [
+        {
+          "name": "slug",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The post whose comments these are, named outright. A page that carries the slug in its URL should leave this alone and use post_param instead."
+          }
+        },
+        {
+          "name": "params",
+          "type": "any",
+          "opts": {
+            "default": {},
+            "doc": "The page's own captures and query string, read for the one key post_param names — the post these comments belong to."
+          }
+        },
+        {
+          "name": "post_param",
+          "type": "any",
+          "opts": {
+            "default": "slug",
+            "doc": "The key in params holding the post's slug — slug for a page stored at /:lang/blog/:slug."
+          }
+        },
+        {
+          "name": "language",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "Only the conversation under a post written in this language is opened here — fa on a page stored at /fa/blog/:slug, so the English edition's comments are not published under the Persian URL, and nothing a reader writes there lands on the English post. Left empty, or all, the slug alone decides. Set it to whatever the article above it is set to."
+          }
+        },
+        {
+          "name": "per_page",
+          "type": "integer",
+          "opts": {
+            "default": 10,
+            "doc": "How many comments to show before the reader asks for more.",
+            "min": 1,
+            "max": 50
+          }
+        },
+        {
+          "name": "current_user",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The signed-in reader, handed down by the page as current_user. Without one the box is replaced by a link to sign in, and nothing can be written. A post locked to permissions the reader does not hold shows no conversation; without one, no locked post does."
+          }
+        },
+        {
+          "name": "allow_posting",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Let readers add to the conversation. Turned off, the comments are still shown."
+          }
+        },
+        {
+          "name": "login_href",
+          "type": "any",
+          "opts": {
+            "default": "/auth",
+            "doc": "Where a reader who is not signed in is sent."
+          }
+        },
+        {
+          "name": "heading",
+          "type": "string",
+          "opts": {
+            "default": "Comments",
+            "doc": "The words above the conversation. Left empty, no heading is drawn."
+          }
+        },
+        {
+          "name": "empty_text",
+          "type": "string",
+          "opts": {
+            "default": "No comments yet.",
+            "doc": "What a reader is told when nobody has written anything."
+          }
+        },
+        {
+          "name": "login_text",
+          "type": "string",
+          "opts": {
+            "default": "Sign in to comment",
+            "doc": "The words on the link for a reader who is not signed in."
+          }
+        },
+        {
+          "name": "pending_text",
+          "type": "string",
+          "opts": {
+            "default": "Thank you — your comment is waiting for a moderator.",
+            "doc": "What a reader is told once their comment is written. It is not public until it is approved."
+          }
+        },
+        {
+          "name": "error_text",
+          "type": "string",
+          "opts": {
+            "default": "Your comment could not be saved.",
+            "doc": "What a reader is told when the site refused their comment."
+          }
+        },
+        {
+          "name": "pinned_text",
+          "type": "string",
+          "opts": {
+            "default": "Pinned",
+            "doc": "The badge a pinned comment carries."
+          }
+        },
+        {
+          "name": "reply_text",
+          "type": "string",
+          "opts": {
+            "default": "Reply",
+            "doc": "The words on each comment's reply button."
+          }
+        },
+        {
+          "name": "cancel_text",
+          "type": "string",
+          "opts": {
+            "default": "Cancel",
+            "doc": "The words that take the box back to a comment of its own."
+          }
+        },
+        {
+          "name": "submit_text",
+          "type": "string",
+          "opts": {
+            "default": "Post comment",
+            "doc": "The words on the send button."
+          }
+        },
+        {
+          "name": "placeholder",
+          "type": "string",
+          "opts": {
+            "default": "Write a comment…",
+            "doc": "What the empty box says."
+          }
+        },
+        {
+          "name": "more_text",
+          "type": "string",
+          "opts": {
+            "default": "Load more",
+            "doc": "The words on the button that lengthens the conversation."
+          }
+        },
+        {
+          "name": "reader_text",
+          "type": "string",
+          "opts": {
+            "default": "Reader",
+            "doc": "What a commenter with no blogger profile on this site is called."
+          }
+        },
+        {
+          "name": "loading_text",
+          "type": "string",
+          "opts": {
+            "default": "Loading the conversation…",
+            "doc": "What a screen reader is told while the conversation is being read."
+          }
+        },
+        {
+          "name": "failed_text",
+          "type": "string",
+          "opts": {
+            "default": "The conversation could not be loaded.",
+            "doc": "What a reader is told when the conversation itself could not be read."
+          }
+        },
+        {
+          "name": "retry_text",
+          "type": "string",
+          "opts": {
+            "default": "Try again",
+            "doc": "The way out of a failed read."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "mount",
+          "args": "socket",
+          "code": "{:ok,\n Phoenix.Component.assign(socket,\n   asked: nil,\n   loading: true,\n   failed: false,\n   post: nil,\n   comments: [],\n   shown: 0,\n   has_more: false,\n   replying: \"\",\n   notice: \"\"\n )}\n"
+        },
+        {
+          "name": "update",
+          "args": "_assigns, socket",
+          "code": "{:ok, load(socket)}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"more\", _params, socket",
+          "code": "{:noreply,\n socket\n |> Phoenix.Component.assign(\n   notice: \"\",\n   shown: socket.assigns[:shown] + positive(socket.assigns[:per_page], 10)\n )\n |> load()}\n"
+        },
+        {
+          "name": "site_id",
+          "args": "",
+          "code": "__MODULE__.__component_information__([:private, :site_id])\n"
+        },
+        {
+          "name": "read_as",
+          "args": "visitor",
+          "code": "# THE VISITOR THE READ IS FOR, named so the conversation under a post locked to permissions it\n# does not hold is not read.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+        },
+        {
+          "name": "positive",
+          "args": "value, fallback",
+          "code": "cond do\n  is_integer(value) and value > 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number > 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
+        },
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "first_row",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: [found | _rest]}} -> found\n  {:ok, [found | _rest]} -> found\n  _nothing -> nil\nend\n"
+        },
+        {
+          "name": "rows",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: found}} -> {:ok, found}\n  {:ok, found} when is_list(found) -> {:ok, found}\n  {:error, reason} -> {:error, reason}\n  _unreadable -> {:error, :unreadable}\nend\n"
+        },
+        {
+          "name": "paged",
+          "args": "result",
+          "code": "# A TUPLE RATHER THAN A LIST, and that is what the error state is built on: folding an unreadable\n# answer into an empty one leaves a block telling a reader that nothing is published when the truth\n# is that nothing could be read.\ncase result do\n  {:ok, %{results: found, count: count}} -> {:ok, %{rows: found, total: count || length(found)}}\n  {:ok, found} when is_list(found) -> {:ok, %{rows: found, total: length(found)}}\n  {:error, reason} -> {:error, reason}\n  _unreadable -> {:error, :unreadable}\nend\n"
+        },
+        {
+          "name": "asked_slug",
+          "args": "assigns",
+          "code": "key = to_string(assigns[:post_param] || \"post\")\n\ncase assigns[:params] do\n  %{^key => asked} -> asked\n  _no_params_or_key -> assigns[:slug]\nend\n"
+        },
+        {
+          "name": "parent_id",
+          "args": "value",
+          "code": "case trimmed(value) do\n  \"\" -> nil\n  id -> id\nend\n"
+        },
+        {
+          "name": "body_html",
+          "args": "content",
+          "code": "case is_binary(content) do\n  true -> Phoenix.HTML.raw(HtmlSanitizeEx.basic_html(content))\n  false -> Phoenix.HTML.raw(\"\")\nend\n"
+        },
+        {
+          "name": "only_language",
+          "args": "query, wanted",
+          "code": "# THE SAME EDITION THE ARTICLE ABOVE THIS ONE IS SERVING. A slug belongs to one edition, so\n# without this /fa/blog/<english-slug> published the English article's conversation underneath a\n# detail block correctly saying that post is not there — and offered a signed-in reader a box that\n# writes onto the English post. Left empty the component sits on a page that does not address\n# languages at all, and the slug decides on its own.\nrequire Ash.Query\n\ncase trimmed(wanted) do\n  \"\" -> query\n  \"all\" -> query\n  code -> Ash.Query.filter(query, language == ^code)\nend\n"
+        },
+        {
+          "name": "post_row",
+          "args": "slug, language, visitor",
+          "code": "require Ash.Query\n\ncase slug in [nil, \"\"] do\n  true ->\n    nil\n\n  false ->\n    MishkaBlog.BlogPost\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(slug == ^to_string(slug))\n    |> only_language(language)\n    |> Ash.Query.select([:id, :title, :slug])\n    |> Ash.read(tenant: site_id(), page: [limit: 1])\n    |> first_row()\nend\n"
+        },
+        {
+          "name": "author_names",
+          "args": "comments",
+          "code": "require Ash.Query\n\nids =\n  comments\n  |> Enum.flat_map(fn comment -> [comment | approved_replies(comment)] end)\n  |> Enum.map(& &1.author_id)\n  |> Enum.reject(&is_nil/1)\n  |> Enum.uniq()\n\n# A HUNDRED AT A TIME, which is all `:public_list` will hand back; a bigger ask is shrunk to that\n# cap instead of refused, and every commenter past it would have been called by the anonymous word.\nids\n|> Enum.chunk_every(100)\n|> Enum.flat_map(fn wanted ->\n  MishkaBlog.Blogger\n  |> Ash.Query.for_read(:public_list, %{}, authorize?: false)\n  |> Ash.Query.filter(user_id in ^wanted)\n  |> Ash.Query.select([:user_id, :display_name])\n  |> Ash.read(tenant: site_id(), page: [limit: 100])\n  |> rows()\n  |> case do\n    # A NAME THAT COULD NOT BE READ IS A READER, not a conversation nobody can see.\n    {:ok, found} -> found\n    {:error, _unreadable} -> []\n  end\nend)\n|> Map.new(&{&1.user_id, &1.display_name})\n"
+        },
+        {
+          "name": "approved_replies",
+          "args": "comment",
+          "code": "case comment.replies do\n  replies when is_list(replies) ->\n    replies\n    |> Enum.filter(&(&1.status == :approved))\n    |> Enum.sort_by(& &1.inserted_at, DateTime)\n\n  _not_loaded ->\n    []\nend\n"
+        },
+        {
+          "name": "shape",
+          "args": "comment, names, reader, replies",
+          "code": "%{\n  id: comment.id,\n  author: Map.get(names, comment.author_id) || reader,\n  at: comment.inserted_at,\n  pinned: comment.is_pinned == true,\n  body: comment.rendered_content,\n  replies: replies\n}\n"
+        },
+        {
+          "name": "top_level",
+          "args": "post_id, wanted, visitor",
+          "code": "require Ash.Query\n\n# ONE CAPPED PAGE AT A TIME. `:approved_by_post` hands back at most 100 rows and Ash shrinks a\n# bigger ask to that cap rather than refusing it, so asking for the whole conversation at once made\n# every comment past the hundredth unreachable while \"load more\" stayed on the page for ever.\nEnum.reduce_while(Stream.iterate(0, &(&1 + 100)), {:ok, {[], 0}}, fn offset, {:ok, {gathered, counted}} ->\n  ask = min(wanted - offset, 100)\n\n  MishkaBlog.Comment\n  |> Ash.Query.for_read(:approved_by_post, %{post_id: post_id}, read_as(visitor))\n  |> Ash.Query.filter(is_nil(parent_comment_id))\n  |> Ash.Query.sort(is_pinned: :desc, inserted_at: :asc)\n  |> Ash.Query.load([:rendered_content, replies: [:rendered_content]])\n  |> Ash.read(\n    tenant: site_id(),\n    page: [limit: ask, offset: offset, count: offset == 0]\n  )\n  |> paged()\n  |> case do\n    {:error, reason} ->\n      {:halt, {:error, reason}}\n\n    {:ok, %{rows: page, total: total}} ->\n      rows = gathered ++ page\n\n      whole =\n        case offset do\n          0 -> total\n          _a_later_page -> counted\n        end\n\n      case length(rows) < wanted and length(page) == ask do\n        true -> {:cont, {:ok, {rows, whole}}}\n        false -> {:halt, {:ok, {rows, whole}}}\n      end\n  end\nend)\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"reply\", %{\"comment\" => id}, socket",
+          "code": "{:noreply, Phoenix.Component.assign(socket, replying: to_string(id), notice: \"\")}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"cancel\", _params, socket",
+          "code": "{:noreply, Phoenix.Component.assign(socket, replying: \"\", notice: \"\")}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"submit\", %{\"content\" => content}, socket",
+          "code": "assigns = socket.assigns\n\nwritten =\n  case {assigns[:current_user], assigns[:post], assigns[:allow_posting]} do\n    {nil, _post, _posting} ->\n      :error\n\n    {_actor, nil, _posting} ->\n      :error\n\n    {_actor, _post, false} ->\n      :error\n\n    {actor, post, _posting} ->\n      MishkaBlog.Comment\n      |> Ash.Changeset.for_create(\n        :create_public,\n        %{\n          post_id: post.id,\n          content: to_string(content),\n          parent_comment_id: parent_id(assigns[:replying])\n        },\n        tenant: site_id(),\n        actor: actor\n      )\n      |> Ash.create(actor: actor, authorize?: true)\n      |> case do\n        {:ok, _comment} -> :pending\n        _refused -> :error\n      end\n  end\n\n# THE CONVERSATION IS READ AGAIN EVEN THOUGH NOTHING THIS BLOCK ASKS FOR HAS CHANGED. A comment was\n# just written, and on a site whose moderation approves them on arrival it belongs on the page — so\n# the signature is cleared, which is the one thing that makes `load/1` read anything.\n{:noreply,\n socket\n |> Phoenix.Component.assign(\n   notice: to_string(written),\n   replying: \"\",\n   asked: nil\n )\n |> load()}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"retry\", _params, socket",
+          "code": "{:noreply,\n socket\n |> Phoenix.Component.assign(:asked, nil)\n |> load()}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":comments, {:ok, result}, socket",
+          "code": "{:noreply, arrived(socket, result)}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":comments, {:exit, _reason}, socket",
+          "code": "# A READ THAT DIED TAKES THE BLOCK'S OWN STATE WITH IT AND NOTHING ELSE. The task is unlinked\n# before it re-raises — see `Phoenix.LiveView.Async.do_async/5` — so the page around this block is\n# still standing, and this is what it draws instead of the list.\n{:noreply, Phoenix.Component.assign(socket, loading: false, failed: true)}\n"
+        },
+        {
+          "name": "site_name",
+          "args": "",
+          "code": "# THE SITE'S NAME, NOT ITS ID, because that is what a component is addressed by: the runtime hashes\n# a module out of (component name, site name). Every `<.component …/>` below draws a sibling of this\n# one, which lives on the same site as this one and nowhere else.\n__MODULE__.__component_information__([:private, :site])\n"
+        },
+        {
+          "name": "asked",
+          "args": "assigns",
+          "code": "per_page = positive(assigns[:per_page], 10)\n\n%{\n  visitor: assigns[:current_user],\n  slug: to_string(asked_slug(assigns) || \"\"),\n  language: trimmed(assigns[:language]),\n  shown: max(positive(assigns[:shown], per_page), per_page),\n  reader: to_string(assigns[:reader_text])\n}\n"
+        },
+        {
+          "name": "wanted?",
+          "args": "asked",
+          "code": "# WHETHER THERE IS A CONVERSATION TO WAIT FOR AT ALL. A page with no post named in its URL draws\n# nothing here, skeleton included.\nis_map(asked) and asked.slug != \"\"\n"
+        },
+        {
+          "name": "fetch",
+          "args": "asked",
+          "code": "case post_row(asked.slug, asked.language, asked.visitor) do\n  nil ->\n    {:ok, %{post: nil, comments: [], shown: asked.shown, has_more: false}}\n\n  post ->\n    with {:ok, {found, total}} <- top_level(post.id, asked.shown, asked.visitor) do\n      names = author_names(found)\n\n      comments =\n        Enum.map(found, fn comment ->\n          replies =\n            comment\n            |> approved_replies()\n            |> Enum.map(&shape(&1, names, asked.reader, []))\n\n          shape(comment, names, asked.reader, replies)\n        end)\n\n      {:ok,\n       %{\n         post: post,\n         comments: comments,\n         shown: asked.shown,\n         has_more: total > length(comments)\n       }}\n    end\nend\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:ok, data}",
+          "code": "Phoenix.Component.assign(socket,\n  loading: false,\n  failed: false,\n  post: data.post,\n  comments: data.comments,\n  shown: data.shown,\n  has_more: data.has_more\n)\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:error, _reason}",
+          "code": "Phoenix.Component.assign(socket, loading: false, failed: true, comments: [], has_more: false)\n"
+        },
+        {
+          "name": "read_now",
+          "args": "asked",
+          "code": "fetch(asked)\nrescue\n  error -> {:error, error}\ncatch\n  kind, reason -> {:error, {kind, reason}}\n"
+        },
+        {
+          "name": "cold?",
+          "args": "socket",
+          "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
+        },
+        {
+          "name": "load",
+          "args": "socket",
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> Phoenix.LiveView.start_async(:comments, fn -> fetch(asked) end)\n    end\nend\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [
+        "blog-notice"
+      ],
+      "examples": [],
+      "extra": {
+        "icon": "comment",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-post-card",
+      "description": "A function component: one post, as a card or as a line in a narrow list. Drawn by blog-post-list and by blog-featured-posts, which is why it is a component and not markup inside either of them.",
+      "type": "media",
+      "format": "heex",
+      "stateful": false,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<article\n  :if={@post && trimmed(@variant) != \"compact\"}\n  {@rest}\n  data-role=\"blog-list-item\"\n  class=\"flex h-full flex-col overflow-hidden rounded-[18px] border border-[#ecebe6] bg-white\"\n>\n  <img\n    :if={@post.featured_image_url}\n    src={@post.featured_image_url}\n    alt={@post.title}\n    class=\"h-44 w-full object-cover\"\n  />\n\n  <div\n    :if={!@post.featured_image_url}\n    data-role=\"blog-list-nocover\"\n    class=\"flex h-44 items-center justify-center bg-[#f6f5f2] text-3xl font-black text-[#d5d3cc]\"\n  >\n    {String.upcase(String.slice(to_string(@post.title), 0, 1))}\n  </div>\n\n  <div class=\"flex flex-1 flex-col gap-2 p-4\">\n    <div class=\"flex items-start justify-between gap-2\">\n      <.link\n        navigate={@navigate}\n        patch={@patch}\n        data-role=\"blog-list-title\"\n        class=\"text-base font-semibold leading-tight hover:underline\"\n      >\n        {@post.title}\n      </.link>\n\n      <span\n        :if={@post.featured}\n        data-role=\"blog-list-featured\"\n        class=\"flex-none rounded-full bg-[#fbf1dc] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#8a5514]\"\n      >\n        {@featured_text}\n      </span>\n    </div>\n\n    <p\n      :if={@show_excerpt and @post.excerpt}\n      data-role=\"blog-list-excerpt\"\n      class=\"text-sm leading-relaxed text-[#6d6a63]\"\n    >\n      {@post.excerpt}\n    </p>\n\n    <.component\n      component_name=\"blog-post-meta\"\n      site={site_name()}\n      published_at={@post.published_at}\n      show_date={@show_date}\n      show_read={@show_read}\n      navigate={@navigate}\n      patch={@patch}\n      read_text={@read_text}\n    />\n  </div>\n</article>\n\n<div :if={@post && trimmed(@variant) == \"compact\"} {@rest} data-role=\"blog-list-item\">\n  <.link\n    navigate={@navigate}\n    patch={@patch}\n    data-role=\"blog-list-title\"\n    class=\"block text-sm font-semibold leading-snug hover:underline\"\n  >\n    {@post.title}\n  </.link>\n\n  <.component\n    component_name=\"blog-post-meta\"\n    site={site_name()}\n    variant=\"compact\"\n    published_at={@post.published_at}\n    show_date={@show_date}\n    show_read={false}\n  />\n</div>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "post",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The post to draw, as the block above read it. Nothing is drawn without one — this component holds no query of its own."
+          }
+        },
+        {
+          "name": "variant",
+          "type": "string",
+          "opts": {
+            "default": "grid",
+            "doc": "grid draws a card with its cover and summary; compact draws a title and a date, which is what a sidebar wants.",
+            "values": [
+              "grid",
+              "compact"
+            ]
+          }
+        },
+        {
+          "name": "show_excerpt",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the post's summary under its title."
+          }
+        },
+        {
+          "name": "show_date",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the day it was published."
+          }
+        },
+        {
+          "name": "show_read",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the card's own way into the post. The block above knows whether its links lead anywhere, so it says."
+          }
+        },
+        {
+          "name": "navigate",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "Where the title goes as a page of its own."
+          }
+        },
+        {
+          "name": "patch",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "Where the title goes on the page it is already on."
+          }
+        },
+        {
+          "name": "read_text",
+          "type": "string",
+          "opts": {
+            "default": "Read",
+            "doc": "The words on the card's own link."
+          }
+        },
+        {
+          "name": "featured_text",
+          "type": "string",
+          "opts": {
+            "default": "Featured",
+            "doc": "The badge a featured post carries."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "site_name",
+          "args": "",
+          "code": "# THE SITE'S NAME, NOT ITS ID, because that is what a component is addressed by: the runtime hashes\n# a module out of (component name, site name). Every `<.component …/>` below draws a sibling of this\n# one, which lives on the same site as this one and nowhere else.\n__MODULE__.__component_information__([:private, :site])\n"
+        },
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [
+        "blog-post-meta"
+      ],
+      "examples": [],
+      "extra": {
+        "icon": "card",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-post-meta",
+      "description": "A function component: the line under a post — the day it was published and the way into it. Drawn by blog-post-card in both of its shapes, so a site restyles a date once.",
+      "type": "media",
+      "format": "heex",
+      "stateful": false,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div\n  :if={trimmed(@variant) != \"compact\"}\n  {@rest}\n  class=\"mt-auto flex items-center justify-between gap-3 border-t border-[#ecebe6] pt-3\"\n>\n  <time\n    :if={@show_date and @published_at}\n    data-role=\"blog-list-date\"\n    datetime={to_string(@published_at)}\n    class=\"text-xs text-[#8a877f]\"\n  >\n    {Calendar.strftime(@published_at, \"%d %b %Y\")}\n  </time>\n\n  <.link\n    :if={@show_read}\n    navigate={@navigate}\n    patch={@patch}\n    data-role=\"blog-list-read\"\n    class=\"ml-auto inline-flex items-center gap-1 rounded-full border border-[#ecebe6] px-3 py-1 text-xs font-semibold text-[#5b57d6] hover:bg-[#f2f1fc]\"\n  >\n    {@read_text} <span aria-hidden=\"true\">&rarr;</span>\n  </.link>\n</div>\n\n<time\n  :if={trimmed(@variant) == \"compact\" and @show_date and @published_at}\n  {@rest}\n  data-role=\"blog-list-date\"\n  datetime={to_string(@published_at)}\n  class=\"mt-0.5 block text-xs text-[#8a877f]\"\n>\n  {Calendar.strftime(@published_at, \"%d %b %Y\")}\n</time>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "variant",
+          "type": "string",
+          "opts": {
+            "default": "grid",
+            "doc": "grid draws the line across the foot of a card; compact draws the date alone, under a title in a narrow list.",
+            "values": [
+              "grid",
+              "compact"
+            ]
+          }
+        },
+        {
+          "name": "published_at",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The day the post was published."
+          }
+        },
+        {
+          "name": "show_date",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the date."
+          }
+        },
+        {
+          "name": "show_read",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the way into the post. The block above knows whether its links lead anywhere, so it says."
+          }
+        },
+        {
+          "name": "navigate",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "Where the link goes as a page of its own."
+          }
+        },
+        {
+          "name": "patch",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "Where the link goes on the page it is already on."
+          }
+        },
+        {
+          "name": "read_text",
+          "type": "string",
+          "opts": {
+            "default": "Read",
+            "doc": "The words on the link."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [],
+      "examples": [],
+      "extra": {
+        "icon": "calendar",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-term-row",
+      "description": "A function component: a labelled row of linked words — the categories a post is filed under, the tags it carries, the languages it was published in. blog-post-detail draws all three with it.",
+      "type": "navigations",
+      "format": "heex",
+      "stateful": false,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div\n  :if={@terms != []}\n  {@rest}\n  data-role={@role}\n  class={[\n    \"flex flex-wrap items-center gap-2 text-xs\",\n    (@spaced && \"mt-6\") || \"mt-3\"\n  ]}\n>\n  <span :if={trimmed(@label) != \"\"} class=\"text-[#8a877f]\">{@label}</span>\n\n  <.link\n    :for={term <- @terms}\n    :if={term[:href] || term[:patch]}\n    navigate={term[:href]}\n    patch={term[:patch]}\n    hreflang={term[:hreflang]}\n    data-role={@item_role}\n    class={[\n      \"rounded-full border border-[#ecebe6] px-3 py-1 font-semibold text-[#5b57d6] hover:bg-[#f2f1fc]\",\n      @uppercase && \"uppercase\"\n    ]}\n  >\n    {term.name}\n  </.link>\n\n  <span\n    :for={term <- @terms}\n    :if={is_nil(term[:href]) and is_nil(term[:patch])}\n    data-role={@item_role}\n    class={[\n      \"rounded-full border border-[#ecebe6] px-3 py-1 font-semibold text-[#6d6a63]\",\n      @uppercase && \"uppercase\"\n    ]}\n  >\n    {term.name}\n  </span>\n</div>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "label",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "The words in front of the row. Left empty, none are drawn."
+          }
+        },
+        {
+          "name": "terms",
+          "type": "any",
+          "opts": {
+            "default": [],
+            "doc": "What to draw, as the block above prepared it: a list of maps carrying name, href, patch and hreflang. A term with an href leads away, one with a patch opens beside this page, and one with neither is drawn as a word."
+          }
+        },
+        {
+          "name": "role",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "The data-role the row itself carries, so the block around it names the row as well as its words — blog-detail-tags, say."
+          }
+        },
+        {
+          "name": "item_role",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "The data-role each word carries, so the block around it names its own rows — blog-detail-tag, say."
+          }
+        },
+        {
+          "name": "uppercase",
+          "type": "boolean",
+          "opts": {
+            "default": false,
+            "doc": "Draw each word in capitals, which is what a row of language codes wants."
+          }
+        },
+        {
+          "name": "spaced",
+          "type": "boolean",
+          "opts": {
+            "default": false,
+            "doc": "Leave a wider gap above the row, which is what the first row under an article wants."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [],
+      "examples": [],
+      "extra": {
+        "icon": "tag",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-pager",
+      "description": "A function component: the pager under a list — first, previous, where the reader is, next, last. Written as links when the list has a URL of its own and as buttons aimed at the block above it when it has not.",
+      "type": "navigations",
+      "format": "heex",
+      "stateful": false,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<nav\n  :if={@pages > 1}\n  {@rest}\n  data-role={@role}\n  aria-label=\"Pages\"\n  class=\"mt-8 flex flex-wrap items-center justify-center gap-2\"\n>\n  <.link\n    :if={trimmed(@base) != \"\"}\n    patch={page_href(@base, @params, @page_param, 1)}\n    data-role=\"blog-list-first\"\n    class={[\n      \"rounded-full border border-[#ecebe6] bg-white px-3 py-1 text-xs font-semibold\",\n      @page <= 1 && \"pointer-events-none opacity-40\"\n    ]}\n  >\n    {@first_text}\n  </.link>\n  <.link\n    :if={trimmed(@base) != \"\"}\n    patch={page_href(@base, @params, @page_param, @page - 1)}\n    data-role=\"blog-list-prev\"\n    class={[\n      \"rounded-full border border-[#ecebe6] bg-white px-3 py-1 text-xs font-semibold\",\n      @page <= 1 && \"pointer-events-none opacity-40\"\n    ]}\n  >\n    {@previous_text}\n  </.link>\n\n  <button\n    :if={trimmed(@base) == \"\"}\n    type=\"button\"\n    data-role=\"blog-list-first\"\n    disabled={@page <= 1}\n    phx-click=\"page\"\n    phx-value-to=\"1\"\n    phx-target={@target}\n    class=\"rounded-full border border-[#ecebe6] bg-white px-3 py-1 text-xs font-semibold disabled:opacity-40\"\n  >\n    {@first_text}\n  </button>\n  <button\n    :if={trimmed(@base) == \"\"}\n    type=\"button\"\n    data-role=\"blog-list-prev\"\n    disabled={@page <= 1}\n    phx-click=\"page\"\n    phx-value-to={@page - 1}\n    phx-target={@target}\n    class=\"rounded-full border border-[#ecebe6] bg-white px-3 py-1 text-xs font-semibold disabled:opacity-40\"\n  >\n    {@previous_text}\n  </button>\n\n  <span data-role=\"blog-list-position\" class=\"px-3 text-xs text-[#8a877f]\">{@page} / {@pages}</span>\n\n  <button\n    :if={trimmed(@base) == \"\"}\n    type=\"button\"\n    data-role=\"blog-list-next\"\n    disabled={@page >= @pages}\n    phx-click=\"page\"\n    phx-value-to={@page + 1}\n    phx-target={@target}\n    class=\"rounded-full border border-[#ecebe6] bg-white px-3 py-1 text-xs font-semibold disabled:opacity-40\"\n  >\n    {@next_text}\n  </button>\n  <button\n    :if={trimmed(@base) == \"\"}\n    type=\"button\"\n    data-role=\"blog-list-last\"\n    disabled={@page >= @pages}\n    phx-click=\"page\"\n    phx-value-to={@pages}\n    phx-target={@target}\n    class=\"rounded-full border border-[#ecebe6] bg-white px-3 py-1 text-xs font-semibold disabled:opacity-40\"\n  >\n    {@last_text}\n  </button>\n\n  <.link\n    :if={trimmed(@base) != \"\"}\n    patch={page_href(@base, @params, @page_param, @page + 1)}\n    data-role=\"blog-list-next\"\n    class={[\n      \"rounded-full border border-[#ecebe6] bg-white px-3 py-1 text-xs font-semibold\",\n      @page >= @pages && \"pointer-events-none opacity-40\"\n    ]}\n  >\n    {@next_text}\n  </.link>\n  <.link\n    :if={trimmed(@base) != \"\"}\n    patch={page_href(@base, @params, @page_param, @pages)}\n    data-role=\"blog-list-last\"\n    class={[\n      \"rounded-full border border-[#ecebe6] bg-white px-3 py-1 text-xs font-semibold\",\n      @page >= @pages && \"pointer-events-none opacity-40\"\n    ]}\n  >\n    {@last_text}\n  </.link>\n</nav>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "page",
+          "type": "integer",
+          "opts": {
+            "default": 1,
+            "doc": "The page being read."
+          }
+        },
+        {
+          "name": "pages",
+          "type": "integer",
+          "opts": {
+            "default": 1,
+            "doc": "How many there are. Under two, nothing is drawn."
+          }
+        },
+        {
+          "name": "base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The path the pager writes its links to. Left empty it draws buttons and sends the click to the block above instead."
+          }
+        },
+        {
+          "name": "params",
+          "type": "any",
+          "opts": {
+            "default": {},
+            "doc": "The page's own query string, handed straight through, so a link this component writes keeps every key the page already had."
+          }
+        },
+        {
+          "name": "page_param",
+          "type": "any",
+          "opts": {
+            "default": "page",
+            "doc": "The query key the page number is written under."
+          }
+        },
+        {
+          "name": "role",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "The data-role the pager carries, so the block around it names its own — blog-list-pager, say."
+          }
+        },
+        {
+          "name": "target",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "Who a button sends its click to — @myself, from the block that drew this."
+          }
+        },
+        {
+          "name": "first_text",
+          "type": "string",
+          "opts": {
+            "default": "First",
+            "doc": "The jump to the first page."
+          }
+        },
+        {
+          "name": "previous_text",
+          "type": "string",
+          "opts": {
+            "default": "Previous",
+            "doc": "The step back."
+          }
+        },
+        {
+          "name": "next_text",
+          "type": "string",
+          "opts": {
+            "default": "Next",
+            "doc": "The step forward."
+          }
+        },
+        {
+          "name": "last_text",
+          "type": "string",
+          "opts": {
+            "default": "Last",
+            "doc": "The jump to the last page."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "href",
+          "args": "base, params, key, value",
+          "code": "query =\n  params\n  |> case do\n    map when is_map(map) -> map\n    _not_a_map -> %{}\n  end\n  |> Map.put(to_string(key), to_string(value))\n  |> URI.encode_query()\n\nto_string(base) <> \"?\" <> query\n"
+        },
+        {
+          "name": "page_href",
+          "args": "base, params, key, page",
+          "code": "href(base, params, key, max(page, 1))\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [],
+      "examples": [],
+      "extra": {
+        "icon": "pagination",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-notice",
+      "description": "A function component: the box a blog block draws in place of its rows — a skeleton while it loads, a line when there is nothing, a line and a way out when the read failed. Every block that loads draws its three states with it.",
+      "type": "media",
+      "format": "heex",
+      "stateful": false,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div\n  :if={trimmed(@tone) == \"loading\"}\n  {@rest}\n  data-role={@role}\n  data-tone=\"loading\"\n  aria-busy=\"true\"\n  class=\"animate-pulse rounded-[18px] border border-[#ecebe6] bg-white px-4 py-5\"\n>\n  <div class=\"h-3 w-1/3 rounded-full bg-[#ecebe6]\"></div>\n  <div class=\"mt-3 h-3 w-2/3 rounded-full bg-[#f2f1ec]\"></div>\n  <div class=\"mt-3 h-3 w-1/2 rounded-full bg-[#f2f1ec]\"></div>\n  <span class=\"sr-only\">{@text}</span>\n</div>\n\n<div\n  :if={trimmed(@tone) == \"error\"}\n  {@rest}\n  data-role={@role}\n  data-tone=\"error\"\n  class=\"rounded-[18px] border border-[#f0d6d6] bg-[#fdf7f7] px-4 py-6 text-center text-sm text-[#9a3b3b]\"\n>\n  {@text}\n\n  <button\n    :if={@target}\n    type=\"button\"\n    data-role=\"blog-notice-retry\"\n    phx-click=\"retry\"\n    phx-target={@target}\n    class=\"ml-2 rounded-full border border-[#e2bebe] px-3 py-1 text-xs font-semibold hover:bg-[#f9eded]\"\n  >\n    {@retry_text}\n  </button>\n</div>\n\n<p\n  :if={trimmed(@tone) not in [\"loading\", \"error\"] and not @quiet}\n  {@rest}\n  data-role={@role}\n  data-tone=\"empty\"\n  class=\"rounded-[18px] border border-dashed border-[#ecebe6] bg-white px-4 py-6 text-center text-sm text-[#6d6a63]\"\n>\n  {@text}\n</p>\n\n<p\n  :if={trimmed(@tone) not in [\"loading\", \"error\"] and @quiet}\n  {@rest}\n  data-role={@role}\n  data-tone=\"empty\"\n  class=\"text-sm text-[#8a877f]\"\n>\n  {@text}\n</p>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "tone",
+          "type": "string",
+          "opts": {
+            "default": "empty",
+            "doc": "loading draws a pulsing skeleton, empty a dashed box, error a red box with a way to ask again.",
+            "values": [
+              "loading",
+              "empty",
+              "error"
+            ]
+          }
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "What the box says. On a skeleton it is read out to a screen reader and drawn to nobody else."
+          }
+        },
+        {
+          "name": "role",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "The data-role the box carries, so the block around it names its own states — blog-list-empty, say."
+          }
+        },
+        {
+          "name": "quiet",
+          "type": "boolean",
+          "opts": {
+            "default": false,
+            "doc": "Draw the empty line as plain words rather than as a box, which is what a line under a heading wants."
+          }
+        },
+        {
+          "name": "target",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "Who the Try again button sends its click to — @myself, from the block that drew this. Left empty, no button is drawn."
+          }
+        },
+        {
+          "name": "retry_text",
+          "type": "string",
+          "opts": {
+            "default": "Try again",
+            "doc": "What the way out of an error says."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [],
+      "examples": [],
+      "extra": {
+        "icon": "info",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    }
+  ],
+  "icons": [],
+  "js_hooks": [],
+  "stylesheets": []
+}
