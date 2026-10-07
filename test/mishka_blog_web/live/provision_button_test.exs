@@ -19,7 +19,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
 
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
-  alias MishkaCmsCore.Runtime.Page
+  alias MishkaCmsCore.Runtime.{ExtensionProvision, Page}
   alias MishkaCmsCore.Runtime.States.SiteState
 
   require Ash.Query
@@ -365,23 +365,18 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
     end
   end
 
-  # EVERY NAME OF WHAT THE BUTTON WRITES: pages and the page builder's snippet, components, and the
-  # site read. Holding all three offers it; missing any one does not.
+  # EVERY NAME OF WHAT THE BUTTON WRITES: pages and the page builder's snippet, components, the
+  # bundle's stylesheet, and the site read — read off the bundle, as the button reads them. Holding
+  # all of them offers it; missing any one does not.
   describe "who is offered the control" do
-    @provision [
-      "admin:dashboard:runtime:page",
-      "admin:dashboard:runtime:component",
-      "admin:dashboard:runtime:site"
-    ]
-
     # OFFERED IS NOT ENOUGH: the button has to finish for whoever it is offered to, so the holder
     # presses it, as a master and as an admin of the site alone.
     for {who, master?} <- [{"a master", true}, {"a site admin", false}] do
       @master? master?
 
-      test "#{who} holding the three names, who sets the site up", %{conn: conn, site: site} do
+      test "#{who} holding every name, who sets the site up", %{conn: conn, site: site} do
         admin =
-          create_user_with_permissions!(["admin:dashboard:blog:post" | @provision],
+          create_user_with_permissions!(["admin:dashboard:blog:post" | provision_names()],
             site_id: if(@master?, do: nil, else: site.id)
           )
 
@@ -398,10 +393,12 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       end
     end
 
-    test "not a holder of two of them, who is refused the event too", %{conn: conn, site: site} do
-      for missing <- @provision do
+    test "missing any one of them, and refused the event too", %{conn: conn, site: site} do
+      for missing <- provision_names() do
         admin =
-          create_user_with_permissions!(["admin:dashboard:blog:post" | @provision -- [missing]])
+          create_user_with_permissions!([
+            "admin:dashboard:blog:post" | provision_names() -- [missing]
+          ])
 
         {:ok, view, _html} = live(log_in(conn, admin), "/admin/dashboard/blog")
 
@@ -413,6 +410,8 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       end
     end
   end
+
+  defp provision_names, do: ExtensionProvision.required(Provision.manifest())
 
   describe "a tenant admin" do
     test "sets up their own site, whatever the event asks for", %{conn: conn, site: site} do

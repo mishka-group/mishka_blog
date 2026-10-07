@@ -1506,6 +1506,9 @@ defmodule MishkaBlog.BlogPost do
         changeset
       end
 
+      # Highlights the code blocks of the sanitized content, before the row is written.
+      change MishkaBlog.Resources.Changes.HighlightCode
+
       description "Creates blog post for tenant users - requires tenant context, auto-assigns site_id and language_group_id for master posts"
     end
 
@@ -1595,6 +1598,9 @@ defmodule MishkaBlog.BlogPost do
 
         changeset
       end
+
+      # Highlights the code blocks of the sanitized content, before the row is written.
+      change MishkaBlog.Resources.Changes.HighlightCode
 
       description "Creates blog post for master users - bypasses multi-tenancy, requires explicit site_id, auto-assigns language_group_id for master posts"
     end
@@ -1700,6 +1706,9 @@ defmodule MishkaBlog.BlogPost do
         changeset
       end
 
+      # Highlights the code blocks of the sanitized content, before the row is written.
+      change MishkaBlog.Resources.Changes.HighlightCode
+
       description "Updates blog post for tenant users - requires tenant context, prevents site_id changes"
     end
 
@@ -1799,6 +1808,9 @@ defmodule MishkaBlog.BlogPost do
 
         changeset
       end
+
+      # Highlights the code blocks of the sanitized content, before the row is written.
+      change MishkaBlog.Resources.Changes.HighlightCode
     end
 
     read :published do
@@ -2425,6 +2437,9 @@ defmodule MishkaBlog.BlogPost do
               version: MishkaBlog.BlogPost.Version,
               fields: List.delete(@admin_fields, :site_id),
               label: dgettext_noop("errors", "blog post")}
+
+      # A version written before code was highlighted comes back highlighted.
+      change MishkaBlog.Resources.Changes.HighlightCode
     end
 
     action :restore_version_api, :struct do
@@ -2499,6 +2514,9 @@ defmodule MishkaBlog.BlogPost do
               version: MishkaBlog.BlogPost.Version,
               fields: List.delete(@admin_fields, :site_id),
               label: dgettext_noop("errors", "blog post")}
+
+      # A version written before code was highlighted comes back highlighted.
+      change MishkaBlog.Resources.Changes.HighlightCode
     end
 
     action :master_restore_version_api, :struct do

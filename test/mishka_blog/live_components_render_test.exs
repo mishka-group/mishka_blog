@@ -1364,6 +1364,44 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       refute body =~ "onerror", "an event handler attribute survived into the page"
     end
 
+    # A POST'S CODE IS STORED HIGHLIGHTED, and the body is scrubbed again on its way to the page.
+    # The token classes have to come through that, or the kit's stylesheet has nothing to colour.
+    test "draws a highlighted code block with every token class it was stored with", %{site: site} do
+      editor = create_user_with_permissions!(["admin:dashboard:blog:post"], site_id: site.id)
+
+      post =
+        MishkaBlog.BlogPost
+        |> Ash.Changeset.for_create(
+          :create,
+          %{
+            title: "Code",
+            slug: "code",
+            status: :published,
+            language: "en",
+            content:
+              ~S|<pre><code class="language-elixir">def hello(name), do: "Hi #{name}"</code></pre>|
+          },
+          actor: editor,
+          tenant: site.id
+        )
+        |> Ash.create!()
+
+      {:ok, view, _html} = mount_page(site, "blog-post-detail", %{slug: post.slug})
+
+      token_classes = fn html, scope ->
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query(scope <> " pre.highlight > code.language-elixir > span")
+        |> LazyHTML.attribute("class")
+      end
+
+      stored = token_classes.(post.content, "")
+      drawn = token_classes.(render_async(view, @async), ~s([data-role="blog-detail-body"]))
+
+      assert "kd" in stored and "nf" in stored and "s" in stored
+      assert drawn == stored
+    end
+
     test "reads only its own site's posts", %{site: site} do
       other = create_site!(name: "elsewhere#{System.unique_integer([:positive])}")
       [theirs | _rest] = publish!(other, ["Theirs"])

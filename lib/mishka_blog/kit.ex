@@ -23,6 +23,14 @@ defmodule MishkaBlog.Kit do
   paged list and by the featured strip, the notice by every block but the search box — and an admin
   who restyles a card restyles it once.
 
+  ### The stylesheet
+
+  `blog-code-highlight` colours the code blocks in a post's body. A post is stored with its code
+  already highlighted — `MishkaBlog.Resources.Changes.HighlightCode` does it when the post is
+  written — as `<pre class="highlight"><code class="language-x">` with a `<span>` per token, and the
+  sheet colours the token classes Makeup emits, in its Monokai style. Installed with the components,
+  per site, as a `:base` stylesheet, so a site's own `:custom` rows still win over it.
+
   ## What was split, and what was left alone
 
   `blog-post-list` used to draw the featured strip as well, through a `featured_only` switch. The
