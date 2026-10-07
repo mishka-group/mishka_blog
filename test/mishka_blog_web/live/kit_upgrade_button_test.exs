@@ -18,7 +18,7 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
 
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
-  alias MishkaCmsCore.Runtime.Component
+  alias MishkaCmsCore.Runtime.{Component, ExtensionProvision}
   alias MishkaCmsCore.Runtime.Handlers.UiKitUpgrade
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.PageDraft
@@ -421,12 +421,7 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
       test "#{who} updates the components and drafts the sample page", %{conn: conn, site: site} do
         admin =
           create_user_with_permissions!(
-            [
-              "admin:dashboard:blog:post",
-              "admin:dashboard:runtime:page",
-              "admin:dashboard:runtime:component",
-              "admin:dashboard:runtime:site"
-            ],
+            ["admin:dashboard:blog:post" | ExtensionProvision.required(Provision.manifest())],
             site_id: if(@master?, do: nil, else: site.id)
           )
 
