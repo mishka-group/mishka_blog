@@ -1412,6 +1412,174 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     end
   end
 
+  # A POST NAMES COMPONENTS BY MARKER and its page draws them — see
+  # `MishkaCmsCore.Runtime.ContentComponents`. The body goes through `rich_content`, so a marker is
+  # the site's real component, cast to what it declares, and the HTML around it is the post's own.
+  describe "blog-post-detail drawing the components a post names" do
+    # WHAT THE COMPILE WORKER DOES FOR AN ACTIVE COMPONENT, which `testing: :manual` never runs: its
+    # name goes into `SiteState`, the names a marker is checked against before anything is built.
+    defp known!(site, name) do
+      :ok = SiteState.put_component(site.id, name)
+      on_exit(fn -> SiteState.delete_component(site.id, name) end)
+    end
+
+    defp callout!(site) do
+      name = "post-callout-#{System.unique_integer([:positive])}"
+      known!(site, name)
+
+      create_component!(
+        name: name,
+        site_id: site.id,
+        active: true,
+        template:
+          ~S|<aside data-role="post-callout" data-title={@title} data-tone={@tone}>{render_slot(@inner_block)}</aside>|,
+        attrs: [
+          %{"name" => "title", "type" => "string", "opts" => %{"default" => nil}},
+          %{
+            "name" => "tone",
+            "type" => "string",
+            "opts" => %{"default" => "info", "values" => ["info", "warn"]}
+          }
+        ],
+        slots: [%{"name" => "inner_block", "opts" => %{}}]
+      )
+    end
+
+    defp written!(site, title, content) do
+      create_blog_post!(
+        site_id: site.id,
+        title: title,
+        status: :published,
+        published_at: ~U[2026-01-01 00:00:00Z],
+        content: content
+      )
+    end
+
+    defp body(view) do
+      view
+      |> render_async(@async)
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(~s([data-role="blog-detail-body"]))
+    end
+
+    test "draws the component a marker names, where the marker stands", %{site: site} do
+      callout = callout!(site)
+
+      post =
+        written!(
+          site,
+          "With a callout",
+          ~s(<p>Intro</p>[[component #{callout.name} title="Heads up" tone="warn" phx-click="boom"]]Read <b>this</b>[[/component]]<p>Outro</p>)
+        )
+
+      {:ok, view, _html} = mount_page(site, "blog-post-detail", %{slug: post.slug})
+
+      body = body(view)
+      [aside] = body |> LazyHTML.query(~s([data-role="post-callout"])) |> Enum.to_list()
+
+      assert LazyHTML.attribute(aside, "data-title") == ["Heads up"]
+      assert LazyHTML.attribute(aside, "data-tone") == ["warn"]
+      assert aside |> LazyHTML.query("b") |> LazyHTML.text() == "this"
+
+      html = LazyHTML.to_html(body)
+
+      assert html =~ "<p>Intro</p>"
+      assert html =~ "<p>Outro</p>"
+      refute html =~ "[[component"
+      refute html =~ "phx-click"
+    end
+
+    # AN EDITOR WRAPS EVERY LINE IN A `<p>`, and a block inside one is HTML a browser takes apart.
+    test "a marker alone in its paragraph is drawn without the paragraph", %{site: site} do
+      callout = callout!(site)
+      post = written!(site, "Wrapped", "<p>Intro</p><p>[[component #{callout.name} /]]</p>")
+
+      {:ok, view, _html} = mount_page(site, "blog-post-detail", %{slug: post.slug})
+
+      assert body(view) |> LazyHTML.query(~s(p [data-role="post-callout"])) |> Enum.to_list() ==
+               []
+
+      assert [_aside] =
+               body(view) |> LazyHTML.query(~s([data-role="post-callout"])) |> Enum.to_list()
+
+      assert body(view) |> LazyHTML.query("p") |> Enum.count() == 1
+    end
+
+    test "a stateful block in a post is a live component of its own", %{site: site} do
+      known!(site, "blog-featured-posts")
+      create_blog_post!(site_id: site.id, title: "Starred", status: :published, featured: true)
+      post = written!(site, "Holder", "<p>See also</p>[[component blog-featured-posts /]]")
+
+      {:ok, view, _html} = mount_page(site, "blog-post-detail", %{slug: post.slug})
+      render_async(view, @async)
+
+      assert has_element?(view, ~s(#one-body-0[data-role="blog-featured-posts"]))
+      assert "Starred" in titles(view)
+    end
+
+    test "a marker for a block that draws posts itself is drawn as nothing", %{site: site} do
+      known!(site, "blog-post-detail")
+
+      post =
+        written!(site, "Itself", ~s(<p>Kept</p>[[component blog-post-detail slug="itself" /]]))
+
+      {:ok, view, _html} = mount_page(site, "blog-post-detail", %{slug: post.slug})
+
+      assert body(view) |> LazyHTML.query(~s([data-role="blog-post-detail"])) |> Enum.to_list() ==
+               []
+
+      assert body(view) |> LazyHTML.text() =~ "Kept"
+    end
+
+    # STORED CONTENT IS SANITIZED WHEN IT IS WRITTEN, and a code-heavy post scrubbed again on every
+    # view cost ~150 ms. The row is written here past the write path, with markup the scrubber would
+    # take out, so a second pass on read is something this test can see.
+    test "draws the stored content as it was stored, without scrubbing it again", %{site: site} do
+      post = written!(site, "Stored", "<p>placeholder</p>")
+      stored = ~s(<p><font data-probe="kept">Stored as written</font></p>)
+
+      Ecto.Adapters.SQL.query!(
+        Application.fetch_env!(:mishka_cms_core, :repo),
+        "UPDATE mishka_blog_posts SET content = $1 WHERE id = $2",
+        [stored, Ecto.UUID.dump!(post.id)]
+      )
+
+      {:ok, view, _html} = mount_page(site, "blog-post-detail", %{slug: post.slug})
+
+      assert [_kept] =
+               body(view) |> LazyHTML.query(~s(font[data-probe="kept"])) |> Enum.to_list()
+    end
+
+    # A PLUGIN'S OUTPUT WAS NEVER SCRUBBED, so it alone is sanitized on the way to the page.
+    test "scrubs what a render_content plugin changed", %{site: site} do
+      with_plugin(
+        MishkaBlog.Test.Plugins.BlogPostRenderContentScript,
+        "blog:blog_post:render_content",
+        fn ->
+          post = written!(site, "Plugged", "<p>Stored</p>")
+
+          {:ok, view, _html} = mount_page(site, "blog-post-detail", %{slug: post.slug})
+
+          html = view |> body() |> LazyHTML.to_html()
+
+          assert html =~ "<p>Stored</p>"
+          assert html =~ ~s(data-probe="plugin")
+          refute html =~ "<script"
+        end
+      )
+    end
+
+    test "a marker inside code is shown as written", %{site: site} do
+      callout = callout!(site)
+      post = written!(site, "Docs", "<pre><code>[[component #{callout.name} /]]</code></pre>")
+
+      {:ok, view, _html} = mount_page(site, "blog-post-detail", %{slug: post.slug})
+
+      assert body(view) |> LazyHTML.query(~s([data-role="post-callout"])) |> Enum.to_list() == []
+      assert body(view) |> LazyHTML.text() =~ "[[component #{callout.name} /]]"
+    end
+  end
+
   describe "blog-post-search" do
     test "narrows the list as the visitor types", %{site: site} do
       publish!(site, ["Elixir at work", "Gardening notes", "Elixir releases"])

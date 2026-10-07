@@ -55,6 +55,12 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.PageSeo
   ]
 
+  # Names the components the site's posts draw, so its stylesheet carries them (a
+  # `runtime:compile:content_components` plugin).
+  @runtime_plugins [
+    MishkaBlog.Plugins.ContentComponents
+  ]
+
   # Each code block of a post being written is lexed in a task of its own under this supervisor — see
   # `MishkaBlog.Resources.Changes.HighlightCode`.
   @highlight_supervisor {Task.Supervisor, name: MishkaBlog.HighlightSupervisor}
@@ -68,7 +74,8 @@ defmodule MishkaBlog.Application do
     do:
       @dashboard_widgets ++
         @notify_plugins ++
-        @settings_plugins ++ @sidebar_menus ++ @provision_plugins ++ @seo_plugins
+        @settings_plugins ++
+        @sidebar_menus ++ @provision_plugins ++ @seo_plugins ++ @runtime_plugins
 
   @impl true
   def start(_type, _args) do

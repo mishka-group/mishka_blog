@@ -107,6 +107,42 @@ defmodule MishkaBlog.Test.BlogPostGuardedStructTest do
                  })
       end
 
+      # A COMPONENT MARKER IS TEXT TO THE SANITIZER, and it has to come out of it as the same marker:
+      # its quotes, its slash and the HTML it holds all reach the page that draws it — see
+      # `MishkaCmsCore.Runtime.ContentComponents`. A render_content plugin's output is scrubbed
+      # again on the way to the page, and the markers survive that too.
+      test "content keeps component markers whole, and so does a second scrub" do
+        html =
+          ~s(<p>Intro</p>[[component chelekom-alert title="Heads up" kind='info' open]]Read <b>this</b>[[/component]]\n) <>
+            ~s(<p>[[component chelekom-badge size="small" note="x &lt; y &amp; z" /]]</p>\n) <>
+            ~s(<pre><code>[[component shown-as-text a="1" /]]</code></pre>)
+
+        markers = fn content ->
+          for {:component, marker} <- MishkaCmsCore.Runtime.ContentComponents.parse(content),
+              do: marker
+        end
+
+        assert {:ok, %{content: content}} =
+                 BlogPost.__guarded_change__(%{
+                   title: "t",
+                   content: html,
+                   status: :draft,
+                   language: "en"
+                 })
+
+        assert [
+                 %{
+                   name: "chelekom-alert",
+                   attrs: %{"title" => "Heads up", "kind" => "info", "open" => true},
+                   inner: "Read <b>this</b>"
+                 },
+                 %{name: "chelekom-badge", attrs: %{"size" => "small", "note" => "x < y & z"}}
+               ] = markers.(content)
+
+        assert markers.(HtmlSanitizeEx.html5(content)) == markers.(content)
+        assert content =~ ~s(<pre><code>[[component shown-as-text a="1" /]]</code></pre>)
+      end
+
       test "status outside enum rejected with explicit message" do
         assert {:error,
                 [
