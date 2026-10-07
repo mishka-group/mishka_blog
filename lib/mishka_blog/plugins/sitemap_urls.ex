@@ -1,6 +1,7 @@
 defmodule MishkaBlog.Plugins.SitemapUrls do
   @moduledoc """
-  Adds the blog's posts, categories and tags to a site's `/sitemap.xml`, through the
+  Adds the blog's posts, categories, tags, bloggers and teams to a site's `/sitemap.xml`, through
+  the
   `seo:sitemap:urls` mishka_installer hook `MishkaCmsCore.Runtime.Compilers.SitemapCompiler` fires
   when it builds a site's sitemap. A post, category or tag written rebuilds its site's sitemap,
   because those resources list `MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh`.
@@ -12,11 +13,15 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
     * a published post, at the post page, with `lastmod` its `updated_at` and `images` its
       `featured_image_url`, or none when it has no such image;
     * a category or a tag holding a published post in its own language, at its page, with no
-      `lastmod`.
+      `lastmod`;
+    * a blogger with a published post, and a team one of whose members has one, at its page in
+      each language the page answers, with no `lastmod`.
 
   Each row at its own language and slug (`MishkaCmsCore.Runtime.PageEditions.path/2`). A kind is
-  listed only while `pages` holds the page at its `MishkaBlog.Provision.item_paths/0` path — so a
-  page moved, switched off, closed to visitors or marked noindex lists nothing — and a row only in a
+  listed only while `pages` holds its page — the page whose `extra` says it shows that kind
+  (`"blog:post"`, `"blog:category"`, `"blog:tag"`, `"blog:author"`, `"blog:team"`), else, for the
+  first three, the page at its `MishkaBlog.Provision.item_paths/0` path — so a page switched off,
+  closed to visitors or marked noindex lists nothing — and a row only in a
   language that page answers (`PageEditions.served_languages/2`), so no address here 404s. A row
   that opens with a permission, or whose own `seo_tags` hold a robots meta saying `noindex` or
   `none`, is left out as such a page is (`PageEditions.listed?/2`): a post or a category in a locked
@@ -34,19 +39,26 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
   require Ash.Query
 
-  alias MishkaBlog.{BlogPost, Collection, Provision, Tag}
-  alias MishkaCmsCore.Runtime.{Languages, PageEditions}
+  alias MishkaBlog.{BlogPost, Blogger, Collection, Provision, Tag, Team}
+  alias MishkaCmsCore.Runtime.{Languages, PageEditions, Seo}
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
 
-  # Each kind of row, by its `Provision.item_paths/0` key, the fields its address and whether it is
-  # listed are read from, and what it loads to know the permissions it opens with.
+  # Each kind of row, by its `Provision.item_paths/0` key: the record its page says it shows, the
+  # fields its address and whether it is listed are read from, and what it loads to know the
+  # permissions it opens with.
   @kinds [
     post:
-      {BlogPost, [:slug, :language, :updated_at, :featured_image_url, :permissions, :seo_tags],
+      {"blog:post", BlogPost,
+       [:slug, :language, :updated_at, :featured_image_url, :permissions, :seo_tags],
        [:effective_permissions]},
-    category: {Collection, [:slug, :language, :permissions, :seo_tags], [:effective_permissions]},
-    tag: {Tag, [:slug, :language, :permissions, :seo_tags], []}
+    category:
+      {"blog:category", Collection, [:slug, :language, :permissions, :seo_tags],
+       [:effective_permissions]},
+    tag: {"blog:tag", Tag, [:slug, :language, :permissions, :seo_tags], []}
   ]
+
+  # A blogger or a team is one row in every language, and opens with no permission of its own.
+  @people [{"blog:author", Blogger}, {"blog:team", Team}]
 
   @impl true
   def call(%{site: %{id: site_id}, pages: pages, urls: urls} = data)
@@ -62,19 +74,63 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
   defp blog_urls(pages, site_id) do
     item_paths = Provision.item_paths()
 
-    Stream.flat_map(@kinds, fn {kind, {resource, fields, loads}} ->
-      case Enum.find(pages, &(&1.path == item_paths[kind])) do
-        nil ->
-          []
+    records =
+      Stream.flat_map(@kinds, fn {kind, {record, resource, fields, loads}} ->
+        case page_for(pages, record, item_paths[kind]) do
+          nil ->
+            []
 
-        page ->
-          resource
-          |> rows(fields, loads, PageEditions.served_languages(page, site_id), site_id)
-          |> Stream.filter(&PageEditions.listed?(%{&1 | permissions: opens_with(&1)}))
-          |> Stream.map(&entry(page, &1))
-      end
+          page ->
+            resource
+            |> rows(fields, loads, PageEditions.served_languages(page, site_id), site_id)
+            |> Stream.filter(&PageEditions.listed?(%{&1 | permissions: opens_with(&1)}))
+            |> Stream.map(&entry(page, &1))
+        end
+      end)
+
+    people =
+      Stream.flat_map(@people, fn {record, resource} ->
+        case page_for(pages, record, nil) do
+          nil -> []
+          page -> people_entries(page, resource, site_id)
+        end
+      end)
+
+    Stream.concat(records, people)
+  end
+
+  # The page that says it shows `record`; else, for a kind the provision writes, its own path.
+  defp page_for(pages, record, path) do
+    Enum.find(pages, &(Seo.record_of(&1.extra) == record)) ||
+      (is_binary(path) && Enum.find(pages, &(&1.path == path))) || nil
+  end
+
+  defp people_entries(page, resource, site_id) do
+    languages = PageEditions.served_languages(page, site_id)
+
+    resource
+    |> Ash.Query.for_read(:public_list, %{}, tenant: site_id)
+    |> with_published_post(resource)
+    |> Ash.Query.select([:slug])
+    |> SitemapCompiler.stream_rows(tenant: site_id)
+    |> Stream.flat_map(fn row ->
+      languages
+      |> Enum.map(&PageEditions.path(page.path, %{Languages.capture() => &1, "slug" => row.slug}))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> Enum.map(&%{path: &1, lastmod: nil})
     end)
   end
+
+  defp with_published_post(query, Blogger),
+    do: Ash.Query.filter(query, exists(tenant_posts, status == :published))
+
+  defp with_published_post(query, Team),
+    do:
+      Ash.Query.filter(
+        query,
+        exists(tenant_members, exists(tenant_posts, status == :published))
+      )
 
   defp rows(_resource, _fields, _loads, [], _site_id), do: []
 

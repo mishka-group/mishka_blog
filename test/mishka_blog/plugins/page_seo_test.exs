@@ -545,9 +545,10 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   end
 
   describe "the kinds it names" do
-    test "are a post, a collection and a tag, named as the blog's admin names them, each with the site's own to preview with",
+    test "are a post, a collection, a tag, a blogger and a team, named as the blog's admin names them, each with the site's own to preview with",
          %{site: site} do
       post = published!(site, title: "Ash in production")
+      create_blogger!(site_id: site.id, display_name: "Mona", slug: "mona")
 
       assert [
                %{
@@ -558,7 +559,15 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
                  samples: posts
                },
                %{id: "blog:category", group: "Blog", label: "Collection", captures: ["slug"]},
-               %{id: "blog:tag", group: "Blog", label: "Tag", captures: ["slug"]}
+               %{id: "blog:tag", group: "Blog", label: "Tag", captures: ["slug"]},
+               %{
+                 id: "blog:author",
+                 group: "Blog",
+                 label: "Blogger",
+                 captures: ["slug"],
+                 samples: [%{label: "Mona", params: %{"slug" => "mona"}}]
+               },
+               %{id: "blog:team", group: "Blog", label: "Team", captures: ["slug"]}
              ] = MishkaBlog.Plugins.PageRecords.types(site.id)
 
       assert %{label: "Ash in production · en", params: %{"slug" => slug, "lang" => "en"}} =
@@ -570,6 +579,113 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
         MishkaBlog.Plugins.PageRecords.call(%{site_id: site.id, records: [%{id: "other"}]})
 
       assert [%{id: "other"} | _blog] = records
+    end
+  end
+
+  # A site that answers its primary language at the root has the blog at `/blog`, not
+  # `/:lang/blog`: the page's own path says where the blog is.
+  defp given_at(site, path, record, params) do
+    Seo.given(
+      %{title: "Blog", path: path, language: "en", seo: %{description: nil, schema: []}},
+      site_id: site.id,
+      url: base() <> MishkaCmsCore.Runtime.PageEditions.path(path, params),
+      params: params,
+      record: record
+    )
+  end
+
+  defp blog_crumb(answered) do
+    %{"itemListElement" => [_home, blog | _]} = schema_of(answered, "BreadcrumbList")
+    blog
+  end
+
+  describe "a blog at the site's root" do
+    test "leads its breadcrumb's Blog to /blog, from every kind of page", %{site: site} do
+      post = published!(site, title: "Ash in production")
+      tag = create_blog_tag!(site_id: site.id, name: "elixir")
+      create_post_tag!(post_id: post.id, tag_id: tag.id)
+
+      for {path, record, slug} <- [
+            {"/blog/:slug", "blog:post", post.slug},
+            {"/blog/tag/:slug", "blog:tag", tag.slug}
+          ] do
+        answered = answer(given_at(site, path, record, %{"slug" => slug}))
+
+        assert blog_crumb(answered)["item"] == base() <> "/blog",
+               "#{record} led Blog elsewhere"
+      end
+    end
+  end
+
+  describe "the blogger page" do
+    test "is the blogger's own profile: name, plain bio, photo, links and expertise", %{
+      site: site
+    } do
+      create_blogger!(
+        site_id: site.id,
+        display_name: "Shahryar Tavakkoli",
+        slug: "shahryar",
+        bio: "<p>Builds <b>Mishka</b>.</p>",
+        avatar_url: "/media/shahryar.jpg",
+        social_links: [%{platform: "github", url: "https://github.com/shahryarjb"}],
+        expertise_areas: ["Elixir", "Phoenix"]
+      )
+
+      answered =
+        answer(given_at(site, "/blog/author/:slug", "blog:author", %{"slug" => "shahryar"}))
+
+      assert answered.title == "Shahryar Tavakkoli"
+      assert answered.description == "Builds Mishka."
+      assert answered.image == "/media/shahryar.jpg"
+      assert answered.type == "profile"
+      assert answered.permissions == []
+
+      assert %{"mainEntity" => person} = schema_of(answered, "ProfilePage")
+      assert person["@type"] == "Person"
+      assert person["name"] == "Shahryar Tavakkoli"
+      assert person["sameAs"] == ["https://github.com/shahryarjb"]
+      assert person["knowsAbout"] == ["Elixir", "Phoenix"]
+      assert person["image"] == base() <> "/media/shahryar.jpg"
+      assert blog_crumb(answered)["item"] == base() <> "/blog"
+      assert answered.vars["author.name"] == "Shahryar Tavakkoli"
+    end
+
+    test "is left alone for a slug no blogger has", %{site: site} do
+      given = given_at(site, "/blog/author/:slug", "blog:author", %{"slug" => "nobody"})
+      answered = answer(given)
+
+      assert answered.title == given.title
+      assert keys(answered.var_docs) == ~w(author.name author.bio author.image author.url)
+    end
+  end
+
+  describe "the team page" do
+    test "is the team as an organization, with its members", %{site: site} do
+      team =
+        create_team!(
+          site_id: site.id,
+          name: "Mishka group core",
+          slug: "mishka-group-core",
+          description: "The people behind Mishka.",
+          status: :active
+        )
+
+      for name <- ["Mona Aghili", "Shahryar Tavakkoli"] do
+        blogger = create_blogger!(site_id: site.id, display_name: name)
+        create_team_member!(team_id: team.id, blogger_id: blogger.id)
+      end
+
+      answered =
+        answer(given_at(site, "/blog/team/:slug", "blog:team", %{"slug" => "mishka-group-core"}))
+
+      assert answered.title == "Mishka group core"
+      assert answered.description == "The people behind Mishka."
+
+      assert %{"mainEntity" => %{"@type" => "Organization", "member" => members}} =
+               schema_of(answered, "ProfilePage")
+
+      assert Enum.map(members, & &1["name"]) == ["Mona Aghili", "Shahryar Tavakkoli"]
+      assert blog_crumb(answered)["item"] == base() <> "/blog"
     end
   end
 

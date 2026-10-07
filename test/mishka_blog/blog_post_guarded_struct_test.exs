@@ -56,6 +56,36 @@ defmodule MishkaBlog.Test.BlogPostGuardedStructTest do
         refute content =~ "<script"
       end
 
+      # A post is rich content: code highlighted by class, headings a table of contents links to,
+      # notes and figures. What the reader's browser would run is still taken out.
+      test "content keeps classes, ids and rich blocks, and still drops what would run" do
+        html = """
+        <h2 id="install">Install</h2>
+        <pre class="highlight"><code class="language-elixir"><span class="ss">:ok</span></code></pre>
+        <aside class="post-note"><strong>Note:</strong> read this.</aside>
+        <a href="javascript:alert(1)" onclick="alert(1)">bad</a>
+        <img src="/media/x.png" onerror="alert(1)" alt="x">
+        <script>alert(1)</script>
+        """
+
+        assert {:ok, %{content: content}} =
+                 BlogPost.__guarded_change__(%{
+                   title: "t",
+                   content: html,
+                   status: :draft,
+                   language: "en"
+                 })
+
+        assert content =~ ~s(<h2 id="install">)
+        assert content =~ ~s(<pre class="highlight"><code class="language-elixir">)
+        assert content =~ ~s(<span class="ss">:ok</span>)
+        assert content =~ ~s(<aside class="post-note">)
+        refute content =~ "<script"
+        refute content =~ "onclick"
+        refute content =~ "onerror"
+        refute content =~ "javascript:"
+      end
+
       test "status outside enum rejected with explicit message" do
         assert {:error,
                 [

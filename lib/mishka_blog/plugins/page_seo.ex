@@ -1,11 +1,14 @@
 defmodule MishkaBlog.Plugins.PageSeo do
   @moduledoc """
-  Gives each post, category and tag its own head on the blog page that serves it, through the
-  `runtime:page:seo` mishka_installer hook `MishkaCmsWeb.RuntimeLive` fires in `handle_params/3`
-  (see `MishkaCmsCore.Runtime.Seo` for the map it is handed and what the head builds from it).
+  Gives each post, category, tag, blogger and team its own head on the blog page that serves it,
+  through the
+  `runtime:page:seo` mishka_installer hook `MishkaCmsWeb.RuntimeLive` fires in
+  `handle_params/3` (see `MishkaCmsCore.Runtime.Seo` for the map it is handed and what the head
+  builds from it).
 
   A page is matched by the kind of record it says it shows (`record`, its `extra`'s `"record"`):
-  `"blog:post"`, `"blog:category"` or `"blog:tag"`, the kinds `MishkaBlog.Plugins.PageRecords`
+  `"blog:post"`, `"blog:category"`, `"blog:tag"`, `"blog:author"` or `"blog:team"`, the kinds
+  `MishkaBlog.Plugins.PageRecords`
   names. Its path may be anything that captures the `slug`. Every other page is handed back
   untouched before anything is read. A kind has one owner, so the answer for one of these halts the
   chain: no later plugin is asked.
@@ -45,6 +48,26 @@ defmodule MishkaBlog.Plugins.PageSeo do
   `seo_tags`, a `CollectionPage` and a `BreadcrumbList`, Home → Blog → the tag. `vars` —
   `tag.name`, `tag.description`, `tag.url`.
 
+  ## A blogger, `"blog:author"`
+
+  The blogger the `slug` capture names: their name, their bio as plain text, their avatar, a
+  `ProfilePage` whose `mainEntity` is the `Person` — with `sameAs` their social links and
+  `knowsAbout` their expertise — and a `BreadcrumbList`, Home → Blog → the blogger. `vars` —
+  `author.name`, `author.bio`, `author.image`, `author.url`. A blogger is the same row in every
+  language, so the slug alone names them.
+
+  ## A team, `"blog:team"`
+
+  The active team the `slug` capture names: its name, description and avatar, a `ProfilePage`
+  whose `mainEntity` is the `Organization` with its members as `Person`s, and a `BreadcrumbList`,
+  Home → Blog → the team. `vars` — `team.name`, `team.description`, `team.url`.
+
+  ## Where "Blog" points
+
+  The breadcrumb's middle item is the blog's home, read off the page's own path: the post page's
+  parent, the parent of every other kind's parent — `/blog/:slug` and `/blog/tag/:slug` both lead
+  to `/blog`, `/:lang/blog/:slug` to `/:lang/blog` in the page's language.
+
   ## What every matched page returns
 
   `permissions` — what the record opens with: named, `MishkaCmsWeb.RuntimeLive` opens the address
@@ -64,7 +87,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   require Ash.Query
 
-  alias MishkaBlog.{BlogPost, Blogger, Collection, Provision, Tag}
+  alias MishkaBlog.{BlogPost, Blogger, Collection, Tag, Team}
   alias MishkaCmsCore.Runtime.{Languages, PageEditions, Seo}
   alias MishkaCmsCore.Settings
 
@@ -94,11 +117,15 @@ defmodule MishkaBlog.Plugins.PageSeo do
     :permissions
   ]
   @tag_fields [:id, :name, :slug, :description, :language, :seo_tags, :permissions]
+  @blogger_fields [:id, :display_name, :slug, :bio, :avatar_url, :social_links, :expertise_areas]
+  @team_fields [:id, :name, :slug, :description, :avatar_url]
 
   @impl true
   def call(%{record: "blog:post"} = seo), do: {:reply, :halt, post(seo)}
   def call(%{record: "blog:category"} = seo), do: {:reply, :halt, category(seo)}
   def call(%{record: "blog:tag"} = seo), do: {:reply, :halt, tag(seo)}
+  def call(%{record: "blog:author"} = seo), do: {:reply, :halt, author(seo)}
+  def call(%{record: "blog:team"} = seo), do: {:reply, :halt, team(seo)}
   def call(seo), do: {:reply, seo}
 
   defp post(seo) do
@@ -128,6 +155,30 @@ defmodule MishkaBlog.Plugins.PageSeo do
     end
   end
 
+  defp author(seo) do
+    seo = %{seo | var_docs: author_docs()}
+
+    case read_one(Blogger, seo, @blogger_fields, []) do
+      %Blogger{} = blogger -> author_seo(seo, blogger)
+      nil -> seo
+    end
+  end
+
+  defp team(seo) do
+    members =
+      Blogger
+      |> Ash.Query.for_read(:public_list)
+      |> Ash.Query.select([:display_name, :slug])
+      |> Ash.Query.sort(:display_name)
+
+    seo = %{seo | var_docs: team_docs()}
+
+    case read_one(Team, seo, @team_fields, tenant_members: members) do
+      %Team{} = team -> team_seo(seo, team)
+      nil -> seo
+    end
+  end
+
   # The row the `slug` capture names, in the page's language, on the page's site; `nil` when the
   # request names none or none is shown.
   defp read(resource, %{params: %{"slug" => slug}, site_id: site_id} = seo, fields, loads)
@@ -146,6 +197,24 @@ defmodule MishkaBlog.Plugins.PageSeo do
   end
 
   defp read(_resource, _seo, _fields, _loads), do: nil
+
+  # A blogger or a team is one row in every language: the slug alone names it. Read as a visitor
+  # reads it, through the public action.
+  defp read_one(resource, %{params: %{"slug" => slug}, site_id: site_id}, fields, loads)
+       when is_binary(slug) and slug != "" and is_binary(site_id) do
+    resource
+    |> Ash.Query.for_read(:public_list, %{}, tenant: site_id)
+    |> Ash.Query.filter(slug == ^slug)
+    |> Ash.Query.select(fields)
+    |> Ash.Query.load(loads)
+    |> Ash.read(tenant: site_id, page: [limit: 1])
+    |> case do
+      {:ok, %{results: [row | _rest]}} -> row
+      _none -> nil
+    end
+  end
+
+  defp read_one(_resource, _seo, _fields, _loads), do: nil
 
   defp in_language(query, language) when is_binary(language) and language != "",
     do: Ash.Query.filter(query, language == ^language)
@@ -220,7 +289,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         tags: with_own(generated, post.seo_tags),
         schema:
           own_schema(post.schema, posting) ++
-            breadcrumb(seo, base, gettext("Blog"), post.title),
+            breadcrumb(seo, base, 1, post.title),
         permissions: post.effective_permissions,
         vars:
           Map.merge(
@@ -263,7 +332,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         tags: List.wrap(collection.seo_tags),
         schema:
           own_schema(collection.schema, page) ++
-            breadcrumb(seo, base, gettext("Blog"), collection.name),
+            breadcrumb(seo, base, 2, collection.name),
         permissions: collection.effective_permissions,
         vars:
           Map.merge(
@@ -296,7 +365,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         description: tag.description,
         language: tag.language,
         tags: List.wrap(tag.seo_tags),
-        schema: [page | breadcrumb(seo, base, gettext("Blog"), tag.name)],
+        schema: [page | breadcrumb(seo, base, 2, tag.name)],
         permissions: List.wrap(tag.permissions),
         vars:
           Map.merge(
@@ -308,6 +377,101 @@ defmodule MishkaBlog.Plugins.PageSeo do
             })
           )
     }
+  end
+
+  defp author_seo(seo, blogger) do
+    base = base(seo)
+    bio = plain(blogger.bio)
+    image = Seo.absolute(blogger.avatar_url, base)
+
+    person =
+      compact(%{
+        "@type" => "Person",
+        "name" => blogger.display_name,
+        "description" => bio,
+        "image" => image,
+        "url" => seo.url,
+        "sameAs" => links(blogger.social_links),
+        "knowsAbout" => List.wrap(blogger.expertise_areas)
+      })
+
+    profile =
+      compact(%{
+        "@context" => "https://schema.org",
+        "@type" => "ProfilePage",
+        "url" => seo.url,
+        "mainEntity" => person
+      })
+
+    %{
+      seo
+      | title: blogger.display_name,
+        description: bio,
+        image: blogger.avatar_url || seo.image,
+        type: "profile",
+        schema: [profile | breadcrumb(seo, base, 2, blogger.display_name)],
+        permissions: [],
+        vars:
+          Map.merge(
+            seo.vars,
+            compact(%{
+              "author.name" => blogger.display_name,
+              "author.bio" => bio,
+              "author.image" => image,
+              "author.url" => seo.url
+            })
+          )
+    }
+  end
+
+  defp team_seo(seo, team) do
+    base = base(seo)
+
+    organization =
+      compact(%{
+        "@type" => "Organization",
+        "name" => team.name,
+        "description" => team.description,
+        "logo" => Seo.absolute(team.avatar_url, base),
+        "url" => seo.url,
+        "member" =>
+          Enum.map(rows(team.tenant_members), &%{"@type" => "Person", "name" => &1.display_name})
+      })
+
+    profile =
+      compact(%{
+        "@context" => "https://schema.org",
+        "@type" => "ProfilePage",
+        "url" => seo.url,
+        "mainEntity" => organization
+      })
+
+    %{
+      seo
+      | title: team.name,
+        description: team.description,
+        image: team.avatar_url || seo.image,
+        schema: [profile | breadcrumb(seo, base, 2, team.name)],
+        permissions: [],
+        vars:
+          Map.merge(
+            seo.vars,
+            compact(%{
+              "team.name" => team.name,
+              "team.description" => team.description,
+              "team.url" => seo.url
+            })
+          )
+    }
+  end
+
+  defp plain(html) when is_binary(html),
+    do: html |> HtmlSanitizeEx.strip_tags() |> String.replace(~r/\s+/, " ") |> String.trim()
+
+  defp plain(_none), do: nil
+
+  defp links(links) do
+    for link <- List.wrap(links), url = field(link, :url), is_binary(url) and url != "", do: url
   end
 
   # The readers' average to one decimal, and how many rated; nothing before the first rating.
@@ -393,18 +557,20 @@ defmodule MishkaBlog.Plugins.PageSeo do
   defp own_schema([_ | _] = own, _built), do: own
   defp own_schema(_none, built), do: [built]
 
-  defp breadcrumb(_seo, nil, _blog, _name), do: []
+  defp breadcrumb(_seo, nil, _depth, _name), do: []
 
-  defp breadcrumb(%{language: language, url: url}, base, blog, name) do
+  # `depth` is how many segments of the page's path come after the blog's home: one for a post,
+  # two for a category, a tag, a blogger or a team.
+  defp breadcrumb(%{language: language, url: url, page: %{path: path}}, base, depth, name) do
     blog_url =
-      Provision.item_paths().post
-      |> Path.dirname()
+      path
+      |> drop_segments(depth)
       |> PageEditions.path(%{Languages.capture() => language})
       |> Seo.absolute(base)
 
     items =
       Enum.reject(
-        [{gettext("Home"), base}, {blog, blog_url}, {name, url}],
+        [{gettext("Home"), base}, {gettext("Blog"), blog_url}, {name, url}],
         fn {_name, item} -> is_nil(item) end
       )
 
@@ -421,6 +587,9 @@ defmodule MishkaBlog.Plugins.PageSeo do
       }
     ]
   end
+
+  defp drop_segments(path, 0), do: path
+  defp drop_segments(path, depth), do: path |> Path.dirname() |> drop_segments(depth - 1)
 
   defp publisher(site_id, base) do
     case Settings.get("site.title", nil, site_id) do
@@ -512,6 +681,31 @@ defmodule MishkaBlog.Plugins.PageSeo do
         gettext("Category address"),
         gettext("The category's canonical address.")
       )
+    ]
+  end
+
+  defp author_docs do
+    [
+      var(
+        "author.name",
+        gettext("Blogger name"),
+        gettext("The name of the blogger this address shows.")
+      ),
+      var("author.bio", gettext("Blogger bio"), gettext("The blogger's bio, as plain text.")),
+      var(
+        "author.image",
+        gettext("Blogger photo"),
+        gettext("The blogger's avatar, as a full address.")
+      ),
+      var("author.url", gettext("Blogger address"), gettext("The blogger's canonical address."))
+    ]
+  end
+
+  defp team_docs do
+    [
+      var("team.name", gettext("Team name"), gettext("The name of the team this address shows.")),
+      var("team.description", gettext("Team description"), gettext("The team's description.")),
+      var("team.url", gettext("Team address"), gettext("The team's canonical address."))
     ]
   end
 

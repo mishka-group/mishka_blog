@@ -1,9 +1,9 @@
 defmodule MishkaBlog.Plugins.PageRecords do
   @moduledoc """
-  Names the kinds of record the blog's pages show — a post, a collection, a tag — on the
-  `runtime:page:records` mishka_installer hook, for a page's "This page shows each" choice (see
-  `MishkaCmsCore.Runtime.Seo.record_types/1`), each with a few of the site's own to preview a page
-  with. Each is labelled as the blog's admin names it, where its Permissions and SEO Tags are set.
+  Names the kinds of record the blog's pages show — a post, a collection, a tag, a blogger, a team —
+  on the `runtime:page:records` mishka_installer hook, for a page's "This page shows each" choice
+  (see `MishkaCmsCore.Runtime.Seo.record_types/1`), each with a few of the site's own to preview a
+  page with. Each is labelled as the blog's admin names it, where its Permissions and SEO Tags are set.
   `MishkaBlog.Plugins.PageSeo` answers for the same kinds.
 
   A module because a mishka_installer hook is one. Registered in `MishkaBlog.Application`.
@@ -12,7 +12,7 @@ defmodule MishkaBlog.Plugins.PageRecords do
   use Gettext, backend: MishkaCmsCore.Gettext
   use MishkaInstaller.Event.Hook, event: "runtime:page:records", initial: %{priority: 50}
 
-  alias MishkaBlog.{BlogPost, Collection, Tag}
+  alias MishkaBlog.{BlogPost, Blogger, Collection, Tag, Team}
   alias MishkaCmsCore.Runtime.Languages
 
   @samples 8
@@ -33,7 +33,9 @@ defmodule MishkaBlog.Plugins.PageRecords do
         gettext("Collection"),
         samples(Collection, :name, :updated_at, site_id)
       ),
-      type("blog:tag", gettext("Tag"), samples(Tag, :name, :updated_at, site_id))
+      type("blog:tag", gettext("Tag"), samples(Tag, :name, :updated_at, site_id)),
+      type("blog:author", gettext("Blogger"), people(Blogger, :display_name, site_id)),
+      type("blog:team", gettext("Team"), people(Team, :name, site_id))
     ]
   end
 
@@ -62,4 +64,24 @@ defmodule MishkaBlog.Plugins.PageRecords do
   end
 
   defp samples(_resource, _name, _newest, _no_site), do: []
+
+  # A blogger or a team is one row in every language, so its sample names the slug alone.
+  defp people(resource, name, site_id) when is_binary(site_id) do
+    resource
+    |> Ash.Query.for_read(:public_list, %{}, tenant: site_id)
+    |> Ash.Query.select([name, :slug])
+    |> Ash.Query.sort(updated_at: :desc)
+    |> Ash.read(tenant: site_id, page: [limit: @samples])
+    |> case do
+      {:ok, %{results: rows}} ->
+        for %{slug: slug} = row <- rows,
+            is_binary(slug),
+            do: %{label: Map.get(row, name), params: %{"slug" => slug}}
+
+      _unreadable ->
+        []
+    end
+  end
+
+  defp people(_resource, _name, _no_site), do: []
 end

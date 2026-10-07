@@ -61,6 +61,57 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
 
   defp robots(content), do: [%{tag: "meta", attrs: %{"name" => "robots"}, content: content}]
 
+  # A page at a path of the site's own choosing, saying the kind it shows, answering every language.
+  defp record_page!(site, path, record) do
+    create_page!(
+      site_id: site.id,
+      path: path,
+      extra: %{"serves_all_languages" => true, "record" => record},
+      active: true,
+      permissions: []
+    )
+  end
+
+  describe "a blog at the site's root" do
+    test "is found by the kind each page shows, not by the provision's path", %{site: site} do
+      record_page!(site, "/blog/:slug", "blog:post")
+      record_page!(site, "/blog/tag/:slug", "blog:tag")
+      post = post!(site, :published)
+      tag = create_blog_tag!(site_id: site.id, name: "elixir", language: "en")
+      create_post_tag!(post_id: post.id, tag_id: tag.id)
+
+      assert paths(site) == Enum.sort(["/blog/#{post.slug}", "/blog/tag/#{tag.slug}"])
+    end
+  end
+
+  describe "bloggers and teams" do
+    test "a blogger with a published post and that blogger's team are listed, once each", %{
+      site: site
+    } do
+      record_page!(site, "/blog/author/:slug", "blog:author")
+      record_page!(site, "/blog/team/:slug", "blog:team")
+
+      writer = create_blogger!(site_id: site.id, slug: "shahryar")
+      create_blogger!(site_id: site.id, slug: "silent")
+      team = create_team!(site_id: site.id, slug: "core", status: :active)
+      create_team!(site_id: site.id, slug: "empty", status: :active)
+      create_team_member!(team_id: team.id, blogger_id: writer.id)
+
+      post = post!(site, :published)
+      create_post_blogger!(post_id: post.id, blogger_id: writer.id)
+
+      assert paths(site) == ["/blog/author/shahryar", "/blog/team/core"]
+    end
+
+    test "nothing is listed without their pages", %{site: site} do
+      writer = create_blogger!(site_id: site.id)
+      post = post!(site, :published)
+      create_post_blogger!(post_id: post.id, blogger_id: writer.id)
+
+      assert paths(site) == []
+    end
+  end
+
   describe "posts" do
     test "a published post is listed in its own language, after what the payload held", %{
       site: site

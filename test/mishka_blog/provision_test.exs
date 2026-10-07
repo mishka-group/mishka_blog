@@ -199,8 +199,11 @@ defmodule MishkaBlog.ProvisionTest do
       assert page(site, paths.tag).extra["record"] == "blog:tag"
       refute Map.has_key?(page(site, "/:lang/blog").extra || %{}, "record")
 
+      # A blogger's and a team's page are a site's own to build; the blog names those kinds too.
       kinds = Enum.map(MishkaBlog.Plugins.PageRecords.types(site.id), & &1.id)
-      assert Enum.sort(kinds) == ["blog:category", "blog:post", "blog:tag"]
+
+      assert Enum.sort(kinds) ==
+               ["blog:author", "blog:category", "blog:post", "blog:tag", "blog:team"]
     end
 
     # A PAGE IS ONE ROW FOR EVERY LANGUAGE. `:lang` is a capture the resolver fills from the URL and
