@@ -1274,6 +1274,24 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
 
       assert text_of(view, ~s([data-role="blog-detail-title"])) == ["Gardening notes"]
       assert text_of(view, ~s([data-role="blog-detail-body"])) != []
+      assert text_of(view, ~s([data-role="blog-detail-subtitle"])) == []
+    end
+
+    test "draws the post's subtitle under its title", %{site: site} do
+      [post | _rest] = publish!(site, ["Gardening notes"])
+
+      post =
+        post
+        |> Ash.Changeset.for_update(:master_update, %{subtitle: "What grows in a dry summer"},
+          authorize?: false
+        )
+        |> Ash.update!()
+
+      {:ok, view, _html} = mount_page(site, "blog-post-detail", %{slug: post.slug})
+
+      assert text_of(view, ~s([data-role="blog-detail-subtitle"])) == [
+               "What grows in a dry summer"
+             ]
     end
 
     # A SLUG THAT NAMES NOTHING IS A DIFFERENT SENTENCE from no slug at all — one is "pick a post",

@@ -16,6 +16,7 @@ defmodule MishkaBlog.Test.BlogPostGuardedStructTest do
       test "GS covers every Ash attribute" do
         assert MapSet.new([
                  :title,
+                 :subtitle,
                  :slug,
                  :content,
                  :excerpt,
@@ -84,6 +85,26 @@ defmodule MishkaBlog.Test.BlogPostGuardedStructTest do
         refute content =~ "onclick"
         refute content =~ "onerror"
         refute content =~ "javascript:"
+      end
+
+      test "subtitle is plain text of at most 300 characters" do
+        assert {:ok, %{subtitle: "A line, bold"}} =
+                 BlogPost.__guarded_change__(%{
+                   title: "t",
+                   subtitle: "  A line, <b>bold</b>  ",
+                   content: "<p>x</p>",
+                   status: :draft,
+                   language: "en"
+                 })
+
+        assert {:error, _too_long} =
+                 BlogPost.__guarded_change__(%{
+                   title: "t",
+                   subtitle: String.duplicate("a", 301),
+                   content: "<p>x</p>",
+                   status: :draft,
+                   language: "en"
+                 })
       end
 
       test "status outside enum rejected with explicit message" do

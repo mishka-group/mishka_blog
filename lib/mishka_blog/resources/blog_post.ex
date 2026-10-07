@@ -82,6 +82,7 @@ defmodule MishkaBlog.BlogPost do
 
   @admin_fields [
     :title,
+    :subtitle,
     :slug,
     :content,
     :excerpt,
@@ -1194,6 +1195,14 @@ defmodule MishkaBlog.BlogPost do
           end
         end
 
+        field :subtitle, :textarea do
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Subtitle") end
+            placeholder fn -> dgettext("mishka_gervaz", "One line under the title") end
+            rows 2
+          end
+        end
+
         field :excerpt, :textarea do
           ui do
             label fn -> dgettext("mishka_gervaz", "Excerpt") end
@@ -1313,7 +1322,7 @@ defmodule MishkaBlog.BlogPost do
         end
 
         group :content do
-          fields [:content, :excerpt, :featured_image_url]
+          fields [:subtitle, :content, :excerpt, :featured_image_url]
 
           ui do
             columns 1
@@ -1342,6 +1351,9 @@ defmodule MishkaBlog.BlogPost do
 
     field :title, :string,
       derives: "sanitize(strip_tags, trim) validate(string, not_empty, min_len=1, max_len=500)"
+
+    field :subtitle, :string,
+      derives: "sanitize(strip_tags, trim) validate(optional=[string, max_len=300])"
 
     field :slug, :string,
       derives: "sanitize(trim) validate(string, not_empty, min_len=1, max_len=255)"
@@ -2789,6 +2801,13 @@ defmodule MishkaBlog.BlogPost do
       public? true
       constraints min_length: 1, max_length: 500, trim?: true
       description "Title of the blog post"
+    end
+
+    attribute :subtitle, :string do
+      allow_nil? true
+      public? true
+      constraints max_length: 300, trim?: true
+      description "A line under the title saying what the post is about"
     end
 
     attribute :slug, :string do
