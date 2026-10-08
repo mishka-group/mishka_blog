@@ -4,10 +4,11 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Tag.Index do
   form, and the version history of one tag.
 
   The page itself is thin — it decodes the URL state, forwards PubSub broadcasts into the table
-  component, and closes the form modal over the `gervaz:exec-js` bridge. The only feature it owns is
-  the version history, which is read a page at a time off the render and shown in a modal beside the
-  form's, the same way `MishkaBlogWeb.Live.Admin.Dashboard.Post.Index` shows a tag's — the modal and
-  its list are `MishkaCmsCoreWeb.Templates.VersionHistory`, shared across the admin.
+  component, opens the form modal for a language chip, and closes it over the `gervaz:exec-js`
+  bridge. The only feature it owns is the version history, which is read a page at a time off the
+  render and shown in a modal beside the form's, the same way
+  `MishkaBlogWeb.Live.Admin.Dashboard.Post.Index` shows a tag's — the modal and its list are
+  `MishkaCmsCoreWeb.Templates.VersionHistory`, shared across the admin.
 
   See `MishkaBlog.Tag` for the table, filter and row-action definitions.
   """
@@ -65,7 +66,18 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Tag.Index do
     {:noreply, assign(socket, :url_state, url_state)}
   end
 
+  # A language chip opens that edition in the form the row's Edit action opens, so a tag has one
+  # edit path whichever language you reached it by.
   @impl true
+  def handle_event("show_edition", %{"id" => tag_id}, socket) do
+    send_update(MishkaGervaz.Form.Web.Live,
+      id: MishkaGervaz.Resource.Info.Form.component_id(Tag),
+      record_id: tag_id
+    )
+
+    {:noreply, open_modal(socket, @form_modal)}
+  end
+
   def handle_event("close_versions", _params, socket) do
     {:noreply, reset_versions(socket)}
   end
