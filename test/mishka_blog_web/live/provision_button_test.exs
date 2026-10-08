@@ -8,8 +8,8 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
   the two free to drift in their wording instead.
 
   The blog is the one driven because it is the extension with the most to install: six pages, a
-  snippet, and a name (`Blog`) the dev seeds already take on every site, which is what makes the
-  rename path reachable at all.
+  snippet, and a name (`Blog`) a site may well hold already, which is what makes the rename path
+  reachable at all.
   """
   use MishkaBlog.ConnCase
 
@@ -20,7 +20,8 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.{ExtensionProvision, Page}
-  alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
+  alias MishkaCmsCore.Settings
 
   require Ash.Query
 
@@ -162,18 +163,22 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       close(view)
     end
 
-    # THE SITE THE BUG WAS FOUND ON. `MishkaCmsCore.Dev.Seeds` writes a page called "Blog" at
-    # `/blog`, so every seeded site holds the first sample page's NAME at an address of its own —
-    # first the button answered "The blog could not be set up. The logs say why.", having
-    # created no page at all, and then it created five of the six and skipped the one that matters:
-    # `/:lang/blog` is the only page carrying `blog-featured-posts`. The name is now answered with
-    # the next free one, and the card says which page that happened to.
+    # A SITE HOLDING THE FIRST SAMPLE PAGE'S NAME at an address of its own — first the button
+    # answered "The blog could not be set up. The logs say why.", having created no page at all,
+    # and then it created five of the six and skipped the one that matters: `/:lang/blog` is the
+    # only page carrying `blog-featured-posts`. The name is now answered with the next free one, and
+    # the card says which page that happened to.
     test "names the page itself on a site that already has a page called Blog", %{
       conn: conn,
       site: site
     } do
       mine =
-        create_page!(site_id: site.id, name: "Blog", path: "/blog", template: "<div>mine</div>")
+        create_page!(
+          site_id: site.id,
+          name: "Blog",
+          path: "/our-blog",
+          template: "<div>mine</div>"
+        )
 
       {:ok, view, _html} = live(conn, "/admin/dashboard/blog")
 
@@ -191,7 +196,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       refute has_element?(view, "#blog-provision-renamed-1")
       refute has_element?(view, "#blog-provision-skipped-0")
 
-      assert Enum.sort(paths(site)) == Enum.sort(["/blog" | Provision.page_paths()])
+      assert Enum.sort(paths(site)) == Enum.sort(["/our-blog" | Provision.page_paths()])
 
       html =
         view
@@ -207,9 +212,36 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       refute html =~ "created under another name"
 
       assert length(paths(site)) == length(Provision.page_paths()) + 1
-      assert page!(site, "/blog").id == mine.id
+      assert page!(site, "/our-blog").id == mine.id
 
       close(view)
+    end
+
+    # ONE ADDRESS, ONE PAGE. A page of the site's own at `/blog` answers the address the blog's home
+    # has in the site's first language while that language goes unprefixed, so the home is left out
+    # and the card names the page in its way — in either URL mode, because a site that switches to
+    # the other one later must not find one of the two hidden behind the other.
+    for mode <- ~w(prefix_others prefix_all) do
+      test "leaves the blog's home out where a page of the site answers its address, in #{mode}",
+           %{conn: conn, site: site} do
+        on_exit(fn -> SettingsState.delete(site.id, "site.language_urls") end)
+        {:ok, _} = Settings.put("site.language_urls", unquote(mode), site_id: site.id)
+        create_page!(site_id: site.id, name: "Mine", path: "/blog", template: "<div>mine</div>")
+
+        {:ok, view, _html} = live(conn, "/admin/dashboard/blog")
+
+        html =
+          view
+          |> form("#blog-provision-form", %{"site_id" => site.id})
+          |> render_submit()
+
+        assert html =~ "#{@components} components, 5 pages, 1 snippet."
+        assert has_element?(view, "#blog-provision-skipped-0", "/:lang/blog")
+        assert has_element?(view, "#blog-provision-skipped-0", ~s("/blog"))
+        refute "/:lang/blog" in paths(site)
+
+        close(view)
+      end
     end
 
     # A PATH IS THE ONE CLASH A RUN CANNOT ANSWER ON ITS OWN. A name it can take another of; an
@@ -264,7 +296,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       |> form("#blog-provision-clashes", %{"site_id" => site.id, "prefix" => "/mish"})
       |> render_submit()
 
-      assert "/mish/:lang/blog" in paths(site)
+      assert "/:lang/mish/blog" in paths(site)
       assert page!(site, "/:lang/blog").name == "mine"
 
       close(view)

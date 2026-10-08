@@ -88,7 +88,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
   require Ash.Query
 
   alias MishkaBlog.{BlogPost, Blogger, Collection, Tag, Team}
-  alias MishkaCmsCore.Runtime.{Languages, PageEditions, Seo}
+  alias MishkaCmsCore.Runtime.{Languages, Seo}
   alias MishkaCmsCore.Settings
 
   @post_fields [
@@ -493,7 +493,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
   defp rated(_unrated), do: nil
 
   # Each language the post is published in among the site's own, at its address, and `x-default` at
-  # the site's primary language; nothing for a post in one language.
+  # the site's primary language — `MishkaCmsCore.Runtime.Seo.alternate_links/3`, the head's own
+  # rule; nothing for a post in one language.
   defp alternates(post, %{page: %{path: path}, site_id: site_id}, base) do
     served = Languages.site(site_id)
 
@@ -504,28 +505,16 @@ defmodule MishkaBlog.Plugins.PageSeo do
             |> Enum.sort_by(& &1.language),
           edition.language in served,
           captures = %{Languages.capture() => edition.language, "slug" => edition.slug},
-          url = Seo.absolute(PageEditions.path(path, captures), base),
-          is_binary(url),
-          do: {edition.language, url}
+          address = Languages.url(path, captures, site_id),
+          is_binary(address),
+          do: %{language: edition.language, path: address}
 
-    case editions do
-      [_, _ | _] ->
-        primary = Languages.primary(site_id)
-
-        Enum.map(editions, fn {language, url} -> alternate(language, url) end) ++
-          for {^primary, url} <- editions, do: alternate("x-default", url)
-
-      _one_or_none ->
-        []
-    end
+    Seo.alternate_links(editions, base, site_id)
   end
 
   # A relationship read through an action that pages arrives as a page.
   defp rows(%Ash.Page.Offset{results: results}), do: results
   defp rows(rows) when is_list(rows), do: rows
-
-  defp alternate(language, url),
-    do: %{tag: "link", attrs: %{"rel" => "alternate", "hreflang" => language, "href" => url}}
 
   defp meta(key, name, value) when is_binary(value) and value != "",
     do: [%{tag: "meta", attrs: %{key => name}, content: value}]
@@ -561,11 +550,16 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   # `depth` is how many segments of the page's path come after the blog's home: one for a post,
   # two for a category, a tag, a blogger or a team.
-  defp breadcrumb(%{language: language, url: url, page: %{path: path}}, base, depth, name) do
+  defp breadcrumb(
+         %{language: language, url: url, page: %{path: path}, site_id: site_id},
+         base,
+         depth,
+         name
+       ) do
     blog_url =
       path
       |> drop_segments(depth)
-      |> PageEditions.path(%{Languages.capture() => language})
+      |> Languages.url(%{Languages.capture() => language}, site_id)
       |> Seo.absolute(base)
 
     items =

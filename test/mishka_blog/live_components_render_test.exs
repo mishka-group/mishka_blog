@@ -24,7 +24,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
   alias MishkaCmsCore.Runtime.LiveViewHelpers
-  alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Runtime.Translations
 
   require Ash.Query
@@ -1978,9 +1978,9 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     test "links each tag to where the page said that tag's posts live", %{site: site} do
       tagged!(site, "Elixir", "elixir")
 
-      {:ok, view, _html} = mount_page(site, "blog-tag-cloud", %{tag_base: "/en/blog/tag"})
+      {:ok, view, _html} = mount_page(site, "blog-tag-cloud", %{tag_base: "/blog/tag"})
 
-      assert hrefs(view, ~s([data-role="blog-tag"])) == ["/en/blog/tag/elixir"]
+      assert hrefs(view, ~s([data-role="blog-tag"])) == ["/blog/tag/elixir"]
       assert text_of(view, ~s([data-role="blog-tag"])) == ["Elixir"]
     end
 
@@ -2106,13 +2106,10 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       filed!(site, "OTP Patterns", "otp-patterns")
 
       {:ok, view, _html} =
-        mount_page(site, "blog-category-list", %{category_base: "/en/blog/category"})
+        mount_page(site, "blog-category-list", %{category_base: "/blog/category"})
 
       assert text_of(view, ~s([data-role="blog-category-name"])) == ["OTP Patterns"]
-
-      assert hrefs(view, ~s([data-role="blog-category-name"])) == [
-               "/en/blog/category/otp-patterns"
-             ]
+      assert hrefs(view, ~s([data-role="blog-category-name"])) == ["/blog/category/otp-patterns"]
     end
 
     # A DRAFT CATEGORY IS THE AUTHOR'S BUSINESS. `:public_list` is what decides that, and this reads
@@ -2168,11 +2165,11 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       {:ok, view, _html} =
         mount_page(site, "blog-category-list", %{
           posts_per_category: 2,
-          post_base: "/en/blog/post"
+          post_base: "/blog/post"
         })
 
       assert text_of(view, ~s([data-role="blog-category-post"])) == ["Third", "Second"]
-      assert hrefs(view, ~s([data-role="blog-category-post"])) |> List.first() =~ "/en/blog/post/"
+      assert hrefs(view, ~s([data-role="blog-category-post"])) |> List.first() =~ "/blog/post/"
     end
 
     test "and none of them by default", %{site: site} do
@@ -2336,14 +2333,14 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       {:ok, view, _html} =
         mount_page(site, "blog-post-detail", %{
           slug: post.slug,
-          tag_base: "/en/blog/tag",
-          category_base: "/en/blog/category"
+          tag_base: "/blog/tag",
+          category_base: "/blog/category"
         })
 
       assert text_of(view, ~s([data-role="blog-detail-tag"])) == ["Elixir"]
-      assert hrefs(view, ~s([data-role="blog-detail-tag"])) == ["/en/blog/tag/elixir"]
+      assert hrefs(view, ~s([data-role="blog-detail-tag"])) == ["/blog/tag/elixir"]
       assert text_of(view, ~s([data-role="blog-detail-category"])) == ["OTP"]
-      assert hrefs(view, ~s([data-role="blog-detail-category"])) == ["/en/blog/category/otp"]
+      assert hrefs(view, ~s([data-role="blog-detail-category"])) == ["/blog/category/otp"]
     end
 
     test "and names the bloggers credited with it", %{site: site} do
@@ -2557,6 +2554,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     test "and fills the same capture on a tag and a category from the row it links to", %{
       site: site
     } do
+      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["en", "fa"], site_id: site.id)
       persian = persian!(site, "نوشته")
       tag_post!(persian, tag!(site, name: "اکسیر", slug: "eksir", language: "fa"))
       categorize!(persian, category!(site, name: "الگوها", slug: "olgooha", language: "fa"))
@@ -2665,46 +2663,139 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
 
   # THE LANGUAGE IN A LINK IS THE LANGUAGE OF THE ROW IT LEADS TO. A listing that is not narrowed to
   # one language holds rows of several, and one prefix over all of them sends half of them to a URL
-  # their own edition's page will not answer.
+  # their own edition's page will not answer. Each link is the address the site's URL mode gives its
+  # language: English, the first, unprefixed while the site leaves it so.
   describe "a base written with the lang capture" do
-    test "sends each post to its own language", %{site: site} do
-      [english] = publish!(site, ["English"])
-      persian = persian!(site, "نوشته")
+    for mode <- ~w(prefix_others prefix_all) do
+      test "sends each post to its own language, in #{mode}", %{site: site} do
+        publishes_persian!(site, unquote(mode))
+        [english] = publish!(site, ["English"])
+        persian = persian!(site, "نوشته")
 
-      {:ok, view, _html} =
-        mount_page(site, "blog-post-list", %{
-          per_page: 10,
-          language: "all",
-          post_base: "/:lang/blog"
-        })
+        {:ok, view, _html} =
+          mount_page(site, "blog-post-list", %{
+            per_page: 10,
+            language: "all",
+            post_base: "/:lang/blog"
+          })
 
-      assert Enum.sort(hrefs(view, ~s([data-role="blog-list-title"]))) ==
-               Enum.sort(["/en/blog/#{english.slug}", "/fa/blog/#{persian.slug}"])
+        assert Enum.sort(hrefs(view, ~s([data-role="blog-list-title"]))) ==
+                 Enum.sort([
+                   english(unquote(mode), "/blog/#{english.slug}"),
+                   "/fa/blog/#{persian.slug}"
+                 ])
+      end
+
+      test "and each tag and category to theirs, in #{mode}", %{site: site} do
+        publishes_persian!(site, unquote(mode))
+        tagged!(site, "Elixir", "elixir")
+        persian_tag = tag!(site, name: "اکسیر", slug: "eksir", language: "fa")
+        tag_post!(persian!(site, "نوشته"), persian_tag)
+
+        {:ok, tags, _html} =
+          mount_page(site, "blog-tag-cloud", %{language: "all", tag_base: "/:lang/blog/tag"})
+
+        assert Enum.sort(hrefs(tags, ~s([data-role="blog-tag"]))) ==
+                 Enum.sort([english(unquote(mode), "/blog/tag/elixir"), "/fa/blog/tag/eksir"])
+
+        filed!(site, "OTP", "otp")
+        persian_category = category!(site, name: "الگوها", slug: "olgooha", language: "fa")
+        categorize!(persian!(site, "دیگر"), persian_category)
+
+        {:ok, categories, _html} =
+          mount_page(site, "blog-category-list", %{
+            language: "all",
+            category_base: "/:lang/blog/category"
+          })
+
+        assert Enum.sort(hrefs(categories, ~s([data-role="blog-category-name"]))) ==
+                 Enum.sort([
+                   english(unquote(mode), "/blog/category/otp"),
+                   "/fa/blog/category/olgooha"
+                 ])
+      end
+
+      # A BASE WRITTEN UNDER THE FIRST LANGUAGE is the same address as the one with the capture:
+      # `/en/blog` is `/blog` while English goes unprefixed, and a link to the form the site
+      # redirects away from would cost every reader a hop.
+      test "and a base written under the first language is that language's address, in #{mode}",
+           %{site: site} do
+        publishes_persian!(site, unquote(mode))
+        tagged!(site, "Elixir", "elixir")
+
+        {:ok, view, _html} = mount_page(site, "blog-tag-cloud", %{tag_base: "/en/blog/tag"})
+
+        assert hrefs(view, ~s([data-role="blog-tag"])) == [
+                 english(unquote(mode), "/blog/tag/elixir")
+               ]
+      end
     end
 
-    test "and each tag and category to theirs", %{site: site} do
-      tagged!(site, "Elixir", "elixir")
-      persian_tag = tag!(site, name: "اکسیر", slug: "eksir", language: "fa")
-      tag_post!(persian!(site, "نوشته"), persian_tag)
+    # AND SO IS EVERY OTHER ROW WITH NO ADDRESS, NEVER A LINK TO NOTHING. `<.link navigate={nil}>`
+    # draws `href="#"` — a link that scrolls the reader to the top of the page they are on. A title,
+    # a tag, a category and a post under one are drawn as the word they name instead; a control
+    # that only leads somewhere — a card's read link, the permalink — is not drawn at all.
+    test "draws every row with no address as a word, and no link to nothing", %{site: site} do
+      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["en"], site_id: site.id)
+      persian = persian!(site, "نوشته")
+      tag_post!(persian, tag!(site, name: "اکسیر", slug: "eksir", language: "fa"))
+      categorize!(persian, category!(site, name: "الگوها", slug: "olgooha", language: "fa"))
+      listed = %{per_page: 10, language: "all", post_base: "/:lang/blog"}
 
-      {:ok, tags, _html} =
-        mount_page(site, "blog-tag-cloud", %{language: "all", tag_base: "/:lang/blog/tag"})
+      for {name, given, roles} <- [
+            {"blog-post-list", listed, ["blog-list-title"]},
+            {"blog-post-list", Map.put(listed, :variant, "compact"), ["blog-list-title"]},
+            {"blog-tag-cloud", %{language: "all", tag_base: "/:lang/blog/tag"}, ["blog-tag"]},
+            {"blog-category-list",
+             %{
+               language: "all",
+               category_base: "/:lang/blog/category",
+               post_base: "/:lang/blog",
+               posts_per_category: 1
+             }, ["blog-category-name", "blog-category-post"]},
+            {"blog-post-detail", %{slug: persian.slug, base: "/blog", post_base: "/:lang/blog"},
+             ["blog-detail-title"]}
+          ] do
+        {:ok, view, _html} = mount_page(site, name, given)
 
-      assert Enum.sort(hrefs(tags, ~s([data-role="blog-tag"]))) ==
-               Enum.sort(["/en/blog/tag/elixir", "/fa/blog/tag/eksir"])
+        for role <- roles do
+          assert text_of(view, ~s([data-role="#{role}"])) != [], "#{name} drew no #{role}"
 
-      filed!(site, "OTP", "otp")
-      persian_category = category!(site, name: "الگوها", slug: "olgooha", language: "fa")
-      categorize!(persian!(site, "دیگر"), persian_category)
+          assert hrefs(view, ~s([data-role="#{role}"])) == [],
+                 "#{name} linked a #{role} to nothing"
+        end
 
-      {:ok, categories, _html} =
-        mount_page(site, "blog-category-list", %{
-          language: "all",
-          category_base: "/:lang/blog/category"
+        assert attrs_of(view, "a", "href") |> Enum.filter(&(&1 == "#")) == [],
+               "#{name} drew a link to nothing"
+
+        assert text_of(view, "a:not([href])") == [], "#{name} drew a link with no address"
+        assert text_of(view, ~s([data-role="blog-list-read"])) == []
+        assert text_of(view, ~s([data-role="blog-detail-permalink"])) == []
+      end
+
+      {:ok, search, _html} = mount_page(site, "blog-post-search", %{post_base: "/:lang/blog"})
+      search |> form(~s(#one form), %{"q" => "نوشته"}) |> render_change()
+
+      assert text_of(search, ~s([data-role="blog-search-result"])) == ["نوشته"]
+      assert text_of(search, ~s([data-role="blog-search-result"] a)) == []
+    end
+
+    # A ROW IN A LANGUAGE THE SITE DOES NOT PUBLISH HAS NO ADDRESS — the `:lang` capture answers
+    # `site.languages` alone — so it is drawn as a word rather than linked to a 404.
+    test "and draws a row in a language the site does not publish as a word", %{site: site} do
+      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["en"], site_id: site.id)
+      persian = persian!(site, "نوشته")
+      tag_post!(persian, tag!(site, name: "اکسیر", slug: "eksir", language: "fa"))
+
+      {:ok, view, _html} =
+        mount_page(site, "blog-post-detail", %{
+          slug: persian.slug,
+          language: "fa",
+          tag_base: "/:lang/blog/tag"
         })
 
-      assert Enum.sort(hrefs(categories, ~s([data-role="blog-category-name"]))) ==
-               Enum.sort(["/en/blog/category/otp", "/fa/blog/category/olgooha"])
+      assert text_of(view, ~s([data-role="blog-detail-tag"])) == ["اکسیر"]
+      assert hrefs(view, ~s([data-role="blog-detail-tag"])) == []
     end
   end
 
@@ -2779,6 +2870,25 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
 
       refute has_element?(view, ~s([data-role="blog-comments-form"]))
       assert has_element?(view, ~s([data-role="blog-comments-login"]))
+    end
+
+    # THE WAY IN IS THE SIGN-IN PAGE IN THE POST'S LANGUAGE, at the address the site's URL mode
+    # gives it: English, the first, unprefixed while the site leaves it so.
+    for mode <- ~w(prefix_others prefix_all) do
+      test "and sends them to the sign-in page in the post's language, in #{mode}", %{site: site} do
+        publishes_persian!(site, unquote(mode))
+        [english] = publish!(site, ["Ours"])
+        persian = persian!(site, "نوشته")
+
+        for {post, address} <- [
+              {english, english(unquote(mode), "/auth")},
+              {persian, "/fa/auth"}
+            ] do
+          {:ok, view, _html} = mount_page(site, "blog-post-comments", %{slug: post.slug})
+
+          assert hrefs(view, ~s([data-role="blog-comments-login"] a)) == [address]
+        end
+      end
     end
 
     test "and a signed-in one a box, whose comment arrives waiting for a moderator", %{site: site} do
@@ -3023,6 +3133,21 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       published_at: ~U[2026-01-01 00:00:00Z]
     )
   end
+
+  # English and Persian on `site`, its addresses named in `mode`.
+  defp publishes_persian!(site, mode) do
+    on_exit(fn ->
+      SettingsState.delete(site.id, "site.languages")
+      SettingsState.delete(site.id, "site.language_urls")
+    end)
+
+    {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+    {:ok, _} = MishkaCmsCore.Settings.put("site.language_urls", mode, site_id: site.id)
+  end
+
+  # Where English, the site's first language, puts `path` in `mode`.
+  defp english("prefix_others", path), do: path
+  defp english("prefix_all", path), do: "/en" <> path
 
   defp categorize!(post, category),
     do: create_post_collection!(post_id: post.id, collection_id: category.id)

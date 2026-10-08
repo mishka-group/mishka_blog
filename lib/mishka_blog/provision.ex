@@ -91,9 +91,12 @@ defmodule MishkaBlog.Provision do
   That is also why the bases the components build links from are written with the capture still in
   them — `post_base="/:lang/blog"`, not `"/" <> @page.language <> "/blog"`. The component fills the
   `:lang` segment with the language of the ROW it is linking to, which is the language the reader
-  will be reading in when they arrive. A base with the page's own language baked in gets that right
-  for everything except the one link that matters most: the post's translations row, where every
-  other edition would be offered at a URL under the language the reader is leaving.
+  will be reading in when they arrive, and builds the address the site's URL mode gives it
+  (`site_path/2`, `MishkaCmsCore.Runtime.LiveViewHelpers`): `/blog/<slug>` in a first language the
+  site leaves unprefixed, `/fa/blog/<slug>` in Persian. A base with the page's own language baked in
+  gets the language right for everything except the one link that matters most: the post's
+  translations row, where every other edition would be offered at a URL under the language the
+  reader is leaving.
 
   `base`, where a page has one, is the pager's and stays a real URL — nothing appends a slug to it,
   and its `?page=2` has to be somewhere a reader could have typed.
@@ -125,12 +128,12 @@ defmodule MishkaBlog.Provision do
   # separate literals, six paths, fifteen bases and six URLs, each one its own chance to write a path
   # this site does not answer.
   #
-  # THE `lang` CAPTURE STAYS IN A BASE, rather than `"/" <> @page.language <> "/blog"` the way the
-  # chrome's own links are built. A component fills that segment with the language of the ROW it is
-  # linking to — see `lang_base/2` in the bundle — which is the only way a link can lead to another
-  # language's edition; a base with the reader's current language baked in would offer every
-  # translation under the language they are leaving. It also means the bases are the same on a page
-  # whose path captures no language at all, which is where the snippet below ends up.
+  # THE `lang` CAPTURE STAYS IN A BASE, rather than the reader's language baked in. A component
+  # fills that segment with the language of the ROW it is linking to — see `slug_href/4` in the
+  # bundle — which is the only way a link can lead to another language's edition; a base with the
+  # reader's current language baked in would offer every translation under the language they are
+  # leaving. It also means the bases are the same on a page whose path captures no language at all,
+  # which is where the snippet below ends up.
   #
   # A URL IS THE SAME ADDRESS WITH THAT CAPTURE ALREADY FILLED IN — `live_url/2` — because nothing
   # fills it later: a pager writes its `?page=2` to the address bar, and the header links to a page
@@ -580,19 +583,20 @@ defmodule MishkaBlog.Provision do
 
   defp without_the_open_one(_no_post_here, _pad), do: ""
 
-  # ONE OF THE ADDRESSES ABOVE AS A URL A READER COULD HAVE TYPED: the `lang` capture filled in with
-  # the language this page is being read in, which is what a pager writes to the address bar and
-  # what the header links a page by. `captured` names the page's OTHER capture, where it has one and
-  # the pager's URL has to end in it — `|| ""` because the admin's Preview assigns no captures at
-  # all. An address holding no `lang` raises here rather than turning into a link under no language.
-  defp live_url(address, captured \\ nil) do
-    [before_it, after_it] = String.split(address, ":" <> Languages.capture(), parts: 2)
-    url = ~s("#{before_it}" <> @page.language <> "#{after_it}")
+  # ONE OF THE ADDRESSES ABOVE AS A URL A READER COULD HAVE TYPED, written as the `site_path/2` the
+  # template calls: the `lang` capture filled in with the language this page is being read in, at the
+  # address the site's URL mode gives it, which is what a pager writes to the address bar and what
+  # the header links a page by. `captured` names the page's OTHER capture, where it has one and the
+  # pager's URL has to end in it; the admin's Preview assigns no captures at all, and gets no URL.
+  defp live_url(address, captured \\ nil)
 
-    case captured do
-      nil -> url
-      name -> url <> ~s( <> "/" <> \(@query_params["#{name}"] || ""\))
-    end
+  defp live_url(address, nil), do: ~s|site_path("#{address}", @page.language)|
+
+  defp live_url(address, name) do
+    captures =
+      ~s|%{"#{Languages.capture()}" => @page.language, "#{name}" => @query_params["#{name}"]}|
+
+    ~s|site_path("#{address}/:#{name}", #{captures})|
   end
 
   # THE LANGUAGE NAV IS BUILT FROM `@page_languages`, never from the first path segment. The capture
