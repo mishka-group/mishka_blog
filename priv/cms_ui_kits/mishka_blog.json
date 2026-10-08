@@ -1,7 +1,7 @@
 {
   "$schema": "mishka.ui_kit.bundle.v3",
   "name": "mishka_blog",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "components": [
     {
       "name": "blog-post-list",
@@ -357,7 +357,7 @@
         {
           "name": "read_as",
           "args": "visitor",
-          "code": "# THE VISITOR THE READ IS FOR, named so a post, a category or a tag locked to permissions it\n# does not hold is left out of the rows, the count and the pages.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+          "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
         },
         {
           "name": "site_name",
@@ -492,7 +492,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> Phoenix.LiveView.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -748,7 +748,7 @@
         {
           "name": "read_as",
           "args": "visitor",
-          "code": "# THE VISITOR THE READ IS FOR, named so a post, a category or a tag locked to permissions it\n# does not hold is left out of the rows, the count and the pages.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+          "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
         },
         {
           "name": "site_name",
@@ -848,7 +848,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> Phoenix.LiveView.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -968,7 +968,7 @@
         {
           "name": "read_as",
           "args": "visitor",
-          "code": "# THE VISITOR THE READ IS FOR, named so a post, a category or a tag locked to permissions it\n# does not hold is left out of the rows, the count and the pages.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+          "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
         },
         {
           "name": "positive",
@@ -1186,7 +1186,7 @@
         {
           "name": "read_as",
           "args": "visitor",
-          "code": "# THE VISITOR THE READ IS FOR, named so a post, a category or a tag locked to permissions it\n# does not hold is left out of the rows, the count and the pages.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+          "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
         },
         {
           "name": "positive",
@@ -1281,7 +1281,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> Phoenix.LiveView.start_async(:tags, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:tags, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -1566,7 +1566,7 @@
         {
           "name": "read_as",
           "args": "visitor",
-          "code": "# THE VISITOR THE READ IS FOR, named so a post, a category or a tag locked to permissions it\n# does not hold is left out of the rows, the count and the pages.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+          "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
         },
         {
           "name": "trimmed",
@@ -1651,7 +1651,7 @@
         {
           "name": "authors_of",
           "args": "post, visitor",
-          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  %{id: post_id} ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_list, %{}, actor: visitor)\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(display_name: :asc)\n    |> Ash.Query.select([:id, :display_name])\n    |> Ash.read(tenant: site_id(), page: [limit: 20])\n    |> rows()\nend\n"
+          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  %{id: post_id} ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(display_name: :asc)\n    |> Ash.Query.select([:id, :display_name])\n    |> Ash.read(tenant: site_id(), page: [limit: 20])\n    |> rows()\nend\n"
         },
         {
           "name": "only_language",
@@ -1898,7 +1898,7 @@
         {
           "name": "read_as",
           "args": "visitor",
-          "code": "# THE VISITOR THE READ IS FOR, named so a post, a category or a tag locked to permissions it\n# does not hold is left out of the rows, the count and the pages.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+          "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
         },
         {
           "name": "positive",
@@ -2018,7 +2018,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> Phoenix.LiveView.start_async(:categories, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:categories, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -2262,7 +2262,7 @@
         {
           "name": "read_as",
           "args": "visitor",
-          "code": "# THE VISITOR THE READ IS FOR, named so the conversation under a post locked to permissions it\n# does not hold is not read.\n[authorize?: false, context: %{shared: %{visitor: visitor}}]\n"
+          "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so the conversation under a post locked to\n# permissions it does not hold is not read, and a page with nobody signed in reads as a guest. The\n# tenant goes with it, because a public action that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
         },
         {
           "name": "positive",
@@ -2321,8 +2321,8 @@
         },
         {
           "name": "author_names",
-          "args": "comments",
-          "code": "require Ash.Query\n\nids =\n  comments\n  |> Enum.flat_map(fn comment -> [comment | approved_replies(comment)] end)\n  |> Enum.map(& &1.author_id)\n  |> Enum.reject(&is_nil/1)\n  |> Enum.uniq()\n\n# A HUNDRED AT A TIME, which is all `:public_list` will hand back; a bigger ask is shrunk to that\n# cap instead of refused, and every commenter past it would have been called by the anonymous word.\nids\n|> Enum.chunk_every(100)\n|> Enum.flat_map(fn wanted ->\n  MishkaBlog.Blogger\n  |> Ash.Query.for_read(:public_list, %{}, authorize?: false)\n  |> Ash.Query.filter(user_id in ^wanted)\n  |> Ash.Query.select([:user_id, :display_name])\n  |> Ash.read(tenant: site_id(), page: [limit: 100])\n  |> rows()\n  |> case do\n    # A NAME THAT COULD NOT BE READ IS A READER, not a conversation nobody can see.\n    {:ok, found} -> found\n    {:error, _unreadable} -> []\n  end\nend)\n|> Map.new(&{&1.user_id, &1.display_name})\n"
+          "args": "comments, visitor",
+          "code": "require Ash.Query\n\nids =\n  comments\n  |> Enum.flat_map(fn comment -> [comment | approved_replies(comment)] end)\n  |> Enum.map(& &1.author_id)\n  |> Enum.reject(&is_nil/1)\n  |> Enum.uniq()\n\n# A HUNDRED AT A TIME, which is all `:public_list` will hand back; a bigger ask is shrunk to that\n# cap instead of refused, and every commenter past it would have been called by the anonymous word.\nids\n|> Enum.chunk_every(100)\n|> Enum.flat_map(fn wanted ->\n  MishkaBlog.Blogger\n  |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n  |> Ash.Query.filter(user_id in ^wanted)\n  |> Ash.Query.select([:user_id, :display_name])\n  |> Ash.read(tenant: site_id(), page: [limit: 100])\n  |> rows()\n  |> case do\n    # A NAME THAT COULD NOT BE READ IS A READER, not a conversation nobody can see.\n    {:ok, found} -> found\n    {:error, _unreadable} -> []\n  end\nend)\n|> Map.new(&{&1.user_id, &1.display_name})\n"
         },
         {
           "name": "approved_replies",
@@ -2337,7 +2337,7 @@
         {
           "name": "top_level",
           "args": "post_id, wanted, visitor",
-          "code": "require Ash.Query\n\n# ONE CAPPED PAGE AT A TIME. `:approved_by_post` hands back at most 100 rows and Ash shrinks a\n# bigger ask to that cap rather than refusing it, so asking for the whole conversation at once made\n# every comment past the hundredth unreachable while \"load more\" stayed on the page for ever.\nEnum.reduce_while(Stream.iterate(0, &(&1 + 100)), {:ok, {[], 0}}, fn offset, {:ok, {gathered, counted}} ->\n  ask = min(wanted - offset, 100)\n\n  MishkaBlog.Comment\n  |> Ash.Query.for_read(:approved_by_post, %{post_id: post_id}, read_as(visitor))\n  |> Ash.Query.filter(is_nil(parent_comment_id))\n  |> Ash.Query.sort(is_pinned: :desc, inserted_at: :asc)\n  |> Ash.Query.load([:rendered_content, replies: [:rendered_content]])\n  |> Ash.read(\n    tenant: site_id(),\n    page: [limit: ask, offset: offset, count: offset == 0]\n  )\n  |> paged()\n  |> case do\n    {:error, reason} ->\n      {:halt, {:error, reason}}\n\n    {:ok, %{rows: page, total: total}} ->\n      rows = gathered ++ page\n\n      whole =\n        case offset do\n          0 -> total\n          _a_later_page -> counted\n        end\n\n      case length(rows) < wanted and length(page) == ask do\n        true -> {:cont, {:ok, {rows, whole}}}\n        false -> {:halt, {:ok, {rows, whole}}}\n      end\n  end\nend)\n"
+          "code": "require Ash.Query\n\n# THE REPLIES ARE READ AS THE COMMENTS ABOVE THEM ARE, through the public action and as the\n# visitor. `replies` itself reads through the resource's primary action, which is the moderators'.\nreplies =\n  MishkaBlog.Comment\n  |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n  |> Ash.Query.load(:rendered_content)\n\n# ONE CAPPED PAGE AT A TIME. `:approved_by_post` hands back at most 100 rows and Ash shrinks a\n# bigger ask to that cap rather than refusing it, so asking for the whole conversation at once made\n# every comment past the hundredth unreachable while \"load more\" stayed on the page for ever.\nEnum.reduce_while(Stream.iterate(0, &(&1 + 100)), {:ok, {[], 0}}, fn offset, {:ok, {gathered, counted}} ->\n  ask = min(wanted - offset, 100)\n\n  MishkaBlog.Comment\n  |> Ash.Query.for_read(:approved_by_post, %{post_id: post_id}, read_as(visitor))\n  |> Ash.Query.filter(is_nil(parent_comment_id))\n  |> Ash.Query.sort(is_pinned: :desc, inserted_at: :asc)\n  |> Ash.Query.load([:rendered_content, replies: replies])\n  |> Ash.read(\n    tenant: site_id(),\n    page: [limit: ask, offset: offset, count: offset == 0]\n  )\n  |> paged()\n  |> case do\n    {:error, reason} ->\n      {:halt, {:error, reason}}\n\n    {:ok, %{rows: page, total: total}} ->\n      rows = gathered ++ page\n\n      whole =\n        case offset do\n          0 -> total\n          _a_later_page -> counted\n        end\n\n      case length(rows) < wanted and length(page) == ask do\n        true -> {:cont, {:ok, {rows, whole}}}\n        false -> {:halt, {:ok, {rows, whole}}}\n      end\n  end\nend)\n"
         },
         {
           "name": "handle_event",
@@ -2387,7 +2387,7 @@
         {
           "name": "fetch",
           "args": "asked",
-          "code": "case post_row(asked.slug, asked.language, asked.visitor) do\n  nil ->\n    {:ok, %{post: nil, comments: [], shown: asked.shown, has_more: false}}\n\n  post ->\n    with {:ok, {found, total}} <- top_level(post.id, asked.shown, asked.visitor) do\n      names = author_names(found)\n\n      comments =\n        Enum.map(found, fn comment ->\n          replies =\n            comment\n            |> approved_replies()\n            |> Enum.map(&shape(&1, names, asked.reader, []))\n\n          shape(comment, names, asked.reader, replies)\n        end)\n\n      {:ok,\n       %{\n         post: post,\n         comments: comments,\n         shown: asked.shown,\n         has_more: total > length(comments)\n       }}\n    end\nend\n"
+          "code": "case post_row(asked.slug, asked.language, asked.visitor) do\n  nil ->\n    {:ok, %{post: nil, comments: [], shown: asked.shown, has_more: false}}\n\n  post ->\n    with {:ok, {found, total}} <- top_level(post.id, asked.shown, asked.visitor) do\n      names = author_names(found, asked.visitor)\n\n      comments =\n        Enum.map(found, fn comment ->\n          replies =\n            comment\n            |> approved_replies()\n            |> Enum.map(&shape(&1, names, asked.reader, []))\n\n          shape(comment, names, asked.reader, replies)\n        end)\n\n      {:ok,\n       %{\n         post: post,\n         comments: comments,\n         shown: asked.shown,\n         has_more: total > length(comments)\n       }}\n    end\nend\n"
         },
         {
           "name": "arrived",
@@ -2412,7 +2412,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> Phoenix.LiveView.start_async(:comments, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:comments, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -2422,6 +2422,1289 @@
       "examples": [],
       "extra": {
         "icon": "comment",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-author-profile",
+      "description": "One blogger's page — their picture, name, handle, bio and links, the teams they belong to, and their published posts under it, drawn as the list draws its cards. Two reads, both in the background: the profile, and the page of posts, so turning a page reads the posts alone.",
+      "type": "media",
+      "format": "heex",
+      "stateful": true,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div id={@id} {@rest} data-role=\"blog-author-profile\" class=\"text-[#1b1a18]\">\n  <.component\n    :if={@loading}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"loading\"\n    role=\"blog-author-loading\"\n    text={@loading_text}\n  />\n\n  <.component\n    :if={@failed}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"error\"\n    role=\"blog-author-error\"\n    text={@error_text}\n    retry_text={@retry_text}\n    target={@myself}\n  />\n\n  <.component\n    :if={not @loading and not @failed and @blogger == nil and trimmed(@slug) == \"\"}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-author-idle\"\n    text={@idle_text}\n    quiet={true}\n  />\n\n  <.component\n    :if={not @loading and not @failed and @blogger == nil and trimmed(@slug) != \"\"}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-author-missing\"\n    text={@missing_text}\n  />\n\n  <section\n    :if={not @loading and not @failed and not is_nil(@blogger)}\n    data-role=\"blog-author-card\"\n    class=\"rounded-[18px] border border-[#ecebe6] bg-white p-5 sm:p-7\"\n  >\n    <div class=\"flex flex-col gap-5 sm:flex-row sm:items-start\">\n      <img\n        :if={@show_avatar and trimmed(@blogger.avatar_url) != \"\"}\n        src={@blogger.avatar_url}\n        alt={@blogger.display_name}\n        data-role=\"blog-author-avatar\"\n        class=\"h-24 w-24 flex-none rounded-full object-cover\"\n      />\n\n      <div\n        :if={@show_avatar and trimmed(@blogger.avatar_url) == \"\"}\n        aria-hidden=\"true\"\n        data-role=\"blog-author-initial\"\n        class=\"flex h-24 w-24 flex-none items-center justify-center rounded-full bg-[#f2f1fc] text-3xl font-black text-[#5b57d6]\"\n      >\n        {initial(@blogger.display_name)}\n      </div>\n\n      <div class=\"min-w-0 flex-1\">\n        <h1\n          data-role=\"blog-author-name\"\n          dir=\"auto\"\n          class=\"text-2xl font-bold leading-tight sm:text-3xl\"\n        >\n          {@blogger.display_name}\n        </h1>\n\n        <p data-role=\"blog-author-handle\" dir=\"ltr\" class=\"mt-1 text-sm text-[#8a877f]\">\n          @{@blogger.slug}\n        </p>\n\n        <div\n          :if={@show_bio and trimmed(@blogger.bio) != \"\"}\n          data-role=\"blog-author-bio\"\n          dir=\"auto\"\n          class=\"mt-4 whitespace-pre-line text-sm leading-relaxed text-[#3a382f] [&_a]:underline\"\n        >\n          {bio_html(@blogger.bio)}\n        </div>\n\n        <ul\n          :if={@show_links and links(@blogger.social_links) != []}\n          data-role=\"blog-author-links\"\n          class=\"mt-4 flex flex-wrap gap-2\"\n        >\n          <li :for={link <- links(@blogger.social_links)}>\n            <a\n              :if={link.href}\n              href={link.href}\n              target=\"_blank\"\n              rel=\"me noopener noreferrer\"\n              dir=\"ltr\"\n              data-role=\"blog-author-link\"\n              class=\"inline-flex rounded-full border border-[#ecebe6] px-3 py-1 text-xs font-semibold text-[#5b57d6] hover:bg-[#f2f1fc]\"\n            >\n              {link.name}\n            </a>\n\n            <span\n              :if={is_nil(link.href)}\n              dir=\"ltr\"\n              data-role=\"blog-author-link\"\n              class=\"inline-flex rounded-full border border-[#ecebe6] px-3 py-1 text-xs font-semibold text-[#6d6a63]\"\n            >\n              {link.name}\n            </span>\n          </li>\n        </ul>\n\n        <div\n          :if={@show_teams and @teams != []}\n          data-role=\"blog-author-teams\"\n          class=\"mt-5 flex flex-wrap items-center gap-2 text-xs\"\n        >\n          <span :if={trimmed(@teams_text) != \"\"} class=\"text-[#8a877f]\">{@teams_text}</span>\n\n          <.component\n            :for={{team, href} <- addressed(@teams, @team_base, @lang_param, @language)}\n            component_name=\"blog-profile-card\"\n            site={site_name()}\n            variant=\"compact\"\n            role=\"blog-author-team\"\n            name={team.name}\n            image={team.avatar_url}\n            navigate={href}\n          />\n        </div>\n      </div>\n    </div>\n  </section>\n\n  <section\n    :if={not @loading and not @failed and not is_nil(@blogger) and @show_posts}\n    data-role=\"blog-author-posts\"\n    class=\"mt-8\"\n  >\n    <h2\n      :if={trimmed(@posts_heading) != \"\"}\n      data-role=\"blog-author-posts-heading\"\n      class=\"mb-5 text-lg font-bold leading-tight\"\n    >\n      {@posts_heading}\n    </h2>\n\n    <.component\n      :if={@posts_loading}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"loading\"\n      role=\"blog-author-posts-loading\"\n      text={@posts_loading_text}\n    />\n\n    <.component\n      :if={@posts_failed}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"error\"\n      role=\"blog-author-posts-error\"\n      text={@posts_error_text}\n      retry_text={@retry_text}\n      target={@myself}\n    />\n\n    <.component\n      :if={not @posts_loading and not @posts_failed and @posts == []}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"empty\"\n      role=\"blog-author-posts-empty\"\n      text={@empty_text}\n    />\n\n    <div\n      :if={not @posts_loading and not @posts_failed and @posts != []}\n      data-role=\"blog-author-post-items\"\n      class=\"grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3\"\n    >\n      <div :for={post <- @posts} id={\"#{@id}-post-#{post.id}\"} class=\"h-full\">\n        <.component\n          component_name=\"blog-post-card\"\n          site={site_name()}\n          post={post}\n          show_excerpt={@show_excerpt}\n          show_read={trimmed(@post_base) != \"\"}\n          navigate={post_navigate(@post_base, post.slug, @lang_param, post.language)}\n          read_text={@read_text}\n          featured_text={@featured_text}\n        />\n      </div>\n    </div>\n\n    <.component\n      :if={not @posts_loading and not @posts_failed}\n      component_name=\"blog-pager\"\n      site={site_name()}\n      role=\"blog-author-pager\"\n      page={@page}\n      pages={@pages}\n      base={@base}\n      params={@params}\n      page_param={@page_param}\n      target={@myself}\n      first_text={@first_text}\n      previous_text={@previous_text}\n      next_text={@next_text}\n      last_text={@last_text}\n    />\n  </section>\n</div>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "slug",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The blogger to draw, by their slug. A page stored at /:lang/blog/author/:slug hands it the capture: slug={@query_params[\"slug\"]}."
+          }
+        },
+        {
+          "name": "language",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "Which of their posts to list: a code such as fa or ar lists that language's only, left empty one edition of each, all every translation. A blogger is the same in every language, and the links to their teams are built in this one."
+          }
+        },
+        {
+          "name": "team_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a team's page lives — /:lang/blog/team, say. Left empty the teams are drawn as plain words, because this component does not own the router and will not invent a path. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the page, since a blogger and a team are one row in every language — at the address the site's URL mode gives that language."
+          }
+        },
+        {
+          "name": "post_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a post lives — /:lang/blog, say. Left empty a title among their posts is drawn as plain words. Write the language into it as :lang and every post is linked under its own language, at the address the site's URL mode gives that language."
+          }
+        },
+        {
+          "name": "base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "This page's own address, which the pager under their posts writes its links to. Left empty the pager stays on the server, and a page of the posts has no URL of its own."
+          }
+        },
+        {
+          "name": "params",
+          "type": "any",
+          "opts": {
+            "default": {},
+            "doc": "The page's own query string, handed straight to the pager under their posts, so a link it writes keeps every key the page already had."
+          }
+        },
+        {
+          "name": "page_param",
+          "type": "any",
+          "opts": {
+            "default": "page",
+            "doc": "The query key the page of their posts is written under."
+          }
+        },
+        {
+          "name": "lang_param",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The query key that carries the language on the links this component writes — lang, for a site addressed as /blog?lang=fa. Leave it empty on a site whose language is part of the path, where a :lang in the bases carries it instead."
+          }
+        },
+        {
+          "name": "per_page",
+          "type": "integer",
+          "opts": {
+            "default": 9,
+            "doc": "How many of their posts one page holds.",
+            "min": 1,
+            "max": 50
+          }
+        },
+        {
+          "name": "show_avatar",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw their picture, or the first letter of their name where they have none."
+          }
+        },
+        {
+          "name": "show_bio",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw their bio."
+          }
+        },
+        {
+          "name": "show_links",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the links on their profile — their site, their accounts elsewhere."
+          }
+        },
+        {
+          "name": "show_teams",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the teams they belong to."
+          }
+        },
+        {
+          "name": "show_posts",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw their published posts under their profile."
+          }
+        },
+        {
+          "name": "teams_text",
+          "type": "string",
+          "opts": {
+            "default": "Teams",
+            "doc": "What precedes the teams they belong to."
+          }
+        },
+        {
+          "name": "posts_heading",
+          "type": "string",
+          "opts": {
+            "default": "Posts",
+            "doc": "The heading over their posts. Left empty, none is drawn."
+          }
+        },
+        {
+          "name": "show_excerpt",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw each post's summary under its title."
+          }
+        },
+        {
+          "name": "read_text",
+          "type": "string",
+          "opts": {
+            "default": "Read",
+            "doc": "The words on each post card's own link."
+          }
+        },
+        {
+          "name": "featured_text",
+          "type": "string",
+          "opts": {
+            "default": "Featured",
+            "doc": "The badge a featured post carries."
+          }
+        },
+        {
+          "name": "first_text",
+          "type": "string",
+          "opts": {
+            "default": "First",
+            "doc": "The pager's jump to the first page."
+          }
+        },
+        {
+          "name": "previous_text",
+          "type": "string",
+          "opts": {
+            "default": "Previous",
+            "doc": "The pager's step back."
+          }
+        },
+        {
+          "name": "next_text",
+          "type": "string",
+          "opts": {
+            "default": "Next",
+            "doc": "The pager's step forward."
+          }
+        },
+        {
+          "name": "last_text",
+          "type": "string",
+          "opts": {
+            "default": "Last",
+            "doc": "The pager's jump to the last page."
+          }
+        },
+        {
+          "name": "idle_text",
+          "type": "string",
+          "opts": {
+            "default": "Pick a blogger to see their page.",
+            "doc": "What is shown while nothing names a blogger at all."
+          }
+        },
+        {
+          "name": "missing_text",
+          "type": "string",
+          "opts": {
+            "default": "That blogger is not here, or no longer writes for this site.",
+            "doc": "What is shown when the slug names nobody a reader can see."
+          }
+        },
+        {
+          "name": "empty_text",
+          "type": "string",
+          "opts": {
+            "default": "Nothing published yet.",
+            "doc": "What a reader is told when they have published nothing a reader can open."
+          }
+        },
+        {
+          "name": "loading_text",
+          "type": "string",
+          "opts": {
+            "default": "Loading this blogger…",
+            "doc": "What a screen reader is told while the profile is being read."
+          }
+        },
+        {
+          "name": "posts_loading_text",
+          "type": "string",
+          "opts": {
+            "default": "Loading posts…",
+            "doc": "What a screen reader is told while their posts are being read."
+          }
+        },
+        {
+          "name": "error_text",
+          "type": "string",
+          "opts": {
+            "default": "This blogger could not be loaded.",
+            "doc": "What a reader is told when the profile could not be read."
+          }
+        },
+        {
+          "name": "posts_error_text",
+          "type": "string",
+          "opts": {
+            "default": "These posts could not be loaded.",
+            "doc": "What a reader is told when their posts could not be read."
+          }
+        },
+        {
+          "name": "retry_text",
+          "type": "string",
+          "opts": {
+            "default": "Try again",
+            "doc": "The way out of a failed read."
+          }
+        },
+        {
+          "name": "current_user",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The signed-in reader, handed down by the page as current_user. A record locked to permissions it does not hold is left out; without one, every locked record is."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "mount",
+          "args": "socket",
+          "code": "{:ok,\n Phoenix.Component.assign(socket,\n   asked: nil,\n   loading: true,\n   failed: false,\n   blogger: nil,\n   teams: [],\n   listed: nil,\n   posts_loading: true,\n   posts_failed: false,\n   posts: [],\n   page: 1,\n   pages: 1\n )}\n"
+        },
+        {
+          "name": "update",
+          "args": "_assigns, socket",
+          "code": "{:ok, load(socket)}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"page\", %{\"to\" => to}, socket",
+          "code": "{:noreply,\n socket\n |> Phoenix.Component.assign(:page, to_page(to))\n |> load()}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"retry\", _params, socket",
+          "code": "# ONLY WHAT FAILED IS ASKED AGAIN. The profile and its posts are two reads, and a reader asking\n# again for the posts is not asking to watch the profile above them go back to its skeleton.\n{:noreply,\n socket\n |> Phoenix.Component.assign(\n   asked: if(socket.assigns[:failed], do: nil, else: socket.assigns[:asked]),\n   listed: if(socket.assigns[:posts_failed], do: nil, else: socket.assigns[:listed])\n )\n |> load()}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":profile, {:ok, result}, socket",
+          "code": "{:noreply, arrived(socket, result)}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":profile, {:exit, _reason}, socket",
+          "code": "# A READ THAT DIED TAKES THE BLOCK'S OWN STATE WITH IT AND NOTHING ELSE. The task is unlinked\n# before it re-raises — see `Phoenix.LiveView.Async.do_async/5` — so the page around this block is\n# still standing, and this is what it draws instead of the profile.\n{:noreply, Phoenix.Component.assign(socket, loading: false, failed: true)}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":posts, {:ok, result}, socket",
+          "code": "{:noreply, posts_arrived(socket, result)}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":posts, {:exit, _reason}, socket",
+          "code": "{:noreply, Phoenix.Component.assign(socket, posts_loading: false, posts_failed: true)}\n"
+        },
+        {
+          "name": "site_id",
+          "args": "",
+          "code": "__MODULE__.__component_information__([:private, :site_id])\n"
+        },
+        {
+          "name": "site_name",
+          "args": "",
+          "code": "# THE SITE'S NAME, NOT ITS ID, because that is what a component is addressed by: the runtime hashes\n# a module out of (component name, site name). Every `<.component …/>` below draws a sibling of this\n# one, which lives on the same site as this one and nowhere else.\n__MODULE__.__component_information__([:private, :site])\n"
+        },
+        {
+          "name": "read_as",
+          "args": "visitor",
+          "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
+        },
+        {
+          "name": "positive",
+          "args": "value, fallback",
+          "code": "cond do\n  is_integer(value) and value > 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number > 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
+        },
+        {
+          "name": "to_page",
+          "args": "value",
+          "code": "cond do\n  is_integer(value) and value > 0 -> value\n  is_binary(value) -> positive(value, 1)\n  true -> 1\nend\n"
+        },
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "initial",
+          "args": "name",
+          "code": "name\n|> to_string()\n|> String.trim()\n|> String.first()\n|> to_string()\n|> String.upcase()\n"
+        },
+        {
+          "name": "rows",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: found}} -> found\n  {:ok, found} when is_list(found) -> found\n  _unreadable -> []\nend\n"
+        },
+        {
+          "name": "paged",
+          "args": "result",
+          "code": "# A TUPLE RATHER THAN A LIST, and that is what the error state is built on: folding an unreadable\n# answer into an empty one leaves a block telling a reader that nothing is published when the truth\n# is that nothing could be read.\ncase result do\n  {:ok, %{results: found, count: count}} -> {:ok, %{rows: found, total: count || length(found)}}\n  {:ok, found} when is_list(found) -> {:ok, %{rows: found, total: length(found)}}\n  {:error, reason} -> {:error, reason}\n  _unreadable -> {:error, :unreadable}\nend\n"
+        },
+        {
+          "name": "slug_href",
+          "args": "base, slug, lang_param, language",
+          "code": "# THE ADDRESS OF A ROW, built by `site_path/2`: a `:lang` in the base is filled with the language of\n# the row being linked to, not the one the page is read in, and the address is the one the site's\n# URL mode gives that language — `/blog/<slug>` in a first language the site leaves unprefixed,\n# `/fa/blog/<slug>` in Persian. A base without the segment is filled as written, and a query-mode\n# page carries the language in `lang_param` instead. A row whose language this site does not\n# publish, or cannot be read, gets no link rather than a link to a 404.\ncase site_path(to_string(base) <> \"/:slug\", %{\"lang\" => trimmed(language), \"slug\" => to_string(slug)}) do\n  nil ->\n    nil\n\n  path ->\n    case {trimmed(lang_param), trimmed(language)} do\n      {\"\", _no_key} -> path\n      {_key, \"\"} -> path\n      {key, code} -> path <> \"?\" <> URI.encode_query(%{key => code})\n    end\nend\n"
+        },
+        {
+          "name": "link_language",
+          "args": "language",
+          "code": "# A BLOGGER OR A TEAM IS ONE ROW IN EVERY LANGUAGE, so the address of one is built in the page's\n# own: the language this block was given, else — on a page that names none, or every one — the\n# site's first.\ncase trimmed(language) do\n  code when code in [\"\", \"all\"] -> MishkaCmsCore.Runtime.Languages.primary(site_id())\n  code -> code\nend\n"
+        },
+        {
+          "name": "addressed",
+          "args": "rows, base, lang_param, language",
+          "code": "# EACH ROW WITH ITS ADDRESS UNDER `base`, or `nil` where it has none — no base was given, or the\n# page's language is not one this site publishes (`slug_href/4`) — so the template draws that row as\n# a word rather than as a link to nothing.\ncase trimmed(base) do\n  \"\" ->\n    Enum.map(rows, &{&1, nil})\n\n  address ->\n    code = link_language(language)\n    Enum.map(rows, &{&1, slug_href(address, &1.slug, lang_param, code)})\nend\n"
+        },
+        {
+          "name": "post_navigate",
+          "args": "post_base, slug, lang_param, language",
+          "code": "case trimmed(post_base) do\n  \"\" -> nil\n  base -> slug_href(base, slug, lang_param, language)\nend\n"
+        },
+        {
+          "name": "narrow_language",
+          "args": "query, wanted",
+          "code": "require Ash.Query\n\ncase trimmed(wanted) do\n  \"all\" -> query\n  \"\" -> Ash.Query.filter(query, is_nil(language_group_id) or language_group_id == id)\n  code -> Ash.Query.filter(query, language == ^code)\nend\n"
+        },
+        {
+          "name": "asked_page",
+          "args": "assigns",
+          "code": "key = to_string(assigns[:page_param] || \"page\")\n\ncase assigns[:params] do\n  %{^key => asked} -> to_page(asked)\n  _no_params_or_key -> positive(assigns[:page], 1)\nend\n"
+        },
+        {
+          "name": "field",
+          "args": "map, key",
+          "code": "# A LINK IS A MAP, keyed by atoms as the resource casts it and by strings as it was stored.\ncase map do\n  %{} -> Map.get(map, key) || Map.get(map, Atom.to_string(key))\n  _not_a_map -> nil\nend\n"
+        },
+        {
+          "name": "links",
+          "args": "social_links",
+          "code": "# A LINK IS DRAWN AS ONE ONLY WHERE A BROWSER SHOULD FOLLOW IT: an http, https or mailto address.\n# Anything else a profile was saved with is drawn as the words it was saved as and never put in an\n# `href`, where an address is something the browser runs.\nfor link <- List.wrap(social_links),\n    url = trimmed(field(link, :url)),\n    url != \"\" do\n  name =\n    case trimmed(field(link, :platform)) do\n      \"\" -> url\n      platform -> platform\n    end\n\n  href =\n    case URI.parse(url) do\n      %URI{scheme: scheme} when scheme in [\"http\", \"https\", \"mailto\"] -> url\n      _not_followed -> nil\n    end\n\n  %{name: name, href: href}\nend\n"
+        },
+        {
+          "name": "bio_html",
+          "args": "bio",
+          "code": "# THE BIO IS SANITIZED TO THE FEW TAGS `basic_html` KEEPS, as it was when it was written, because\n# it is drawn as markup: a row written around the form carries whatever it was written with.\ncase is_binary(bio) do\n  true -> Phoenix.HTML.raw(HtmlSanitizeEx.basic_html(bio))\n  false -> Phoenix.HTML.raw(\"\")\nend\n"
+        },
+        {
+          "name": "blogger_row",
+          "args": "slug, visitor",
+          "code": "# THE PUBLIC READ OF ONE BLOGGER, AS THE VISITOR: an archived blogger is nobody here, and their page\n# says so rather than drawing the profile they took down.\ncase slug do\n  \"\" ->\n    {:ok, nil}\n\n  wanted ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_by_slug, %{slug: wanted}, read_as(visitor))\n    |> Ash.Query.select([:id, :display_name, :slug, :bio, :avatar_url, :social_links])\n    |> Ash.read_one(tenant: site_id())\nend\n"
+        },
+        {
+          "name": "teams_of",
+          "args": "blogger, visitor",
+          "code": "require Ash.Query\n\n# THE TEAMS A READER CAN OPEN, which are the active ones: a team that is a draft, switched off or\n# archived has no page to lead to, so it is not named here either.\ncase blogger do\n  nil ->\n    []\n\n  %{id: blogger_id} ->\n    MishkaBlog.Team\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(members, id == ^blogger_id))\n    |> Ash.Query.sort(name: :asc)\n    |> Ash.Query.select([:id, :name, :slug, :avatar_url])\n    |> Ash.read(tenant: site_id(), page: [limit: 50])\n    |> rows()\nend\n"
+        },
+        {
+          "name": "asked",
+          "args": "assigns",
+          "code": "# WHAT THE PROFILE'S READ DEPENDS ON, AS ONE TERM — the argument its task is handed, a plain map\n# rather than the socket, and what says whether anything has to be read at all: `update_many/1` runs\n# on every render of the page holding this block, and the words and the bases it draws with are\n# drawn afresh on each of them without a read.\n%{\n  visitor: assigns[:current_user],\n  slug: trimmed(assigns[:slug]),\n  teams: assigns[:show_teams] == true\n}\n"
+        },
+        {
+          "name": "listed",
+          "args": "assigns",
+          "code": "# WHAT THE POSTS' READ DEPENDS ON, AS ONE TERM OF ITS OWN, so turning a page reads the posts and\n# leaves the profile above them where it is.\n%{\n  visitor: assigns[:current_user],\n  slug: trimmed(assigns[:slug]),\n  wanted: assigns[:show_posts] == true,\n  language: trimmed(assigns[:language]),\n  per_page: positive(assigns[:per_page], 9),\n  page: asked_page(assigns)\n}\n"
+        },
+        {
+          "name": "fetch",
+          "args": "asked",
+          "code": "# RUN IN THE TASK, so nothing here may touch the socket — and nothing here builds an address,\n# because `site_path/2` answers for the site the page's own process renders for. A profile that\n# could not be read is an error, never \"nobody is here\": that is a different sentence to a reader.\nwith {:ok, blogger} <- blogger_row(asked.slug, asked.visitor) do\n  {:ok, %{blogger: blogger, teams: (asked.teams && teams_of(blogger, asked.visitor)) || []}}\nend\n"
+        },
+        {
+          "name": "posts_page",
+          "args": "listed, page",
+          "code": "require Ash.Query\n\nMishkaBlog.BlogPost\n|> Ash.Query.for_read(:public_list, %{}, read_as(listed.visitor))\n|> narrow_language(listed.language)\n|> Ash.Query.filter(exists(bloggers, slug == ^listed.slug and is_nil(archived_at)))\n|> Ash.Query.sort(published_at: :desc)\n|> Ash.Query.select([\n  :id,\n  :title,\n  :slug,\n  :language,\n  :excerpt,\n  :published_at,\n  :featured_image_url,\n  :featured\n])\n|> Ash.read(\n  tenant: site_id(),\n  page: [limit: listed.per_page, offset: (page - 1) * listed.per_page, count: true]\n)\n|> paged()\n"
+        },
+        {
+          "name": "fetch_posts",
+          "args": "listed",
+          "code": "# A PAGE NOBODY HAS IS CLAMPED TO THE LAST ONE THERE IS, and the answer carries the term it was read\n# for, as the list's does, so a clamp settles instead of asking again on the next render.\ncase listed.wanted and listed.slug != \"\" do\n  false ->\n    {:ok, %{listed: listed, posts: [], page: 1, pages: 1}}\n\n  true ->\n    with {:ok, %{rows: posts, total: total}} <- posts_page(listed, listed.page) do\n      pages = max(ceil(total / listed.per_page), 1)\n\n      case listed.page > pages do\n        false ->\n          {:ok, %{listed: listed, posts: posts, page: listed.page, pages: pages}}\n\n        true ->\n          with {:ok, %{rows: clamped}} <- posts_page(listed, pages) do\n            {:ok, %{listed: %{listed | page: pages}, posts: clamped, page: pages, pages: pages}}\n          end\n      end\n    end\nend\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:ok, data}",
+          "code": "Phoenix.Component.assign(socket,\n  loading: false,\n  failed: false,\n  blogger: data.blogger,\n  teams: data.teams\n)\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:error, _reason}",
+          "code": "Phoenix.Component.assign(socket, loading: false, failed: true, blogger: nil, teams: [])\n"
+        },
+        {
+          "name": "posts_arrived",
+          "args": "socket, {:ok, data}",
+          "code": "Phoenix.Component.assign(socket,\n  listed: data.listed,\n  posts_loading: false,\n  posts_failed: false,\n  posts: data.posts,\n  page: data.page,\n  pages: data.pages\n)\n"
+        },
+        {
+          "name": "posts_arrived",
+          "args": "socket, {:error, _reason}",
+          "code": "Phoenix.Component.assign(socket, posts_loading: false, posts_failed: true, posts: [], pages: 1)\n"
+        },
+        {
+          "name": "cold?",
+          "args": "socket",
+          "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
+        },
+        {
+          "name": "load_profile",
+          "args": "socket",
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:profile, fn -> fetch(asked) end)\n    end\nend\n"
+        },
+        {
+          "name": "load_posts",
+          "args": "socket",
+          "code": "listed = listed(socket.assigns)\n\ncase socket.assigns[:listed] == listed do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :listed, listed)\n\n    case cold?(socket) do\n      true ->\n        posts_arrived(socket, fetch_posts(listed))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(posts_loading: true, posts_failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch_posts(listed) end)\n    end\nend\n"
+        },
+        {
+          "name": "load",
+          "args": "socket",
+          "code": "socket\n|> load_profile()\n|> load_posts()\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [
+        "blog-notice",
+        "blog-profile-card",
+        "blog-post-card",
+        "blog-pager"
+      ],
+      "examples": [],
+      "extra": {
+        "icon": "page",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-team-profile",
+      "description": "One team's page — its picture, name and description, the bloggers in it, and the posts they are credited with, drawn as the list draws its cards. Two reads, both in the background: the profile, and the page of posts, so turning a page reads the posts alone.",
+      "type": "media",
+      "format": "heex",
+      "stateful": true,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div id={@id} {@rest} data-role=\"blog-team-profile\" class=\"text-[#1b1a18]\">\n  <.component\n    :if={@loading}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"loading\"\n    role=\"blog-team-loading\"\n    text={@loading_text}\n  />\n\n  <.component\n    :if={@failed}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"error\"\n    role=\"blog-team-error\"\n    text={@error_text}\n    retry_text={@retry_text}\n    target={@myself}\n  />\n\n  <.component\n    :if={not @loading and not @failed and @team == nil and trimmed(@slug) == \"\"}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-team-idle\"\n    text={@idle_text}\n    quiet={true}\n  />\n\n  <.component\n    :if={not @loading and not @failed and @team == nil and trimmed(@slug) != \"\"}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-team-missing\"\n    text={@missing_text}\n  />\n\n  <section\n    :if={not @loading and not @failed and not is_nil(@team)}\n    data-role=\"blog-team-card\"\n    class=\"overflow-hidden rounded-[18px] border border-[#ecebe6] bg-white\"\n  >\n    <img\n      :if={@show_cover and trimmed(@team.cover_image_url) != \"\"}\n      src={@team.cover_image_url}\n      alt=\"\"\n      data-role=\"blog-team-cover\"\n      class=\"h-40 w-full object-cover\"\n    />\n\n    <div class=\"flex flex-col gap-5 p-5 sm:flex-row sm:items-start sm:p-7\">\n      <img\n        :if={@show_avatar and trimmed(@team.avatar_url) != \"\"}\n        src={@team.avatar_url}\n        alt={@team.name}\n        data-role=\"blog-team-avatar\"\n        class=\"h-20 w-20 flex-none rounded-[14px] object-cover\"\n      />\n\n      <div\n        :if={@show_avatar and trimmed(@team.avatar_url) == \"\"}\n        aria-hidden=\"true\"\n        data-role=\"blog-team-initial\"\n        class=\"flex h-20 w-20 flex-none items-center justify-center rounded-[14px] bg-[#f2f1fc] text-3xl font-black text-[#5b57d6]\"\n      >\n        {initial(@team.name)}\n      </div>\n\n      <div class=\"min-w-0 flex-1\">\n        <h1 data-role=\"blog-team-name\" dir=\"auto\" class=\"text-2xl font-bold leading-tight sm:text-3xl\">\n          {@team.name}\n        </h1>\n\n        <p\n          :if={@show_description and trimmed(@team.description) != \"\"}\n          data-role=\"blog-team-description\"\n          dir=\"auto\"\n          class=\"mt-3 whitespace-pre-line text-sm leading-relaxed text-[#3a382f]\"\n        >\n          {@team.description}\n        </p>\n      </div>\n    </div>\n  </section>\n\n  <section\n    :if={not @loading and not @failed and not is_nil(@team) and @show_members}\n    data-role=\"blog-team-members\"\n    class=\"mt-8\"\n  >\n    <h2\n      :if={trimmed(@members_heading) != \"\"}\n      data-role=\"blog-team-members-heading\"\n      class=\"mb-4 text-lg font-bold leading-tight\"\n    >\n      {@members_heading}\n    </h2>\n\n    <.component\n      :if={@members == []}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"empty\"\n      role=\"blog-team-members-empty\"\n      text={@members_empty_text}\n      quiet={true}\n    />\n\n    <div :if={@members != []} class=\"grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3\">\n      <.component\n        :for={{member, href} <- addressed(@members, @author_base, @lang_param, @language)}\n        component_name=\"blog-profile-card\"\n        site={site_name()}\n        role=\"blog-team-member\"\n        name={member.display_name}\n        handle={member.slug}\n        image={member.avatar_url}\n        about={(@show_bios && member.bio) || nil}\n        navigate={href}\n      />\n    </div>\n  </section>\n\n  <section\n    :if={not @loading and not @failed and not is_nil(@team) and @show_posts}\n    data-role=\"blog-team-posts\"\n    class=\"mt-8\"\n  >\n    <h2\n      :if={trimmed(@posts_heading) != \"\"}\n      data-role=\"blog-team-posts-heading\"\n      class=\"mb-5 text-lg font-bold leading-tight\"\n    >\n      {@posts_heading}\n    </h2>\n\n    <.component\n      :if={@posts_loading}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"loading\"\n      role=\"blog-team-posts-loading\"\n      text={@posts_loading_text}\n    />\n\n    <.component\n      :if={@posts_failed}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"error\"\n      role=\"blog-team-posts-error\"\n      text={@posts_error_text}\n      retry_text={@retry_text}\n      target={@myself}\n    />\n\n    <.component\n      :if={not @posts_loading and not @posts_failed and @posts == []}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"empty\"\n      role=\"blog-team-posts-empty\"\n      text={@empty_text}\n    />\n\n    <div\n      :if={not @posts_loading and not @posts_failed and @posts != []}\n      data-role=\"blog-team-post-items\"\n      class=\"grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3\"\n    >\n      <div :for={post <- @posts} id={\"#{@id}-post-#{post.id}\"} class=\"h-full\">\n        <.component\n          component_name=\"blog-post-card\"\n          site={site_name()}\n          post={post}\n          show_excerpt={@show_excerpt}\n          show_read={trimmed(@post_base) != \"\"}\n          navigate={post_navigate(@post_base, post.slug, @lang_param, post.language)}\n          read_text={@read_text}\n          featured_text={@featured_text}\n        />\n      </div>\n    </div>\n\n    <.component\n      :if={not @posts_loading and not @posts_failed}\n      component_name=\"blog-pager\"\n      site={site_name()}\n      role=\"blog-team-pager\"\n      page={@page}\n      pages={@pages}\n      base={@base}\n      params={@params}\n      page_param={@page_param}\n      target={@myself}\n      first_text={@first_text}\n      previous_text={@previous_text}\n      next_text={@next_text}\n      last_text={@last_text}\n    />\n  </section>\n</div>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "slug",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The team to draw, by its slug. A page stored at /:lang/blog/team/:slug hands it the capture: slug={@query_params[\"slug\"]}."
+          }
+        },
+        {
+          "name": "language",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "Which of the team's posts to list: a code such as fa or ar lists that language's only, left empty one edition of each, all every translation. A team is the same in every language, and the links to its members are built in this one."
+          }
+        },
+        {
+          "name": "author_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a blogger's page lives — /:lang/blog/author, say. Left empty the bloggers are drawn as plain words, because this component does not own the router and will not invent a path. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the page, since a blogger and a team are one row in every language — at the address the site's URL mode gives that language."
+          }
+        },
+        {
+          "name": "post_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a post lives — /:lang/blog, say. Left empty a title among the team's posts is drawn as plain words. Write the language into it as :lang and every post is linked under its own language, at the address the site's URL mode gives that language."
+          }
+        },
+        {
+          "name": "base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "This page's own address, which the pager under the team's posts writes its links to. Left empty the pager stays on the server, and a page of the posts has no URL of its own."
+          }
+        },
+        {
+          "name": "params",
+          "type": "any",
+          "opts": {
+            "default": {},
+            "doc": "The page's own query string, handed straight to the pager under the team's posts, so a link it writes keeps every key the page already had."
+          }
+        },
+        {
+          "name": "page_param",
+          "type": "any",
+          "opts": {
+            "default": "page",
+            "doc": "The query key the page of the team's posts is written under."
+          }
+        },
+        {
+          "name": "lang_param",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The query key that carries the language on the links this component writes — lang, for a site addressed as /blog?lang=fa. Leave it empty on a site whose language is part of the path, where a :lang in the bases carries it instead."
+          }
+        },
+        {
+          "name": "per_page",
+          "type": "integer",
+          "opts": {
+            "default": 9,
+            "doc": "How many of the team's posts one page holds.",
+            "min": 1,
+            "max": 50
+          }
+        },
+        {
+          "name": "show_cover",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the team's cover image across the top of its card."
+          }
+        },
+        {
+          "name": "show_avatar",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the team's picture, or the first letter of its name where it has none."
+          }
+        },
+        {
+          "name": "show_description",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the team's description."
+          }
+        },
+        {
+          "name": "show_members",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the bloggers in the team."
+          }
+        },
+        {
+          "name": "show_bios",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw a line of each member's bio on their card."
+          }
+        },
+        {
+          "name": "show_posts",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the posts the team's members are credited with."
+          }
+        },
+        {
+          "name": "members_heading",
+          "type": "string",
+          "opts": {
+            "default": "Members",
+            "doc": "The heading over the team's members. Left empty, none is drawn."
+          }
+        },
+        {
+          "name": "posts_heading",
+          "type": "string",
+          "opts": {
+            "default": "Posts",
+            "doc": "The heading over the team's posts. Left empty, none is drawn."
+          }
+        },
+        {
+          "name": "show_excerpt",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw each post's summary under its title."
+          }
+        },
+        {
+          "name": "read_text",
+          "type": "string",
+          "opts": {
+            "default": "Read",
+            "doc": "The words on each post card's own link."
+          }
+        },
+        {
+          "name": "featured_text",
+          "type": "string",
+          "opts": {
+            "default": "Featured",
+            "doc": "The badge a featured post carries."
+          }
+        },
+        {
+          "name": "first_text",
+          "type": "string",
+          "opts": {
+            "default": "First",
+            "doc": "The pager's jump to the first page."
+          }
+        },
+        {
+          "name": "previous_text",
+          "type": "string",
+          "opts": {
+            "default": "Previous",
+            "doc": "The pager's step back."
+          }
+        },
+        {
+          "name": "next_text",
+          "type": "string",
+          "opts": {
+            "default": "Next",
+            "doc": "The pager's step forward."
+          }
+        },
+        {
+          "name": "last_text",
+          "type": "string",
+          "opts": {
+            "default": "Last",
+            "doc": "The pager's jump to the last page."
+          }
+        },
+        {
+          "name": "idle_text",
+          "type": "string",
+          "opts": {
+            "default": "Pick a team to see its page.",
+            "doc": "What is shown while nothing names a team at all."
+          }
+        },
+        {
+          "name": "missing_text",
+          "type": "string",
+          "opts": {
+            "default": "That team is not here, or is not active any more.",
+            "doc": "What is shown when the slug names no team a reader can see."
+          }
+        },
+        {
+          "name": "members_empty_text",
+          "type": "string",
+          "opts": {
+            "default": "Nobody is in this team yet.",
+            "doc": "What a reader is told when the team has no member a reader can see."
+          }
+        },
+        {
+          "name": "empty_text",
+          "type": "string",
+          "opts": {
+            "default": "Nothing published yet.",
+            "doc": "What a reader is told when the team's members have published nothing a reader can open."
+          }
+        },
+        {
+          "name": "loading_text",
+          "type": "string",
+          "opts": {
+            "default": "Loading this team…",
+            "doc": "What a screen reader is told while the profile is being read."
+          }
+        },
+        {
+          "name": "posts_loading_text",
+          "type": "string",
+          "opts": {
+            "default": "Loading posts…",
+            "doc": "What a screen reader is told while the team's posts are being read."
+          }
+        },
+        {
+          "name": "error_text",
+          "type": "string",
+          "opts": {
+            "default": "This team could not be loaded.",
+            "doc": "What a reader is told when the profile could not be read."
+          }
+        },
+        {
+          "name": "posts_error_text",
+          "type": "string",
+          "opts": {
+            "default": "These posts could not be loaded.",
+            "doc": "What a reader is told when the team's posts could not be read."
+          }
+        },
+        {
+          "name": "retry_text",
+          "type": "string",
+          "opts": {
+            "default": "Try again",
+            "doc": "The way out of a failed read."
+          }
+        },
+        {
+          "name": "current_user",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The signed-in reader, handed down by the page as current_user. A record locked to permissions it does not hold is left out; without one, every locked record is."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "mount",
+          "args": "socket",
+          "code": "{:ok,\n Phoenix.Component.assign(socket,\n   asked: nil,\n   loading: true,\n   failed: false,\n   team: nil,\n   members: [],\n   listed: nil,\n   posts_loading: true,\n   posts_failed: false,\n   posts: [],\n   page: 1,\n   pages: 1\n )}\n"
+        },
+        {
+          "name": "update",
+          "args": "_assigns, socket",
+          "code": "{:ok, load(socket)}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"page\", %{\"to\" => to}, socket",
+          "code": "{:noreply,\n socket\n |> Phoenix.Component.assign(:page, to_page(to))\n |> load()}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"retry\", _params, socket",
+          "code": "# ONLY WHAT FAILED IS ASKED AGAIN. The profile and its posts are two reads, and a reader asking\n# again for the posts is not asking to watch the profile above them go back to its skeleton.\n{:noreply,\n socket\n |> Phoenix.Component.assign(\n   asked: if(socket.assigns[:failed], do: nil, else: socket.assigns[:asked]),\n   listed: if(socket.assigns[:posts_failed], do: nil, else: socket.assigns[:listed])\n )\n |> load()}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":profile, {:ok, result}, socket",
+          "code": "{:noreply, arrived(socket, result)}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":profile, {:exit, _reason}, socket",
+          "code": "# A READ THAT DIED TAKES THE BLOCK'S OWN STATE WITH IT AND NOTHING ELSE. The task is unlinked\n# before it re-raises — see `Phoenix.LiveView.Async.do_async/5` — so the page around this block is\n# still standing, and this is what it draws instead of the profile.\n{:noreply, Phoenix.Component.assign(socket, loading: false, failed: true)}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":posts, {:ok, result}, socket",
+          "code": "{:noreply, posts_arrived(socket, result)}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":posts, {:exit, _reason}, socket",
+          "code": "{:noreply, Phoenix.Component.assign(socket, posts_loading: false, posts_failed: true)}\n"
+        },
+        {
+          "name": "site_id",
+          "args": "",
+          "code": "__MODULE__.__component_information__([:private, :site_id])\n"
+        },
+        {
+          "name": "site_name",
+          "args": "",
+          "code": "# THE SITE'S NAME, NOT ITS ID, because that is what a component is addressed by: the runtime hashes\n# a module out of (component name, site name). Every `<.component …/>` below draws a sibling of this\n# one, which lives on the same site as this one and nowhere else.\n__MODULE__.__component_information__([:private, :site])\n"
+        },
+        {
+          "name": "read_as",
+          "args": "visitor",
+          "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
+        },
+        {
+          "name": "positive",
+          "args": "value, fallback",
+          "code": "cond do\n  is_integer(value) and value > 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number > 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
+        },
+        {
+          "name": "to_page",
+          "args": "value",
+          "code": "cond do\n  is_integer(value) and value > 0 -> value\n  is_binary(value) -> positive(value, 1)\n  true -> 1\nend\n"
+        },
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "initial",
+          "args": "name",
+          "code": "name\n|> to_string()\n|> String.trim()\n|> String.first()\n|> to_string()\n|> String.upcase()\n"
+        },
+        {
+          "name": "rows",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: found}} -> found\n  {:ok, found} when is_list(found) -> found\n  _unreadable -> []\nend\n"
+        },
+        {
+          "name": "paged",
+          "args": "result",
+          "code": "# A TUPLE RATHER THAN A LIST, and that is what the error state is built on: folding an unreadable\n# answer into an empty one leaves a block telling a reader that nothing is published when the truth\n# is that nothing could be read.\ncase result do\n  {:ok, %{results: found, count: count}} -> {:ok, %{rows: found, total: count || length(found)}}\n  {:ok, found} when is_list(found) -> {:ok, %{rows: found, total: length(found)}}\n  {:error, reason} -> {:error, reason}\n  _unreadable -> {:error, :unreadable}\nend\n"
+        },
+        {
+          "name": "slug_href",
+          "args": "base, slug, lang_param, language",
+          "code": "# THE ADDRESS OF A ROW, built by `site_path/2`: a `:lang` in the base is filled with the language of\n# the row being linked to, not the one the page is read in, and the address is the one the site's\n# URL mode gives that language — `/blog/<slug>` in a first language the site leaves unprefixed,\n# `/fa/blog/<slug>` in Persian. A base without the segment is filled as written, and a query-mode\n# page carries the language in `lang_param` instead. A row whose language this site does not\n# publish, or cannot be read, gets no link rather than a link to a 404.\ncase site_path(to_string(base) <> \"/:slug\", %{\"lang\" => trimmed(language), \"slug\" => to_string(slug)}) do\n  nil ->\n    nil\n\n  path ->\n    case {trimmed(lang_param), trimmed(language)} do\n      {\"\", _no_key} -> path\n      {_key, \"\"} -> path\n      {key, code} -> path <> \"?\" <> URI.encode_query(%{key => code})\n    end\nend\n"
+        },
+        {
+          "name": "link_language",
+          "args": "language",
+          "code": "# A BLOGGER OR A TEAM IS ONE ROW IN EVERY LANGUAGE, so the address of one is built in the page's\n# own: the language this block was given, else — on a page that names none, or every one — the\n# site's first.\ncase trimmed(language) do\n  code when code in [\"\", \"all\"] -> MishkaCmsCore.Runtime.Languages.primary(site_id())\n  code -> code\nend\n"
+        },
+        {
+          "name": "addressed",
+          "args": "rows, base, lang_param, language",
+          "code": "# EACH ROW WITH ITS ADDRESS UNDER `base`, or `nil` where it has none — no base was given, or the\n# page's language is not one this site publishes (`slug_href/4`) — so the template draws that row as\n# a word rather than as a link to nothing.\ncase trimmed(base) do\n  \"\" ->\n    Enum.map(rows, &{&1, nil})\n\n  address ->\n    code = link_language(language)\n    Enum.map(rows, &{&1, slug_href(address, &1.slug, lang_param, code)})\nend\n"
+        },
+        {
+          "name": "post_navigate",
+          "args": "post_base, slug, lang_param, language",
+          "code": "case trimmed(post_base) do\n  \"\" -> nil\n  base -> slug_href(base, slug, lang_param, language)\nend\n"
+        },
+        {
+          "name": "narrow_language",
+          "args": "query, wanted",
+          "code": "require Ash.Query\n\ncase trimmed(wanted) do\n  \"all\" -> query\n  \"\" -> Ash.Query.filter(query, is_nil(language_group_id) or language_group_id == id)\n  code -> Ash.Query.filter(query, language == ^code)\nend\n"
+        },
+        {
+          "name": "asked_page",
+          "args": "assigns",
+          "code": "key = to_string(assigns[:page_param] || \"page\")\n\ncase assigns[:params] do\n  %{^key => asked} -> to_page(asked)\n  _no_params_or_key -> positive(assigns[:page], 1)\nend\n"
+        },
+        {
+          "name": "team_row",
+          "args": "slug, visitor",
+          "code": "# THE PUBLIC READ OF ONE TEAM, AS THE VISITOR: a team that is a draft, switched off or archived is\n# not here, and its page says so rather than drawing it.\ncase slug do\n  \"\" ->\n    {:ok, nil}\n\n  wanted ->\n    MishkaBlog.Team\n    |> Ash.Query.for_read(:public_by_slug, %{slug: wanted}, read_as(visitor))\n    |> Ash.Query.select([:id, :name, :slug, :description, :avatar_url, :cover_image_url])\n    |> Ash.read_one(tenant: site_id())\nend\n"
+        },
+        {
+          "name": "members_of",
+          "args": "team, visitor",
+          "code": "require Ash.Query\n\n# THE MEMBERS A READER CAN SEE, which leaves out a blogger who is archived.\ncase team do\n  nil ->\n    []\n\n  %{id: team_id} ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(teams, id == ^team_id))\n    |> Ash.Query.sort(display_name: :asc)\n    |> Ash.Query.select([:id, :display_name, :slug, :avatar_url, :bio])\n    |> Ash.read(tenant: site_id(), page: [limit: 100])\n    |> rows()\nend\n"
+        },
+        {
+          "name": "asked",
+          "args": "assigns",
+          "code": "# WHAT THE PROFILE'S READ DEPENDS ON, AS ONE TERM — the argument its task is handed, a plain map\n# rather than the socket, and what says whether anything has to be read at all: `update_many/1` runs\n# on every render of the page holding this block, and the words and the bases it draws with are\n# drawn afresh on each of them without a read.\n%{\n  visitor: assigns[:current_user],\n  slug: trimmed(assigns[:slug]),\n  members: assigns[:show_members] == true\n}\n"
+        },
+        {
+          "name": "listed",
+          "args": "assigns",
+          "code": "# WHAT THE POSTS' READ DEPENDS ON, AS ONE TERM OF ITS OWN, so turning a page reads the posts and\n# leaves the profile above them where it is.\n%{\n  visitor: assigns[:current_user],\n  slug: trimmed(assigns[:slug]),\n  wanted: assigns[:show_posts] == true,\n  language: trimmed(assigns[:language]),\n  per_page: positive(assigns[:per_page], 9),\n  page: asked_page(assigns)\n}\n"
+        },
+        {
+          "name": "fetch",
+          "args": "asked",
+          "code": "# RUN IN THE TASK, so nothing here may touch the socket — and nothing here builds an address,\n# because `site_path/2` answers for the site the page's own process renders for. A profile that\n# could not be read is an error, never \"nobody is here\": that is a different sentence to a reader.\nwith {:ok, team} <- team_row(asked.slug, asked.visitor) do\n  {:ok, %{team: team, members: (asked.members && members_of(team, asked.visitor)) || []}}\nend\n"
+        },
+        {
+          "name": "posts_page",
+          "args": "listed, page",
+          "code": "require Ash.Query\n\nMishkaBlog.BlogPost\n|> Ash.Query.for_read(:public_list, %{}, read_as(listed.visitor))\n|> narrow_language(listed.language)\n|> Ash.Query.filter(\n  exists(\n    bloggers,\n    is_nil(archived_at) and\n      exists(teams, slug == ^listed.slug and status == :active and is_nil(archived_at))\n  )\n)\n|> Ash.Query.sort(published_at: :desc)\n|> Ash.Query.select([\n  :id,\n  :title,\n  :slug,\n  :language,\n  :excerpt,\n  :published_at,\n  :featured_image_url,\n  :featured\n])\n|> Ash.read(\n  tenant: site_id(),\n  page: [limit: listed.per_page, offset: (page - 1) * listed.per_page, count: true]\n)\n|> paged()\n"
+        },
+        {
+          "name": "fetch_posts",
+          "args": "listed",
+          "code": "# A PAGE NOBODY HAS IS CLAMPED TO THE LAST ONE THERE IS, and the answer carries the term it was read\n# for, as the list's does, so a clamp settles instead of asking again on the next render.\ncase listed.wanted and listed.slug != \"\" do\n  false ->\n    {:ok, %{listed: listed, posts: [], page: 1, pages: 1}}\n\n  true ->\n    with {:ok, %{rows: posts, total: total}} <- posts_page(listed, listed.page) do\n      pages = max(ceil(total / listed.per_page), 1)\n\n      case listed.page > pages do\n        false ->\n          {:ok, %{listed: listed, posts: posts, page: listed.page, pages: pages}}\n\n        true ->\n          with {:ok, %{rows: clamped}} <- posts_page(listed, pages) do\n            {:ok, %{listed: %{listed | page: pages}, posts: clamped, page: pages, pages: pages}}\n          end\n      end\n    end\nend\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:ok, data}",
+          "code": "Phoenix.Component.assign(socket,\n  loading: false,\n  failed: false,\n  team: data.team,\n  members: data.members\n)\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:error, _reason}",
+          "code": "Phoenix.Component.assign(socket, loading: false, failed: true, team: nil, members: [])\n"
+        },
+        {
+          "name": "posts_arrived",
+          "args": "socket, {:ok, data}",
+          "code": "Phoenix.Component.assign(socket,\n  listed: data.listed,\n  posts_loading: false,\n  posts_failed: false,\n  posts: data.posts,\n  page: data.page,\n  pages: data.pages\n)\n"
+        },
+        {
+          "name": "posts_arrived",
+          "args": "socket, {:error, _reason}",
+          "code": "Phoenix.Component.assign(socket, posts_loading: false, posts_failed: true, posts: [], pages: 1)\n"
+        },
+        {
+          "name": "cold?",
+          "args": "socket",
+          "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
+        },
+        {
+          "name": "load_profile",
+          "args": "socket",
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:profile, fn -> fetch(asked) end)\n    end\nend\n"
+        },
+        {
+          "name": "load_posts",
+          "args": "socket",
+          "code": "listed = listed(socket.assigns)\n\ncase socket.assigns[:listed] == listed do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :listed, listed)\n\n    case cold?(socket) do\n      true ->\n        posts_arrived(socket, fetch_posts(listed))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(posts_loading: true, posts_failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch_posts(listed) end)\n    end\nend\n"
+        },
+        {
+          "name": "load",
+          "args": "socket",
+          "code": "socket\n|> load_profile()\n|> load_posts()\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [
+        "blog-notice",
+        "blog-profile-card",
+        "blog-post-card",
+        "blog-pager"
+      ],
+      "examples": [],
+      "extra": {
+        "icon": "page",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-people",
+      "description": "Who writes the blog: every active team with the bloggers in it, then the bloggers in no team, read in the background — each name leading to its own page.",
+      "type": "navigations",
+      "format": "heex",
+      "stateful": true,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div id={@id} {@rest} data-role=\"blog-people\" class=\"text-[#1b1a18]\">\n  <h2\n    :if={trimmed(@heading) != \"\"}\n    data-role=\"blog-people-heading\"\n    class=\"mb-5 text-lg font-bold leading-tight\"\n  >\n    {@heading}\n  </h2>\n\n  <.component\n    :if={@loading}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"loading\"\n    role=\"blog-people-loading\"\n    text={@loading_text}\n  />\n\n  <.component\n    :if={@failed}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"error\"\n    role=\"blog-people-error\"\n    text={@error_text}\n    retry_text={@retry_text}\n    target={@myself}\n  />\n\n  <.component\n    :if={not @loading and not @failed and @teams == [] and @unteamed == []}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-people-empty\"\n    text={@empty_text}\n  />\n\n  <div\n    :if={not @loading and not @failed and (@teams != [] or @unteamed != [])}\n    data-role=\"blog-people-items\"\n    class=\"flex flex-col gap-6\"\n  >\n    <section\n      :for={{team, team_href} <- addressed(@teams, @team_base, @lang_param, @language)}\n      id={\"#{@id}-team-#{team.id}\"}\n      data-role=\"blog-people-team\"\n      class=\"rounded-[18px] border border-[#ecebe6] bg-white p-5 sm:p-7\"\n    >\n      <div class=\"mb-4 flex items-start gap-3\">\n        <img\n          :if={trimmed(team.image) != \"\"}\n          src={team.image}\n          alt=\"\"\n          data-role=\"blog-people-team-image\"\n          class=\"h-12 w-12 flex-none rounded-[12px] object-cover\"\n        />\n\n        <div\n          :if={trimmed(team.image) == \"\"}\n          aria-hidden=\"true\"\n          data-role=\"blog-people-team-initial\"\n          class=\"flex h-12 w-12 flex-none items-center justify-center rounded-[12px] bg-[#f2f1fc] text-lg font-black text-[#5b57d6]\"\n        >\n          {initial(team.name)}\n        </div>\n\n        <div class=\"min-w-0 flex-1\">\n          <.link\n            :if={team_href}\n            navigate={team_href}\n            data-role=\"blog-people-team-name\"\n            dir=\"auto\"\n            class=\"text-base font-bold leading-snug hover:underline\"\n          >\n            {team.name}\n          </.link>\n\n          <span\n            :if={is_nil(team_href)}\n            data-role=\"blog-people-team-name\"\n            dir=\"auto\"\n            class=\"text-base font-bold leading-snug\"\n          >\n            {team.name}\n          </span>\n\n          <p\n            :if={@show_about and trimmed(team.about) != \"\"}\n            data-role=\"blog-people-team-about\"\n            dir=\"auto\"\n            class=\"mt-1 whitespace-pre-line text-sm leading-relaxed text-[#6d6a63]\"\n          >\n            {team.about}\n          </p>\n        </div>\n      </div>\n\n      <.component\n        :if={team.members == []}\n        component_name=\"blog-notice\"\n        site={site_name()}\n        tone=\"empty\"\n        role=\"blog-people-team-empty\"\n        text={@members_empty_text}\n        quiet={true}\n      />\n\n      <div\n        :if={team.members != []}\n        class=\"grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3\"\n      >\n        <.component\n          :for={{member, href} <- addressed(team.members, @author_base, @lang_param, @language)}\n          component_name=\"blog-profile-card\"\n          site={site_name()}\n          role=\"blog-people-member\"\n          name={member.name}\n          handle={member.slug}\n          image={member.image}\n          about={(@show_about && member.about) || nil}\n          navigate={href}\n        />\n      </div>\n    </section>\n\n    <section :if={@unteamed != []} data-role=\"blog-people-unteamed\">\n      <h3\n        :if={trimmed(@unteamed_heading) != \"\"}\n        data-role=\"blog-people-unteamed-heading\"\n        class=\"mb-4 text-base font-bold leading-tight\"\n      >\n        {@unteamed_heading}\n      </h3>\n\n      <div class=\"grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3\">\n        <.component\n          :for={{person, href} <- addressed(@unteamed, @author_base, @lang_param, @language)}\n          component_name=\"blog-profile-card\"\n          site={site_name()}\n          role=\"blog-people-person\"\n          name={person.name}\n          handle={person.slug}\n          image={person.image}\n          about={(@show_about && person.about) || nil}\n          navigate={href}\n        />\n      </div>\n    </section>\n  </div>\n</div>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "heading",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "The words above the people. Left empty, no heading is drawn."
+          }
+        },
+        {
+          "name": "language",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "The language the links to each blogger's and each team's page are built in — the page's own. A blogger and a team are the same in every language. Left empty, the site's first."
+          }
+        },
+        {
+          "name": "author_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a blogger's page lives — /:lang/blog/author, say. Left empty the bloggers are drawn as plain words, because this component does not own the router and will not invent a path. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the page, since a blogger and a team are one row in every language — at the address the site's URL mode gives that language."
+          }
+        },
+        {
+          "name": "team_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a team's page lives — /:lang/blog/team, say. Left empty the teams are drawn as plain words, because this component does not own the router and will not invent a path. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the page, since a blogger and a team are one row in every language — at the address the site's URL mode gives that language."
+          }
+        },
+        {
+          "name": "lang_param",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "The query key that carries the language on the links this component writes — lang, for a site addressed as /blog?lang=fa. Leave it empty on a site whose language is part of the path, where a :lang in the bases carries it instead."
+          }
+        },
+        {
+          "name": "show_teams",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw every active team, each with the bloggers in it."
+          }
+        },
+        {
+          "name": "show_unteamed",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw the bloggers in no active team, after the teams."
+          }
+        },
+        {
+          "name": "show_about",
+          "type": "boolean",
+          "opts": {
+            "default": true,
+            "doc": "Draw a line of each blogger's bio and each team's description."
+          }
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "opts": {
+            "default": 50,
+            "doc": "How many teams at most, and how many bloggers in no team at most.",
+            "min": 1,
+            "max": 100
+          }
+        },
+        {
+          "name": "unteamed_heading",
+          "type": "string",
+          "opts": {
+            "default": "Writers",
+            "doc": "The heading over the bloggers in no team. Left empty, none is drawn."
+          }
+        },
+        {
+          "name": "members_empty_text",
+          "type": "string",
+          "opts": {
+            "default": "Nobody is in this team yet.",
+            "doc": "What a team says when it has no member a reader can see."
+          }
+        },
+        {
+          "name": "empty_text",
+          "type": "string",
+          "opts": {
+            "default": "Nobody writes here yet.",
+            "doc": "What a reader is told when the site has no team and no blogger to show."
+          }
+        },
+        {
+          "name": "loading_text",
+          "type": "string",
+          "opts": {
+            "default": "Loading people…",
+            "doc": "What a screen reader is told while the read is running."
+          }
+        },
+        {
+          "name": "error_text",
+          "type": "string",
+          "opts": {
+            "default": "These people could not be loaded.",
+            "doc": "What a reader is told when the read failed."
+          }
+        },
+        {
+          "name": "retry_text",
+          "type": "string",
+          "opts": {
+            "default": "Try again",
+            "doc": "The way out of a failed read."
+          }
+        },
+        {
+          "name": "current_user",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The signed-in reader, handed down by the page as current_user. A record locked to permissions it does not hold is left out; without one, every locked record is."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "mount",
+          "args": "socket",
+          "code": "{:ok,\n Phoenix.Component.assign(socket,\n   asked: nil,\n   loading: true,\n   failed: false,\n   teams: [],\n   unteamed: []\n )}\n"
+        },
+        {
+          "name": "update",
+          "args": "_assigns, socket",
+          "code": "{:ok, load(socket)}\n"
+        },
+        {
+          "name": "handle_event",
+          "args": "\"retry\", _params, socket",
+          "code": "{:noreply,\n socket\n |> Phoenix.Component.assign(:asked, nil)\n |> load()}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":people, {:ok, result}, socket",
+          "code": "{:noreply, arrived(socket, result)}\n"
+        },
+        {
+          "name": "handle_async",
+          "args": ":people, {:exit, _reason}, socket",
+          "code": "# A READ THAT DIED TAKES THE BLOCK'S OWN STATE WITH IT AND NOTHING ELSE. The task is unlinked\n# before it re-raises — see `Phoenix.LiveView.Async.do_async/5` — so the page around this block is\n# still standing, and this is what it draws instead of the people.\n{:noreply, Phoenix.Component.assign(socket, loading: false, failed: true)}\n"
+        },
+        {
+          "name": "site_id",
+          "args": "",
+          "code": "__MODULE__.__component_information__([:private, :site_id])\n"
+        },
+        {
+          "name": "site_name",
+          "args": "",
+          "code": "# THE SITE'S NAME, NOT ITS ID, because that is what a component is addressed by: the runtime hashes\n# a module out of (component name, site name). Every `<.component …/>` below draws a sibling of this\n# one, which lives on the same site as this one and nowhere else.\n__MODULE__.__component_information__([:private, :site])\n"
+        },
+        {
+          "name": "read_as",
+          "args": "visitor",
+          "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
+        },
+        {
+          "name": "positive",
+          "args": "value, fallback",
+          "code": "cond do\n  is_integer(value) and value > 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number > 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
+        },
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "initial",
+          "args": "name",
+          "code": "name\n|> to_string()\n|> String.trim()\n|> String.first()\n|> to_string()\n|> String.upcase()\n"
+        },
+        {
+          "name": "rows",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: found}} -> {:ok, found}\n  {:ok, found} when is_list(found) -> {:ok, found}\n  {:error, reason} -> {:error, reason}\n  _unreadable -> {:error, :unreadable}\nend\n"
+        },
+        {
+          "name": "slug_href",
+          "args": "base, slug, lang_param, language",
+          "code": "# THE ADDRESS OF A ROW, built by `site_path/2`: a `:lang` in the base is filled with the language of\n# the row being linked to, not the one the page is read in, and the address is the one the site's\n# URL mode gives that language — `/blog/<slug>` in a first language the site leaves unprefixed,\n# `/fa/blog/<slug>` in Persian. A base without the segment is filled as written, and a query-mode\n# page carries the language in `lang_param` instead. A row whose language this site does not\n# publish, or cannot be read, gets no link rather than a link to a 404.\ncase site_path(to_string(base) <> \"/:slug\", %{\"lang\" => trimmed(language), \"slug\" => to_string(slug)}) do\n  nil ->\n    nil\n\n  path ->\n    case {trimmed(lang_param), trimmed(language)} do\n      {\"\", _no_key} -> path\n      {_key, \"\"} -> path\n      {key, code} -> path <> \"?\" <> URI.encode_query(%{key => code})\n    end\nend\n"
+        },
+        {
+          "name": "link_language",
+          "args": "language",
+          "code": "# A BLOGGER OR A TEAM IS ONE ROW IN EVERY LANGUAGE, so the address of one is built in the page's\n# own: the language this block was given, else — on a page that names none, or every one — the\n# site's first.\ncase trimmed(language) do\n  code when code in [\"\", \"all\"] -> MishkaCmsCore.Runtime.Languages.primary(site_id())\n  code -> code\nend\n"
+        },
+        {
+          "name": "addressed",
+          "args": "rows, base, lang_param, language",
+          "code": "# EACH ROW WITH ITS ADDRESS UNDER `base`, or `nil` where it has none — no base was given, or the\n# page's language is not one this site publishes (`slug_href/4`) — so the template draws that row as\n# a word rather than as a link to nothing.\ncase trimmed(base) do\n  \"\" ->\n    Enum.map(rows, &{&1, nil})\n\n  address ->\n    code = link_language(language)\n    Enum.map(rows, &{&1, slug_href(address, &1.slug, lang_param, code)})\nend\n"
+        },
+        {
+          "name": "person",
+          "args": "blogger",
+          "code": "%{\n  id: blogger.id,\n  name: blogger.display_name,\n  slug: blogger.slug,\n  image: blogger.avatar_url,\n  about: blogger.bio\n}\n"
+        },
+        {
+          "name": "teams",
+          "args": "asked",
+          "code": "require Ash.Query\n\n# THE ACTIVE TEAMS, EACH WITH THE MEMBERS A READER CAN SEE, in one read of the teams and one of\n# their members — not one read per team.\nmembers =\n  MishkaBlog.Blogger\n  |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n  |> Ash.Query.sort(display_name: :asc)\n  |> Ash.Query.select([:id, :display_name, :slug, :avatar_url, :bio])\n\ncase asked.teams do\n  false ->\n    {:ok, []}\n\n  true ->\n    MishkaBlog.Team\n    |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n    |> Ash.Query.sort(name: :asc)\n    |> Ash.Query.select([:id, :name, :slug, :avatar_url, :description])\n    |> Ash.Query.load(members: members)\n    |> Ash.read(tenant: site_id(), page: [limit: asked.limit])\n    |> rows()\nend\n"
+        },
+        {
+          "name": "unteamed",
+          "args": "asked",
+          "code": "require Ash.Query\n\n# A BLOGGER IN NO TEAM A READER CAN OPEN. One whose only team is a draft, switched off or archived is\n# listed here, since that team has no page and is named nowhere else.\ncase asked.unteamed do\n  false ->\n    {:ok, []}\n\n  true ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n    |> Ash.Query.filter(not exists(teams, status == :active))\n    |> Ash.Query.sort(display_name: :asc)\n    |> Ash.Query.select([:id, :display_name, :slug, :avatar_url, :bio])\n    |> Ash.read(tenant: site_id(), page: [limit: asked.limit])\n    |> rows()\nend\n"
+        },
+        {
+          "name": "asked",
+          "args": "assigns",
+          "code": "# EVERYTHING THE READ DEPENDS ON, AS ONE TERM. It is the argument the task is handed — a plain map\n# rather than the socket, so nothing of LiveView's is copied into another process — and it is also\n# what says whether anything has to be read at all: `update_many/1` runs on every render of the page\n# holding this block, and a block that re-read on each of them would restart its own load whenever\n# something else on the page moved. The words and the bases are drawn afresh on every render, so\n# they stay out of it.\n%{\n  visitor: assigns[:current_user],\n  teams: assigns[:show_teams] == true,\n  unteamed: assigns[:show_unteamed] == true,\n  limit: positive(assigns[:limit], 50)\n}\n"
+        },
+        {
+          "name": "fetch",
+          "args": "asked",
+          "code": "# RUN IN THE TASK, so nothing here may touch the socket — and nothing here builds an address,\n# because `site_path/2` answers for the site the page's own process renders for.\nwith {:ok, teams} <- teams(asked),\n     {:ok, unteamed} <- unteamed(asked) do\n  {:ok,\n   %{\n     teams:\n       Enum.map(teams, fn team ->\n         %{\n           id: team.id,\n           name: team.name,\n           slug: team.slug,\n           image: team.avatar_url,\n           about: team.description,\n           members: Enum.map(team.members, fn member -> person(member) end)\n         }\n       end),\n     unteamed: Enum.map(unteamed, fn blogger -> person(blogger) end)\n   }}\nend\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:ok, data}",
+          "code": "Phoenix.Component.assign(socket,\n  loading: false,\n  failed: false,\n  teams: data.teams,\n  unteamed: data.unteamed\n)\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:error, _reason}",
+          "code": "Phoenix.Component.assign(socket, loading: false, failed: true, teams: [], unteamed: [])\n"
+        },
+        {
+          "name": "cold?",
+          "args": "socket",
+          "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
+        },
+        {
+          "name": "load",
+          "args": "socket",
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:people, fn -> fetch(asked) end)\n    end\nend\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [
+        "blog-notice",
+        "blog-profile-card"
+      ],
+      "examples": [],
+      "extra": {
+        "icon": "grid",
         "ui_kit": "mishka_blog"
       },
       "site_id": null
@@ -2944,6 +4227,112 @@
       "examples": [],
       "extra": {
         "icon": "info",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-profile-card",
+      "description": "A function component: one blogger or one team — their picture, their name, their handle and a line about them — as a card or as a small chip. Drawn by blog-author-profile, blog-team-profile and blog-people, which is why it is a component and not markup inside any of them.",
+      "type": "media",
+      "format": "heex",
+      "stateful": false,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<article\n  :if={trimmed(@name) != \"\" and trimmed(@variant) != \"compact\"}\n  {@rest}\n  data-role={@role}\n  class=\"flex h-full items-start gap-3 rounded-[18px] border border-[#ecebe6] bg-white p-4\"\n>\n  <img\n    :if={trimmed(@image) != \"\"}\n    src={@image}\n    alt={@name}\n    data-role=\"blog-profile-image\"\n    class=\"h-12 w-12 flex-none rounded-full object-cover\"\n  />\n\n  <div\n    :if={trimmed(@image) == \"\"}\n    aria-hidden=\"true\"\n    data-role=\"blog-profile-initial\"\n    class=\"flex h-12 w-12 flex-none items-center justify-center rounded-full bg-[#f2f1fc] text-lg font-black text-[#5b57d6]\"\n  >\n    {initial(@name)}\n  </div>\n\n  <div class=\"min-w-0 flex-1\">\n    <.link\n      :if={@navigate}\n      navigate={@navigate}\n      data-role=\"blog-profile-name\"\n      dir=\"auto\"\n      class=\"block text-sm font-semibold leading-snug hover:underline\"\n    >\n      {@name}\n    </.link>\n\n    <span\n      :if={is_nil(@navigate)}\n      data-role=\"blog-profile-name\"\n      dir=\"auto\"\n      class=\"block text-sm font-semibold leading-snug\"\n    >\n      {@name}\n    </span>\n\n    <span\n      :if={trimmed(@handle) != \"\"}\n      data-role=\"blog-profile-handle\"\n      dir=\"ltr\"\n      class=\"block text-xs text-[#8a877f]\"\n    >\n      @{@handle}\n    </span>\n\n    <p\n      :if={plain(@about) != \"\"}\n      data-role=\"blog-profile-about\"\n      dir=\"auto\"\n      class=\"mt-1 line-clamp-3 text-xs leading-relaxed text-[#6d6a63]\"\n    >\n      {plain(@about)}\n    </p>\n  </div>\n</article>\n\n<div\n  :if={trimmed(@name) != \"\" and trimmed(@variant) == \"compact\"}\n  {@rest}\n  data-role={@role}\n  class=\"inline-flex max-w-full items-center gap-2 rounded-full border border-[#ecebe6] bg-white py-1 pl-1 pr-3\"\n>\n  <img\n    :if={trimmed(@image) != \"\"}\n    src={@image}\n    alt=\"\"\n    data-role=\"blog-profile-image\"\n    class=\"h-6 w-6 flex-none rounded-full object-cover\"\n  />\n\n  <span\n    :if={trimmed(@image) == \"\"}\n    aria-hidden=\"true\"\n    data-role=\"blog-profile-initial\"\n    class=\"flex h-6 w-6 flex-none items-center justify-center rounded-full bg-[#f2f1fc] text-[10px] font-black text-[#5b57d6]\"\n  >\n    {initial(@name)}\n  </span>\n\n  <.link\n    :if={@navigate}\n    navigate={@navigate}\n    data-role=\"blog-profile-name\"\n    dir=\"auto\"\n    class=\"truncate text-xs font-semibold text-[#5b57d6] hover:underline\"\n  >\n    {@name}\n  </.link>\n\n  <span\n    :if={is_nil(@navigate)}\n    data-role=\"blog-profile-name\"\n    dir=\"auto\"\n    class=\"truncate text-xs font-semibold text-[#3a382f]\"\n  >\n    {@name}\n  </span>\n</div>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "name",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The name to draw — a blogger's, a team's. Nothing is drawn without one: this component holds no query of its own."
+          }
+        },
+        {
+          "name": "handle",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The slug drawn under the name, as @handle. Left empty, none is drawn."
+          }
+        },
+        {
+          "name": "image",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The address of their picture. Left empty, the first letter of the name is drawn in its place."
+          }
+        },
+        {
+          "name": "about",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "A line about them — a blogger's bio, a team's description — drawn as plain text and cut at three lines. Left empty, none is drawn."
+          }
+        },
+        {
+          "name": "variant",
+          "type": "string",
+          "opts": {
+            "default": "card",
+            "doc": "card draws the picture, the name, the handle and the line about them; compact draws a small picture and the name, which is what a row of teams wants.",
+            "values": [
+              "card",
+              "compact"
+            ]
+          }
+        },
+        {
+          "name": "navigate",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "Where the name leads — their own page. Left empty it is drawn as a word, not a link."
+          }
+        },
+        {
+          "name": "role",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "The data-role the card carries, so the block around it names its own rows — blog-team-member, say."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "initial",
+          "args": "name",
+          "code": "name\n|> to_string()\n|> String.trim()\n|> String.first()\n|> to_string()\n|> String.upcase()\n"
+        },
+        {
+          "name": "plain",
+          "args": "value",
+          "code": "# PLAIN TEXT, because a line on a card is not the place for a bio's links and emphasis: what was\n# stored is drawn without its tags, its whitespace folded.\ncase value do\n  text when is_binary(text) ->\n    text\n    |> HtmlSanitizeEx.strip_tags()\n    |> String.replace(~r/\\s+/u, \" \")\n    |> String.trim()\n\n  _nothing -> \"\"\nend\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [],
+      "examples": [],
+      "extra": {
+        "icon": "card",
         "ui_kit": "mishka_blog"
       },
       "site_id": null

@@ -3084,6 +3084,390 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     end
   end
 
+  # A BLOGGER'S PAGE: who they are, the teams a reader can open, and the posts they are credited with
+  # that the reader may open — each a read of the public action, as the visitor the page hands down.
+  describe "blog-author-profile" do
+    setup %{site: site} do
+      writer =
+        blogger!(site,
+          display_name: "Mona Writer",
+          slug: "mona",
+          bio: "Writes about <strong>OTP</strong>.",
+          social_links: [
+            %{platform: "GitHub", url: "https://github.com/mona"},
+            %{platform: "Trap", url: "javascript:alert(1)"}
+          ]
+        )
+
+      core = team!(site, name: "Core", slug: "core")
+      member!(core, writer)
+      member!(team!(site, name: "Hidden", slug: "hidden", status: :draft), writer)
+
+      [older, newer] = publish!(site, ["Older post", "Newer post"])
+      credit!(older, writer)
+      credit!(newer, writer)
+      credit!(create_blog_post!(site_id: site.id, title: "A draft", status: :draft), writer)
+      publish!(site, ["Somebody else's"])
+
+      %{writer: writer, core: core}
+    end
+
+    test "draws the blogger the slug names, their teams and their published posts", %{site: site} do
+      {:ok, view, _html} =
+        mount_page(site, "blog-author-profile", %{
+          slug: "mona",
+          team_base: "/:lang/blog/team",
+          post_base: "/:lang/blog"
+        })
+
+      assert text_of(view, ~s([data-role="blog-author-name"])) == ["Mona Writer"]
+      assert text_of(view, ~s([data-role="blog-author-handle"])) == ["@mona"]
+      assert has_element?(view, ~s([data-role="blog-author-bio"] strong), "OTP")
+
+      assert text_of(view, ~s([data-role="blog-author-team"] [data-role="blog-profile-name"])) ==
+               ["Core"]
+
+      assert hrefs(view, ~s([data-role="blog-author-team"] a)) == ["/blog/team/core"]
+
+      assert titles(view) == ["Newer post", "Older post"]
+      assert has_element?(view, ~s([data-role="blog-author-pager"])) == false
+    end
+
+    # A LINK ON A PROFILE IS AN ADDRESS SOMEBODY TYPED. Only one a browser should follow is put in
+    # an `href`; the rest is drawn as the words it was saved as.
+    test "links only the addresses a browser should follow", %{site: site} do
+      {:ok, view, _html} = mount_page(site, "blog-author-profile", %{slug: "mona"})
+
+      assert text_of(view, ~s([data-role="blog-author-link"])) == ["GitHub", "Trap"]
+      assert hrefs(view, ~s([data-role="blog-author-link"])) == ["https://github.com/mona"]
+      refute render(view) =~ "javascript:"
+    end
+
+    test "draws a team as a word, not a link, where the page gave it no base", %{site: site} do
+      {:ok, view, _html} = mount_page(site, "blog-author-profile", %{slug: "mona"})
+
+      assert text_of(view, ~s([data-role="blog-author-team"] [data-role="blog-profile-name"])) ==
+               ["Core"]
+
+      assert hrefs(view, ~s([data-role="blog-author-team"] a)) == []
+    end
+
+    test "says nothing is chosen, and that nobody is here, by which it was asked", %{site: site} do
+      {:ok, idle, _html} = mount_page(site, "blog-author-profile")
+      assert has_element?(idle, ~s([data-role="blog-author-idle"]))
+      refute has_element?(idle, ~s([data-role="blog-author-card"]))
+
+      {:ok, missing, _html} = mount_page(site, "blog-author-profile", %{slug: "nobody"})
+      assert has_element?(missing, ~s([data-role="blog-author-missing"]))
+      refute has_element?(missing, ~s([data-role="blog-author-posts"]))
+    end
+
+    test "and an archived blogger is nobody", %{site: site, writer: writer} do
+      Ash.destroy!(writer, action: :destroy, tenant: site.id, authorize?: false)
+
+      {:ok, view, _html} = mount_page(site, "blog-author-profile", %{slug: "mona"})
+
+      assert has_element?(view, ~s([data-role="blog-author-missing"]))
+      refute has_element?(view, ~s([data-role="blog-author-card"]))
+    end
+
+    test "leaves a locked post out for a visitor who may not open it", %{
+      site: site,
+      writer: writer
+    } do
+      locked =
+        create_blog_post!(
+          site_id: site.id,
+          title: "Members only",
+          status: :published,
+          permissions: ["members:read"],
+          published_at: ~U[2026-03-01 00:00:00Z]
+        )
+
+      credit!(locked, writer)
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+
+      {:ok, guest, _html} = mount_page(site, "blog-author-profile", %{slug: "mona"})
+      assert titles(guest) == ["Newer post", "Older post"]
+
+      {:ok, shown, _html} =
+        mount_page(site, "blog-author-profile", %{slug: "mona", current_user: member})
+
+      assert titles(shown) == ["Members only", "Newer post", "Older post"]
+    end
+
+    test "says so when they have published nothing", %{site: site} do
+      blogger!(site, display_name: "Quiet", slug: "quiet")
+
+      {:ok, view, _html} = mount_page(site, "blog-author-profile", %{slug: "quiet"})
+
+      assert text_of(view, ~s([data-role="blog-author-name"])) == ["Quiet"]
+      assert has_element?(view, ~s([data-role="blog-author-posts-empty"]))
+      refute has_element?(view, ~s([data-role="blog-author-teams"]))
+    end
+
+    # TURNING A PAGE READS THE POSTS AND NOTHING ELSE. The profile above them is its own load, so
+    # it stays where it is while the next page arrives.
+    test "pages their posts, and a page turned leaves the profile where it is", %{site: site} do
+      {:ok, view, _html} = mount_page(site, "blog-author-profile", %{slug: "mona", per_page: 1})
+
+      assert titles(view) == ["Newer post"]
+
+      asked =
+        queries_while(fn ->
+          view
+          |> element(~s([data-role="blog-author-pager"] [data-role="blog-list-next"]))
+          |> render_click()
+
+          render_async(view, @async)
+        end)
+
+      assert titles(view) == ["Older post"]
+      assert text_of(view, ~s([data-role="blog-author-name"])) == ["Mona Writer"]
+      # The profile is the one read that asks for a blogger's links.
+      assert Enum.any?(asked, &String.contains?(&1, "mishka_blog_posts")),
+             "turning a page read no posts, so nothing is asserted of it"
+
+      refute Enum.any?(asked, &String.contains?(&1, "social_links")),
+             "turning a page read the profile again"
+    end
+
+    test "draws its skeleton first and the blogger after", %{site: site} do
+      {view, first_paint} =
+        mount_blocks(site, [
+          %{"name" => "blog-author-profile", "id" => "one", "attrs" => %{slug: "mona"}}
+        ])
+
+      assert roles(first_paint, "blog-author-loading") == 1
+      assert roles(first_paint, "blog-author-card") == 0
+
+      arrived = render_async(view, @async)
+
+      assert roles(arrived, "blog-author-loading") == 0
+      assert roles(arrived, "blog-author-card") == 1
+    end
+  end
+
+  describe "blog-team-profile" do
+    setup %{site: site} do
+      team =
+        team!(site, name: "Core", slug: "core", description: "The people behind the runtime.")
+
+      [ada, gone] =
+        for {name, slug} <- [{"Ada", "ada"}, {"Gone", "gone"}] do
+          writer = blogger!(site, display_name: name, slug: slug)
+          member!(team, writer)
+          writer
+        end
+
+      [post] = publish!(site, ["By the team"])
+      credit!(post, ada)
+      publish!(site, ["By nobody in it"])
+
+      Ash.destroy!(gone, action: :destroy, tenant: site.id, authorize?: false)
+
+      %{team: team, ada: ada}
+    end
+
+    test "draws the team, the members a reader can see, and their posts", %{site: site} do
+      {:ok, view, _html} =
+        mount_page(site, "blog-team-profile", %{
+          slug: "core",
+          author_base: "/:lang/blog/author",
+          post_base: "/:lang/blog"
+        })
+
+      assert text_of(view, ~s([data-role="blog-team-name"])) == ["Core"]
+
+      assert text_of(view, ~s([data-role="blog-team-description"])) == [
+               "The people behind the runtime."
+             ]
+
+      assert text_of(view, ~s([data-role="blog-team-member"] [data-role="blog-profile-name"])) ==
+               ["Ada"]
+
+      assert hrefs(view, ~s([data-role="blog-team-member"] a)) == ["/blog/author/ada"]
+      assert titles(view) == ["By the team"]
+    end
+
+    test "leaves a locked post out for a visitor who may not open it", %{site: site, ada: ada} do
+      locked =
+        create_blog_post!(
+          site_id: site.id,
+          title: "Members only",
+          status: :published,
+          permissions: ["members:read"],
+          published_at: ~U[2026-03-01 00:00:00Z]
+        )
+
+      credit!(locked, ada)
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+
+      {:ok, guest, _html} = mount_page(site, "blog-team-profile", %{slug: "core"})
+      assert titles(guest) == ["By the team"]
+
+      {:ok, shown, _html} =
+        mount_page(site, "blog-team-profile", %{slug: "core", current_user: member})
+
+      assert titles(shown) == ["Members only", "By the team"]
+    end
+
+    test "says nobody is here for a team that is not active, or is archived", %{
+      site: site,
+      team: team
+    } do
+      team!(site, name: "Drafted", slug: "drafted", status: :draft)
+
+      {:ok, drafted, _html} = mount_page(site, "blog-team-profile", %{slug: "drafted"})
+      assert has_element?(drafted, ~s([data-role="blog-team-missing"]))
+
+      Ash.destroy!(team, action: :destroy, tenant: site.id, authorize?: false)
+
+      {:ok, archived, _html} = mount_page(site, "blog-team-profile", %{slug: "core"})
+      assert has_element?(archived, ~s([data-role="blog-team-missing"]))
+      refute has_element?(archived, ~s([data-role="blog-team-card"]))
+
+      {:ok, idle, _html} = mount_page(site, "blog-team-profile")
+      assert has_element?(idle, ~s([data-role="blog-team-idle"]))
+    end
+
+    test "says so when nobody is in it and nothing is published", %{site: site} do
+      team!(site, name: "Empty", slug: "empty")
+
+      {:ok, view, _html} = mount_page(site, "blog-team-profile", %{slug: "empty"})
+
+      assert has_element?(view, ~s([data-role="blog-team-members-empty"]))
+      assert has_element?(view, ~s([data-role="blog-team-posts-empty"]))
+    end
+  end
+
+  # EVERYBODY WHO WRITES HERE: each active team with the members a reader can see, then the
+  # bloggers in no team a reader can open — which takes in the members of a team that is not active.
+  describe "blog-people" do
+    setup %{site: site} do
+      core = team!(site, name: "Core", slug: "core")
+      member!(core, blogger!(site, display_name: "Ada", slug: "ada"))
+      gone = blogger!(site, display_name: "Gone", slug: "gone")
+      member!(core, gone)
+      Ash.destroy!(gone, action: :destroy, tenant: site.id, authorize?: false)
+
+      member!(
+        team!(site, name: "Drafted", slug: "drafted", status: :draft),
+        blogger!(site, display_name: "Bea", slug: "bea")
+      )
+
+      blogger!(site, display_name: "Cyrus", slug: "cyrus")
+      team!(site, name: "Empty", slug: "empty")
+
+      :ok
+    end
+
+    test "draws every active team with its members, then the bloggers in none", %{site: site} do
+      {:ok, view, _html} =
+        mount_page(site, "blog-people", %{
+          author_base: "/:lang/blog/author",
+          team_base: "/:lang/blog/team"
+        })
+
+      assert text_of(view, ~s([data-role="blog-people-team-name"])) == ["Core", "Empty"]
+
+      assert text_of(view, ~s([data-role="blog-people-member"] [data-role="blog-profile-name"])) ==
+               ["Ada"]
+
+      assert has_element?(view, ~s([data-role="blog-people-team-empty"]))
+
+      assert text_of(view, ~s([data-role="blog-people-person"] [data-role="blog-profile-name"])) ==
+               ["Bea", "Cyrus"]
+
+      assert hrefs(view, ~s([data-role="blog-people-team-name"])) == [
+               "/blog/team/core",
+               "/blog/team/empty"
+             ]
+
+      assert hrefs(view, ~s([data-role="blog-people-person"] a)) == [
+               "/blog/author/bea",
+               "/blog/author/cyrus"
+             ]
+    end
+
+    # A BLOGGER AND A TEAM ARE ONE ROW IN EVERY LANGUAGE, so their addresses are the page's own.
+    test "builds every address in the page's language, at the place the site's mode puts it", %{
+      site: site
+    } do
+      publishes_persian!(site, "prefix_others")
+
+      {:ok, view, _html} =
+        mount_page(site, "blog-people", %{
+          language: "fa",
+          author_base: "/:lang/blog/author",
+          team_base: "/:lang/blog/team"
+        })
+
+      assert hrefs(view, ~s([data-role="blog-people-team-name"])) == [
+               "/fa/blog/team/core",
+               "/fa/blog/team/empty"
+             ]
+
+      assert hrefs(view, ~s([data-role="blog-people-member"] a)) == ["/fa/blog/author/ada"]
+    end
+
+    test "draws every name as a word where the page gave it no base", %{site: site} do
+      {:ok, view, _html} = mount_page(site, "blog-people")
+
+      assert text_of(view, ~s([data-role="blog-people-team-name"])) == ["Core", "Empty"]
+      assert hrefs(view, ~s([data-role="blog-people-team-name"])) == []
+      assert hrefs(view, ~s([data-role="blog-profile-name"])) == []
+    end
+
+    test "leaves out the teams, or the bloggers in none, when the author says so", %{site: site} do
+      {:ok, view, _html} = mount_page(site, "blog-people", %{show_teams: false})
+
+      assert text_of(view, ~s([data-role="blog-people-team-name"])) == []
+
+      assert text_of(view, ~s([data-role="blog-people-person"] [data-role="blog-profile-name"])) ==
+               ["Bea", "Cyrus"]
+
+      {:ok, view, _html} = mount_page(site, "blog-people", %{show_unteamed: false})
+
+      assert text_of(view, ~s([data-role="blog-people-team-name"])) == ["Core", "Empty"]
+      refute has_element?(view, ~s([data-role="blog-people-unteamed"]))
+    end
+
+    test "draws its skeleton first, and an error with a way out when the read fails", %{
+      site: site
+    } do
+      {view, first_paint} =
+        mount_blocks(site, [%{"name" => "blog-people", "id" => "people", "attrs" => %{}}])
+
+      assert roles(first_paint, "blog-people-loading") == 1
+      assert roles(render_async(view, @async), "blog-people-team") == 2
+
+      kept = break!(site, "blog-people")
+      recompile!(site, "blog-people")
+
+      {view, _first_paint} =
+        mount_blocks(site, [%{"name" => "blog-people", "id" => "people", "attrs" => %{}}])
+
+      assert roles(render_async(view, @async), "blog-people-error") == 1
+
+      write_helpers!(site, "blog-people", kept)
+      recompile!(site, "blog-people")
+
+      view |> element(~s(#people [data-role="blog-notice-retry"])) |> render_click()
+
+      assert roles(render_async(view, @async), "blog-people-team") == 2,
+             "asking again did not read again"
+    end
+  end
+
+  describe "blog-people with nobody to show" do
+    test "says so", %{site: site} do
+      {:ok, view, _html} = mount_page(site, "blog-people")
+
+      assert has_element?(view, ~s([data-role="blog-people-empty"]))
+    end
+  end
+
   # THE COMPONENTS AS THE BUNDLE LISTS THEM, so a seventh is covered the day it is added rather than
   # the day somebody remembers to lengthen a list written here.
   defp bundle_components do
@@ -3118,6 +3502,15 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       )
 
   defp tag_post!(post, tag), do: create_post_tag!(post_id: post.id, tag_id: tag.id)
+
+  defp blogger!(site, opts), do: create_blogger!(Keyword.merge([site_id: site.id], opts))
+
+  defp team!(site, opts),
+    do: create_team!(Keyword.merge([site_id: site.id, status: :active], opts))
+
+  defp member!(team, blogger), do: create_team_member!(team_id: team.id, blogger_id: blogger.id)
+
+  defp credit!(post, blogger), do: create_post_blogger!(post_id: post.id, blogger_id: blogger.id)
 
   defp named(records, name), do: Enum.filter(records, &(&1.name == name))
 

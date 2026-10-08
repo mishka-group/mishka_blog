@@ -266,7 +266,8 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
     end
 
     # EACH READ STARTS AFTER THE LAST ROW THE ONE BEFORE IT RETURNED, never at an offset that walks
-    # every row before it again.
+    # every row before it again. Beside each one is the read of the site's locked posts that keeps
+    # it to what a guest may open, which reads no rows of the page.
     test "every one is listed, a hundred read at a time after the last one read", %{
       site: site,
       mode: mode
@@ -281,7 +282,9 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       assert listed == slugs |> Enum.map(&english(mode, "/blog/#{&1}")) |> Enum.sort()
 
       assert [first, second] =
-               asked |> Enum.reverse() |> Enum.filter(&(&1 =~ ~s("mishka_blog_posts")))
+               asked
+               |> Enum.reverse()
+               |> Enum.filter(&(&1 =~ ~s("mishka_blog_posts") and &1 =~ ~s(ORDER BY m0."id")))
 
       refute first =~ ~s("id"::uuid >)
       assert second =~ ~s("id"::uuid >)
@@ -316,16 +319,18 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       item_page!(site, :category)
       item_page!(site, :tag)
 
-      post = post!(site, :published)
-
+      # A POST OF ITS OWN IN EACH CATEGORY. One post filed under all three would be filed under the
+      # locked one, which locks it — and the open category would then hold nothing a guest may open.
       [category | _hidden] =
         for overrides <- [[], [permissions: ["members:read"]], [seo_tags: robots("noindex")]] do
           category =
             create_collection!([site_id: site.id, status: :active, language: "en"] ++ overrides)
 
-          create_post_collection!(post_id: post.id, collection_id: category.id)
+          create_post_collection!(post_id: post!(site, :published).id, collection_id: category.id)
           category
         end
+
+      post = post!(site, :published)
 
       [tag | _hidden] =
         for overrides <- [[], [permissions: ["members:read"]], [seo_tags: robots("none")]] do
@@ -342,6 +347,28 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
 
     # ITS PAGE LISTS ITS OWN LANGUAGE'S POSTS ALONE, so one whose published posts are all in another
     # language opens on "nothing is published" — the rule the blog kit's `with_public_post` keeps.
+    # THE SITEMAP IS READ AS A GUEST, as a crawler reads the site: a category or a tag whose only
+    # published post is locked opens on "nothing is published" for them, so it is not listed.
+    test "one whose only published post is locked is not", %{site: site, mode: mode} do
+      item_page!(site, :category)
+      item_page!(site, :tag)
+
+      locked = post!(site, :published, permissions: ["members:read"])
+      open = post!(site, :published)
+
+      [listed, _hidden] =
+        for post <- [open, locked] do
+          category = create_collection!(site_id: site.id, status: :active, language: "en")
+          create_post_collection!(post_id: post.id, collection_id: category.id)
+          category
+        end
+
+      tag = create_blog_tag!(site_id: site.id, language: "en")
+      create_post_tag!(post_id: locked.id, tag_id: tag.id)
+
+      assert paths(site) == [english(mode, "/blog/category/#{listed.slug}")]
+    end
+
     test "one whose only published post is in another language is not", %{site: site} do
       item_page!(site, :category)
       item_page!(site, :tag)

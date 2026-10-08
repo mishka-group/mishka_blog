@@ -7,7 +7,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
   same component with another noun, and a second file would test the same module twice and leave
   the two free to drift in their wording instead.
 
-  The blog is the one driven because it is the extension with the most to install: six pages, a
+  The blog is the one driven because it is the extension with the most to install: nine pages, a
   snippet, and a name (`Blog`) a site may well hold already, which is what makes the rename path
   reachable at all.
   """
@@ -32,6 +32,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
   # those into a test failure that says nothing.
   @components length(MishkaBlog.Provision.component_names())
   @permissions length(MishkaBlog.Provision.manifest().permissions)
+  @pages length(MishkaBlog.Provision.page_paths())
 
   setup %{conn: conn} do
     SiteState.clear()
@@ -156,7 +157,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
         |> render_submit()
 
       assert html =~
-               "Added #{@permissions} permissions, #{@components} components, 6 pages, 1 snippet."
+               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages, 1 snippet."
 
       assert Enum.sort(paths(site)) == Enum.sort(Provision.page_paths())
 
@@ -188,7 +189,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
         |> render_submit()
 
       assert html =~
-               "Added #{@permissions} permissions, #{@components} components, 6 pages, 1 snippet. 1 page created under another name."
+               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages, 1 snippet. 1 page created under another name."
 
       assert has_element?(view, "#blog-provision-report")
       assert has_element?(view, "#blog-provision-renamed-0", "/:lang/blog")
@@ -235,7 +236,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
           |> form("#blog-provision-form", %{"site_id" => site.id})
           |> render_submit()
 
-        assert html =~ "#{@components} components, 5 pages, 1 snippet."
+        assert html =~ "#{@components} components, #{@pages - 1} pages, 1 snippet."
         assert has_element?(view, "#blog-provision-skipped-0", "/:lang/blog")
         assert has_element?(view, "#blog-provision-skipped-0", ~s("/blog"))
         refute "/:lang/blog" in paths(site)
@@ -316,7 +317,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       assert has_element?(
                view,
                "#blog-provision-added",
-               "Added #{@permissions} permissions, #{@components} components, 6 pages, 1 snippet."
+               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages, 1 snippet."
              )
 
       Ash.destroy!(gone, action: :permanent_destroy, authorize?: false)
@@ -335,7 +336,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       assert has_element?(
                view,
                "#blog-provision-added",
-               "Added #{@permissions} permissions, #{@components} components, 6 pages, 1 snippet."
+               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages, 1 snippet."
              )
 
       close(view)

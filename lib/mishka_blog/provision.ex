@@ -1,6 +1,6 @@
 defmodule MishkaBlog.Provision do
   @moduledoc """
-  What a site needs before anybody can look at its blog: this extension's live components, six
+  What a site needs before anybody can look at its blog: this extension's live components, nine
   sample pages built out of them, and the sidebar saved as a snippet an author can drop anywhere.
 
   ## Why a production site needs this at all
@@ -59,7 +59,7 @@ defmodule MishkaBlog.Provision do
 
   ## The pages, and why they look the way they do
 
-  Six pattern pages in `/:lang` PATH mode, which is what seeded and starter content uses here:
+  Nine pattern pages in `/:lang` PATH mode, which is what seeded and starter content uses here:
 
       /:lang/blog                  the featured strip, the paged list and the sidebar
       /:lang/blog/:slug            one post, its comments and the sidebar
@@ -67,6 +67,9 @@ defmodule MishkaBlog.Provision do
       /:lang/blog/tag/:slug        that tag's posts
       /:lang/blog/categories       every category, as cards
       /:lang/blog/tags             the whole tag cloud
+      /:lang/blog/author/:slug     one blogger, their teams and their posts
+      /:lang/blog/team/:slug       one team, its members and their posts
+      /:lang/blog/people           every team with its members, and the bloggers in none
 
   No static route in the host application's router answers any of them, which is the point of the
   `/:lang` prefix: `/mish-blog/*` is hand-written marketing the user keeps, and a runtime page
@@ -104,7 +107,8 @@ defmodule MishkaBlog.Provision do
   ## What `:slug` means depends on the page, and only the page knows
 
   One capture name carries a category on `/:lang/blog/category/:slug`, a tag on
-  `/:lang/blog/tag/:slug` and a post on `/:lang/blog/:slug` — while the sidebar's category list and
+  `/:lang/blog/tag/:slug`, a blogger on `/:lang/blog/author/:slug`, a team on `/:lang/blog/team/:slug`
+  and a post on `/:lang/blog/:slug` — while the sidebar's category list and
   tag cloud both read `params` under the same default `selected_param` to mark the row the reader is
   on. So a capture is handed only to the component whose kind of row it holds, which is what the
   sidebar builder below takes its second argument for.
@@ -143,9 +147,18 @@ defmodule MishkaBlog.Provision do
   @tag "#{@blog}/tag"
   @categories "#{@blog}/categories"
   @tags "#{@blog}/tags"
+  @author "#{@blog}/author"
+  @team "#{@blog}/team"
+  @people "#{@blog}/people"
 
   # The pages whose `:slug` names one row, by the kind of row it names.
-  @item_paths %{post: "#{@blog}/:slug", category: "#{@category}/:slug", tag: "#{@tag}/:slug"}
+  @item_paths %{
+    post: "#{@blog}/:slug",
+    category: "#{@category}/:slug",
+    tag: "#{@tag}/:slug",
+    author: "#{@author}/:slug",
+    team: "#{@team}/:slug"
+  }
 
   @section "blog"
 
@@ -234,12 +247,18 @@ defmodule MishkaBlog.Provision do
 
   @doc """
   The paths of the sample pages that read one row each, by the kind of row their `:slug` capture
-  names — where a post, a category and a tag is read.
+  names — where a post, a category, a tag, a blogger and a team is read.
 
       Provision.item_paths().post
       #=> "/:lang/blog/:slug"
   """
-  @spec item_paths() :: %{post: String.t(), category: String.t(), tag: String.t()}
+  @spec item_paths() :: %{
+          post: String.t(),
+          category: String.t(),
+          tag: String.t(),
+          author: String.t(),
+          team: String.t()
+        }
   def item_paths, do: @item_paths
 
   @doc """
@@ -333,6 +352,29 @@ defmodule MishkaBlog.Provision do
         path: @tags,
         description: "The blog's whole tag cloud",
         template: &blog_tags/1
+      },
+      %{
+        name: "Blog author",
+        title: "Blog author",
+        path: @item_paths.author,
+        record: "blog:author",
+        description: nil,
+        template: &blog_author/1
+      },
+      %{
+        name: "Blog team",
+        title: "Blog team",
+        path: @item_paths.team,
+        record: "blog:team",
+        description: nil,
+        template: &blog_team/1
+      },
+      %{
+        name: "Blog people",
+        title: "Blog people",
+        path: @people,
+        description: "Every team of the blog with its members, and the bloggers in none",
+        template: &blog_people/1
       }
     ]
   end
@@ -500,6 +542,80 @@ defmodule MishkaBlog.Provision do
     """)
   end
 
+  # A BLOGGER'S PAGE AND A TEAM'S ARE THE CATEGORY PAGE'S SHAPE: the row the capture names, read by
+  # the block that draws it, and its posts paged under it at this page's own URL. A blogger and a team
+  # are one row in every language, so `language` decides only which of their posts are listed and the
+  # language the links out of them are built in. The sidebar is handed `:nothing`, since this
+  # `:slug` names none of the rows it marks.
+  defp blog_author(site) do
+    chrome(
+      """
+      <.component
+        component_name="blog-author-profile"
+        site="#{site}"
+        id="blog-author"
+        current_user={assigns[:current_user]}
+        slug={@query_params["slug"]}
+        teams_text={t("Teams")}
+        posts_heading={t("Posts")}
+        per_page={9}
+        language={@page.language}
+        base={#{live_url(@author, "slug")}}
+        params={Map.drop(@query_params, ["lang", "slug"])}
+        post_base="#{@blog}"
+        team_base="#{@team}"
+        missing_text={t("That blogger is not here, or no longer writes for this site.")}
+        empty_text={t("Nothing published yet.")}
+      />
+      """,
+      sidebar(site, :nothing)
+    )
+  end
+
+  defp blog_team(site) do
+    chrome(
+      """
+      <.component
+        component_name="blog-team-profile"
+        site="#{site}"
+        id="blog-team"
+        current_user={assigns[:current_user]}
+        slug={@query_params["slug"]}
+        members_heading={t("Members")}
+        posts_heading={t("Posts")}
+        per_page={9}
+        language={@page.language}
+        base={#{live_url(@team, "slug")}}
+        params={Map.drop(@query_params, ["lang", "slug"])}
+        post_base="#{@blog}"
+        author_base="#{@author}"
+        missing_text={t("That team is not here, or is not active any more.")}
+        members_empty_text={t("Nobody is in this team yet.")}
+        empty_text={t("Nothing published yet.")}
+      />
+      """,
+      sidebar(site, :nothing)
+    )
+  end
+
+  defp blog_people(site) do
+    chrome("""
+    <.component
+      component_name="blog-people"
+      site="#{site}"
+      id="blog-people"
+      current_user={assigns[:current_user]}
+      heading={t("People")}
+      unteamed_heading={t("Writers")}
+      language={@page.language}
+      author_base="#{@author}"
+      team_base="#{@team}"
+      members_empty_text={t("Nobody is in this team yet.")}
+      empty_text={t("Nobody writes here yet.")}
+    />
+    """)
+  end
+
   # The sidebar the lists and the post page carry, and the snippet's own source. The card chrome is
   # here rather than in the components, because a component that drew its own card could not be
   # dropped into one.
@@ -628,6 +744,12 @@ defmodule MishkaBlog.Provision do
               class="rounded-full border border-[#ecebe6] px-3 py-1.5 text-[#3a382f] hover:bg-[#f6f5f2]"
             >
               {t("Tags")}
+            </.link>
+            <.link
+              navigate={#{live_url(@people)}}
+              class="rounded-full border border-[#ecebe6] px-3 py-1.5 text-[#3a382f] hover:bg-[#f6f5f2]"
+            >
+              {t("People")}
             </.link>
 
             <a

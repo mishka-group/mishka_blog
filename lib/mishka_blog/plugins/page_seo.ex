@@ -180,7 +180,10 @@ defmodule MishkaBlog.Plugins.PageSeo do
   end
 
   # The row the `slug` capture names, in the page's language, on the page's site; `nil` when the
-  # request names none or none is shown.
+  # request names none or none is shown. Read as the system, because what it reads is the lock
+  # `MishkaCmsWeb.RuntimeLive` admits the visitor by: read as a visitor who may not open it, a locked
+  # record is no record at all, and the gate is handed no permissions to refuse them with. The hook
+  # carries no visitor either.
   defp read(resource, %{params: %{"slug" => slug}, site_id: site_id} = seo, fields, loads)
        when is_binary(slug) and slug != "" and is_binary(site_id) do
     resource

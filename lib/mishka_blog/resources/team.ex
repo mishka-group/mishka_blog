@@ -1129,6 +1129,7 @@ defmodule MishkaBlog.Team do
 
     read :public_list do
       description "Public endpoint to list all active teams (no authentication required)"
+      prepare MishkaCmsCore.Runtime.Resources.Preparations.PluginQueryHook
       filter expr(status == :active)
       pagination offset?: true, default_limit: 20, max_page_size: 100, countable: true
 
@@ -1145,6 +1146,7 @@ defmodule MishkaBlog.Team do
 
     read :public_by_slug do
       description "Public endpoint to get a team by slug (no authentication required)"
+      prepare MishkaCmsCore.Runtime.Resources.Preparations.PluginQueryHook
       argument :slug, :string, allow_nil?: false
       filter expr(slug == ^arg(:slug) and status == :active)
       get? true

@@ -8,16 +8,16 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
 
       prepare {OpenToActor, kind: :post}
 
-  THE READER is the visitor a page reads for, named in the read's shared context — what the blog's
-  components pass, a visitor who is not signed in included:
+  THE READER is the actor of an authorized read: the visitor a page reads for, as the blog's
+  components pass it — `nil` for a visitor who is not signed in — and the JSON:API's caller.
 
       Ash.Query.for_read(MishkaBlog.BlogPost, :public_list, %{},
-        authorize?: false,
-        context: %{shared: %{visitor: current_user}}
+        actor: current_user,
+        tenant: site_id
       )
 
-  else the actor of an authorized read — the JSON:API's caller. A read made with `authorize?: false`
-  and no visitor is the system's — a page's head, a sitemap — and is not filtered.
+  A read made with `authorize?: false` is the system's — the lock a page's head hands its gate, the
+  components a site's stylesheet has to carry — and is not filtered.
 
   WHAT A LIST IS KEPT TO is worked out as it runs, from the site's locked records alone: the
   categories, each with the lock it opens with (`effective_permissions`), and the posts or tags that
@@ -58,7 +58,7 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
 
   @impl true
   def prepare(query, opts, context) do
-    case reader(query, context) do
+    case reader(context) do
       :system -> query
       {:reader, actor} -> keep(query, opts[:kind], actor)
     end
@@ -73,9 +73,8 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   def opens?(_required, nil), do: false
   def opens?(required, actor), do: AccessPermissions.match?(actor, %{}, permissions: required)
 
-  defp reader(%{context: %{shared: %{visitor: actor}}}, _context), do: {:reader, actor}
-  defp reader(_query, %{authorize?: false}), do: :system
-  defp reader(_query, %{actor: actor}), do: {:reader, actor}
+  defp reader(%{authorize?: false}), do: :system
+  defp reader(%{actor: actor}), do: {:reader, actor}
 
   defp keep(%{action: %{get?: true}} = query, kind, actor) do
     query

@@ -42,13 +42,14 @@ defmodule MishkaBlog.Plugins.PageRecords do
   defp type(id, label, samples),
     do: %{id: id, group: gettext("Blog"), label: label, captures: ["slug"], samples: samples}
 
-  # The latest a reader may open, each with the captures that open it.
+  # The latest a guest may open, each with the captures that open it. The hook names no reader, and
+  # a preview is of the page a visitor is served.
   defp samples(resource, name, newest, site_id) when is_binary(site_id) do
     resource
-    |> Ash.Query.for_read(:public_list, %{}, tenant: site_id, authorize?: false)
+    |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site_id)
     |> Ash.Query.select([name, :slug, :language])
     |> Ash.Query.sort([{newest, :desc}])
-    |> Ash.read(tenant: site_id, authorize?: false, page: [limit: @samples])
+    |> Ash.read(page: [limit: @samples])
     |> case do
       {:ok, %{results: rows}} ->
         for %{slug: slug, language: language} = row <- rows,
@@ -68,10 +69,10 @@ defmodule MishkaBlog.Plugins.PageRecords do
   # A blogger or a team is one row in every language, so its sample names the slug alone.
   defp people(resource, name, site_id) when is_binary(site_id) do
     resource
-    |> Ash.Query.for_read(:public_list, %{}, tenant: site_id)
+    |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site_id)
     |> Ash.Query.select([name, :slug])
     |> Ash.Query.sort(updated_at: :desc)
-    |> Ash.read(tenant: site_id, page: [limit: @samples])
+    |> Ash.read(page: [limit: @samples])
     |> case do
       {:ok, %{results: rows}} ->
         for %{slug: slug} = row <- rows,

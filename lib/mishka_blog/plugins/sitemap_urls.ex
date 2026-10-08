@@ -30,7 +30,8 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
   The addresses follow the payload's `urls` as a stream, and nothing is read while the hook runs:
   the build reads the rows as it reads the stream, through `:public_list` as the blog's pages read
-  them, on the payload's site, as the system, a hundred at a time after the last one read
+  them, on the payload's site, as a guest — a build has nobody signed in behind it, and a crawler is
+  a guest — a hundred at a time after the last one read
   (`MishkaCmsCore.Runtime.Compilers.SitemapCompiler.stream_rows/2`). Each row is listed once, since
   a slug is unique on its site. Registered in `MishkaBlog.Application`.
   """
@@ -101,10 +102,10 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
     languages = PageEditions.served_languages(page, site_id)
 
     resource
-    |> Ash.Query.for_read(:public_list, %{}, tenant: site_id)
+    |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site_id)
     |> with_published_post(resource)
     |> Ash.Query.select([:slug])
-    |> SitemapCompiler.stream_rows(tenant: site_id)
+    |> SitemapCompiler.stream_rows(actor: nil, tenant: site_id)
     |> Stream.flat_map(fn row ->
       languages
       |> Enum.map(&address(page, &1, row.slug, site_id))
@@ -128,12 +129,12 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
   defp rows(resource, fields, loads, languages, site_id) do
     resource
-    |> Ash.Query.for_read(:public_list, %{}, tenant: site_id, authorize?: false)
+    |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site_id)
     |> Ash.Query.filter(language in ^languages)
     |> published(resource)
     |> Ash.Query.select(fields)
     |> Ash.Query.load(loads)
-    |> SitemapCompiler.stream_rows(tenant: site_id, authorize?: false)
+    |> SitemapCompiler.stream_rows(actor: nil, tenant: site_id)
   end
 
   defp opens_with(%{effective_permissions: permissions}) when is_list(permissions),

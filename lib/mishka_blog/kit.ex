@@ -4,24 +4,37 @@ defmodule MishkaBlog.Kit do
 
   ## What is in the bundle, and why it is a bundle
 
-  `priv/cms_ui_kits/mishka_blog.json` carries twelve components of two kinds. Each is complete on
+  `priv/cms_ui_kits/mishka_blog.json` carries sixteen components of two kinds. Each is complete on
   its own: its markup, its declarations, and its own code, including the Ash reads it runs. Nothing
   about them lives in Elixir.
 
-  ### The seven blocks, which are live components
+  ### The ten blocks, which are live components
 
   `blog-post-list`, `blog-featured-posts`, `blog-post-search`, `blog-tag-cloud`,
-  `blog-post-detail`, `blog-category-list` and `blog-post-comments`. Each is a
-  `Phoenix.LiveComponent` that runs its own query, so an author can put any of them on any page, on
-  its own or beside the others, and each holds what it read.
+  `blog-post-detail`, `blog-category-list`, `blog-post-comments`, `blog-author-profile`,
+  `blog-team-profile` and `blog-people`. Each is a `Phoenix.LiveComponent` that runs its own query,
+  so an author can put any of them on any page, on its own or beside the others, and each holds what
+  it read.
 
-  ### The five pieces, which are function components
+  A blogger's page and a team's read their own page of posts and draw it with the list's own
+  `blog-post-card` and `blog-pager`. They cannot draw `blog-post-list` itself: a component's markup
+  may not hold a live component (`MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement`).
 
-  `blog-post-card`, `blog-post-meta`, `blog-term-row`, `blog-pager` and `blog-notice`. These hold
-  nothing and read nothing: they draw what the block above hands them. They are components rather
-  than markup inside one block because more than one block draws them — the card is drawn by the
-  paged list and by the featured strip, the notice by every block but the search box — and an admin
-  who restyles a card restyles it once.
+  ### The six pieces, which are function components
+
+  `blog-post-card`, `blog-post-meta`, `blog-term-row`, `blog-pager`, `blog-notice` and
+  `blog-profile-card`. These hold nothing and read nothing: they draw what the block above hands
+  them. They are components rather than markup inside one block because more than one block draws
+  them — the card is drawn by the paged list and by the featured strip, the profile card by both
+  profiles and by `blog-people`, the notice by every block but the search box — and an admin who
+  restyles a card restyles it once.
+
+  ### Who they read as
+
+  Every read is the public action's, with the visitor the page hands down as `current_user` as its
+  actor — `nil` for a guest — so a post, a category or a tag locked to permissions the visitor does
+  not hold is left out by the same rules the record's own page keeps
+  (`MishkaBlog.Resources.Preparations.OpenToActor`). No component reads as the system.
 
   ### The stylesheet
 
@@ -57,7 +70,10 @@ defmodule MishkaBlog.Kit do
   read them all again a moment later behind a skeleton the reader watched replace them. While it is
   loading a block draws a skeleton, and when the read fails it draws a line and a button to ask
   again rather than taking the page down. That is `blog-post-list`, `blog-featured-posts`,
-  `blog-tag-cloud`, `blog-category-list` and `blog-post-comments`.
+  `blog-tag-cloud`, `blog-category-list`, `blog-post-comments`, `blog-people`, and both profiles —
+  `blog-author-profile` and `blog-team-profile` read the profile and its page of posts as two loads,
+  so turning a page reads the posts alone. Each starts its read through
+  `MishkaGervaz.Messages.start_async/4`, which runs it in the page's own locale.
 
   WHICH IS A TRADE, AND THE TRADE IS THE POINT: a reader with no JavaScript, and a crawler that
   does not run any, is served the skeleton of a listing rather than its rows. What it is NOT served
