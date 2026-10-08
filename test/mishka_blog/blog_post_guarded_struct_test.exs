@@ -35,7 +35,7 @@ defmodule MishkaBlog.Test.BlogPostGuardedStructTest do
     end
 
     describe "direct __guarded_change__/1" do
-      test "title strip_tags+trim; content keeps safe HTML, drops scripts; status enum accept" do
+      test "title as plain text; content keeps safe HTML, drops scripts; status enum accept" do
         assert {:ok,
                 %{
                   title: title,

@@ -8,6 +8,9 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   """
   use MishkaBlog.DataCase, async: false
 
+  import Phoenix.Component, only: [sigil_H: 2]
+  import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
+
   alias MishkaBlog.Plugins.PageSeo
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Runtime.Seo
@@ -98,6 +101,33 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   end
 
   defp keys(var_docs), do: Enum.map(var_docs, & &1.key)
+
+  # The head as `MishkaCmsWeb.RuntimeLive.page_head/1` writes it into the page.
+  defp rendered_head(head) do
+    assigns = %{seo: head}
+
+    rendered_to_string(~H"""
+    <meta :for={{"meta", attrs} <- @seo.tags} {attrs} />
+    <script :for={json <- @seo.schema} type="application/ld+json">
+      <%= Phoenix.HTML.raw(json) %>
+    </script>
+    """)
+  end
+
+  defp meta_content(html, selector),
+    do:
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(selector)
+      |> LazyHTML.attribute("content")
+
+  defp json_ld(html, type) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(~s(script[type="application/ld+json"]))
+    |> Enum.map(&(&1 |> LazyHTML.text() |> Jason.decode!()))
+    |> Enum.find(&(&1["@type"] == type))
+  end
 
   describe "the post page" do
     for mode <- ~w(prefix_others prefix_all) do
@@ -214,6 +244,26 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
 
         assert Enum.all?(answered.var_docs, &(is_binary(&1.label) and is_binary(&1.help)))
       end
+    end
+
+    # A title is stored as typed (`MishkaCmsCore.PlainText`), so the head escapes it once: `&amp;`
+    # in the page's source, `&` to whoever reads it.
+    test "writes a title with an ampersand escaped once, in the tags and in the JSON-LD", %{
+      site: site
+    } do
+      post = published!(site, title: "MCP & AI-Ready")
+
+      html =
+        site
+        |> given(:post, %{"lang" => "en", "slug" => post.slug})
+        |> head()
+        |> rendered_head()
+
+      assert html =~ ~s(content="MCP &amp; AI-Ready")
+      refute html =~ "&amp;amp;"
+      assert html =~ ~S("headline":"MCP \u0026 AI-Ready")
+      assert meta_content(html, ~s(meta[property="og:title"])) == ["MCP & AI-Ready"]
+      assert %{"headline" => "MCP & AI-Ready"} = json_ld(html, "BlogPosting")
     end
 
     test "a post in one language offers no alternates, and one with no authors no author", %{
@@ -668,6 +718,31 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       assert person["image"] == base() <> "/media/shahryar.jpg"
       assert blog_crumb(answered)["item"] == base() <> "/blog"
       assert answered.vars["author.name"] == "Shahryar Tavakkoli"
+    end
+
+    test "reads the bio's entities once, so the head escapes them once", %{site: site} do
+      create_blogger!(
+        site_id: site.id,
+        display_name: "Tom & Jerry",
+        slug: "tom-and-jerry",
+        bio: "<p>Cats &amp; mice, <b>since 1940</b>.</p>"
+      )
+
+      given = given_at(site, "/blog/author/:slug", "blog:author", %{"slug" => "tom-and-jerry"})
+      answered = answer(given)
+
+      assert answered.title == "Tom & Jerry"
+      assert answered.description == "Cats & mice, since 1940."
+      assert answered.vars["author.bio"] == "Cats & mice, since 1940."
+
+      html = answered |> Seo.accept(given) |> Seo.head(base: base()) |> rendered_head()
+
+      assert html =~ ~s(content="Cats &amp; mice, since 1940.")
+      refute html =~ "&amp;amp;"
+      assert meta_content(html, ~s(meta[name="description"])) == ["Cats & mice, since 1940."]
+
+      assert %{"mainEntity" => %{"description" => "Cats & mice, since 1940."}} =
+               json_ld(html, "ProfilePage")
     end
 
     test "is left alone for a slug no blogger has", %{site: site} do

@@ -928,7 +928,8 @@ defmodule MishkaBlog.Blogger do
     auto_wire true
 
     field :display_name, :string,
-      derives: "sanitize(strip_tags, trim) validate(string, not_empty, min_len=1, max_len=255)"
+      validator: {MishkaCmsCore.PlainText, :field},
+      derives: "sanitize(trim) validate(string, not_empty, min_len=1, max_len=255)"
 
     field :slug, :string,
       derives: "sanitize(trim) validate(string, not_empty, min_len=1, max_len=255)"
