@@ -344,6 +344,17 @@ defmodule MishkaBlog.KitTest do
       assert started != [], "no component starts a background read, so this asserts nothing"
     end
 
+    # A READ THAT FAILS IS A TUPLE THE BLOCK DRAWS ITS ERROR FROM, on the builder's canvas as in a
+    # task; anything else is a bug, and is let crash.
+    test "and catches nothing: no rescue, catch or try" do
+      for component <- components(), helper <- component["helpers"] do
+        code = String.replace(helper["code"], ~r/^\s*#.*$/m, "")
+
+        refute code =~ ~r/\b(rescue|catch|try)\b/,
+               "#{component["name"]}'s #{helper["name"]} catches what it should let crash"
+      end
+    end
+
     # A HELPER NOBODY CALLS IS CODE A SITE STILL COMPILES AND AN ADMIN STILL READS. Six components
     # share one set of small helpers, and each carries only its own copies, so a helper dropped from
     # a template has to be dropped from the component too.

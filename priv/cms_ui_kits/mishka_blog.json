@@ -480,11 +480,6 @@
           "code": "prefix =\n  case trimmed(socket.assigns[:id]) do\n    \"\" -> \"post\"\n    id -> id <> \"-post\"\n  end\n\nEnum.map(rows, &%{id: prefix <> \"-\" <> to_string(&1.id), post: &1})\n"
         },
         {
-          "name": "read_now",
-          "args": "asked",
-          "code": "fetch(asked)\nrescue\n  error -> {:error, error}\ncatch\n  kind, reason -> {:error, {kind, reason}}\n"
-        },
-        {
           "name": "cold?",
           "args": "socket",
           "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
@@ -492,7 +487,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -836,11 +831,6 @@
           "code": "prefix =\n  case trimmed(socket.assigns[:id]) do\n    \"\" -> \"post\"\n    id -> id <> \"-post\"\n  end\n\nEnum.map(rows, &%{id: prefix <> \"-\" <> to_string(&1.id), post: &1})\n"
         },
         {
-          "name": "read_now",
-          "args": "asked",
-          "code": "fetch(asked)\nrescue\n  error -> {:error, error}\ncatch\n  kind, reason -> {:error, {kind, reason}}\n"
-        },
-        {
           "name": "cold?",
           "args": "socket",
           "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
@@ -848,7 +838,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -1269,11 +1259,6 @@
           "code": "Phoenix.Component.assign(socket, loading: false, failed: true, tags: [])\n"
         },
         {
-          "name": "read_now",
-          "args": "asked",
-          "code": "fetch(asked)\nrescue\n  error -> {:error, error}\ncatch\n  kind, reason -> {:error, {kind, reason}}\n"
-        },
-        {
           "name": "cold?",
           "args": "socket",
           "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
@@ -1281,7 +1266,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:tags, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:tags, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -2006,11 +1991,6 @@
           "code": "Phoenix.Component.assign(socket, loading: false, failed: true, categories: [])\n"
         },
         {
-          "name": "read_now",
-          "args": "asked",
-          "code": "fetch(asked)\nrescue\n  error -> {:error, error}\ncatch\n  kind, reason -> {:error, {kind, reason}}\n"
-        },
-        {
           "name": "cold?",
           "args": "socket",
           "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
@@ -2018,7 +1998,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:categories, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:categories, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -2400,11 +2380,6 @@
           "code": "Phoenix.Component.assign(socket, loading: false, failed: true, comments: [], has_more: false)\n"
         },
         {
-          "name": "read_now",
-          "args": "asked",
-          "code": "fetch(asked)\nrescue\n  error -> {:error, error}\ncatch\n  kind, reason -> {:error, {kind, reason}}\n"
-        },
-        {
           "name": "cold?",
           "args": "socket",
           "code": "# NO PROCESS AT ALL, WHICH IS NOT THE SAME AS NOT CONNECTED. `connected?/1` answers false twice:\n# on the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`\n# renders this block with no LiveView behind it, and on the first HTTP render of a real page, where\n# there IS a process and the socket connects a moment later. Only the first has nobody to hand a\n# task's answer to; the second must NOT read here, or the page's HTTP response waits for every\n# block on it and then throws the rows away, because the mount that follows reads them again.\nsocket.private[:runtime_cold] == true\n"
@@ -2412,7 +2387,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, read_now(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:comments, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:comments, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
