@@ -4,9 +4,13 @@ defmodule MishkaBlogWeb.Templates.PostCard do
 
   Declared only by `MishkaBlog.BlogPost`, and it reads that record directly rather than by column
   position — a post row is a specific shape (a thumbnail beside a title over its site and date, an
-  excerpt under its language, and a stats line ending in a status badge) that a generic position
-  mapping cannot describe. The resource's columns stay the field-selection contract and the
-  vocabulary the table view sorts by.
+  excerpt under its language, a stats line ending in a status badge, and a row of language chips)
+  that a generic position mapping cannot describe. The resource's columns stay the field-selection
+  contract and the vocabulary the table view sorts by.
+
+  The list shows one row per post rather than one per translation
+  (`MishkaCmsCore.LanguageEditions`); the chips under the stats line
+  (`MishkaBlogWeb.Templates.EditionChips`) are the way to a translation without searching for it.
 
   ## The row folds rather than overflowing
 
@@ -34,6 +38,8 @@ defmodule MishkaBlogWeb.Templates.PostCard do
   import MishkaGervaz.Helpers, only: [dynamic_component: 1]
 
   alias MishkaBlogWeb.Live.Admin.Dashboard.Home.Index, as: Home
+  alias MishkaBlogWeb.Templates.EditionChips
+  alias MishkaCmsCore.LanguageAccent
   alias MishkaCmsCoreWeb.Templates.CardChrome, as: Shared
   alias MishkaGervaz.Table.Templates.Shared, as: Gervaz
 
@@ -52,6 +58,10 @@ defmodule MishkaBlogWeb.Templates.PostCard do
       chip: "bg-[#fbe9e7] text-[#b3433a]"
     }
   }
+
+  # The row is one line that must not reflow. The row names its own language plus this many siblings,
+  # and anything past that waits behind a "+N" the reader can open.
+  @editions_shown 3
 
   # A post with no image still needs a tile, and a wall of identical grey ones reads as a loading
   # state. The tint is picked from the record's own id so it is stable across renders and pages.
@@ -150,6 +160,9 @@ defmodule MishkaBlogWeb.Templates.PostCard do
       |> assign(:row_class, Gervaz.custom_row_class(assigns.static, record))
       |> assign(:status, status_badge(record))
       |> assign(:tint, tint(record))
+      |> assign(:accent, LanguageAccent.of(record))
+      |> assign(:editions, EditionChips.editions(record))
+      |> assign(:editions_shown, @editions_shown)
       |> assign(:site, site_name(record, state))
       |> assign(:date, date_label(record))
       |> assign(:views, count(record, :view_count))
@@ -280,6 +293,15 @@ defmodule MishkaBlogWeb.Templates.PostCard do
             />
           </span>
         </div>
+
+        <EditionChips.row
+          id={@id}
+          record={@record}
+          editions={@editions}
+          accent={@accent}
+          shown={@editions_shown}
+          class="mt-2.5"
+        />
       </div>
 
       <%!-- Below a phone this leaves the title's line and takes one of its own under a rule, rather

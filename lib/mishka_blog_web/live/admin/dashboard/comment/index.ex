@@ -46,6 +46,20 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Comment.Index do
     {:noreply, assign(socket, :url_state, url_state)}
   end
 
+  # Add opens the empty create form: a Reply closed with the modal's close icon leaves its parent's
+  # ids behind, so they are dropped here before the form starts over.
+  @impl true
+  def handle_event("add_comment", _params, socket) do
+    send_update(MishkaGervaz.Form.Web.Live,
+      id: MishkaGervaz.Resource.Info.Form.component_id(MishkaBlog.Comment),
+      record_id: nil,
+      defaults: nil,
+      reset: true
+    )
+
+    {:noreply, socket |> assign(:reply_defaults, nil) |> open_modal(@form_modal)}
+  end
+
   @impl true
   def handle_info({:put_flash, kind, message}, socket) do
     {:noreply, put_flash(socket, kind, message)}
@@ -81,7 +95,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Comment.Index do
         send_update(MishkaGervaz.Form.Web.Live,
           id: MishkaGervaz.Resource.Info.Form.component_id(MishkaBlog.Comment),
           record_id: nil,
-          defaults: defaults
+          defaults: defaults,
+          reset: true
         )
 
         {:noreply,

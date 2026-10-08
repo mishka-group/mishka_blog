@@ -383,7 +383,20 @@ defmodule MishkaBlog.Collection do
         # on the posts table, so a reader crossing between the two pages reads the same row of counts.
         column :stats_info do
           static true
-          requires [:post_count, :version_count, :language, :featured]
+
+          requires [
+            :id,
+            :status,
+            :archived_at,
+            :post_count,
+            :version_count,
+            :language,
+            :language_group_id,
+            :language_variants,
+            :master_language_variants,
+            :featured
+          ]
+
           label fn -> dgettext("mishka_gervaz", "Stats") end
           visible fn state -> state.template.name() == :table end
 
@@ -395,10 +408,13 @@ defmodule MishkaBlog.Collection do
 
           render fn record ->
             assigns = %{
+              record: record,
               post_count: record.post_count || 0,
               version_count: record.version_count || 0,
               language: record.language,
-              featured: record.featured
+              featured: record.featured,
+              editions: MishkaBlogWeb.Templates.EditionChips.editions(record),
+              accent: MishkaCmsCore.LanguageAccent.of(record)
             }
 
             ~H"""
@@ -411,8 +427,14 @@ defmodule MishkaBlog.Collection do
                 <.icon name="hero-clock" class="size-[13px] text-[#c3c0b8]" />
                 {@version_count}
               </span>
+              <MishkaBlogWeb.Templates.EditionChips.inline
+                id={"collection-editions-#{@record.id}"}
+                record={@record}
+                editions={@editions}
+                accent={@accent}
+              />
               <span
-                :if={@language}
+                :if={@language && @editions == []}
                 class="rounded-[5px] bg-[#f4f3ee] px-[6px] py-[2px] text-[10px] font-bold uppercase tracking-[0.04em] text-[#6d6a63]"
                 title={gettext("Language")}
               >
@@ -1035,9 +1057,9 @@ defmodule MishkaBlog.Collection do
             :slug,
             :status,
             :language,
+            :site_id,
             :language_group_id,
             :parent_collection_id,
-            :site_id,
             :display_order,
             :featured
           ]
@@ -1068,6 +1090,11 @@ defmodule MishkaBlog.Collection do
       end
 
       hooks do
+        # While a collection is added, its slug follows the name until the author types one.
+        on_validate fn params, state ->
+          MishkaCmsCore.Runtime.Helpers.follow_slug(params, state, :name)
+        end
+
         on_cancel fn state -> state end
       end
     end

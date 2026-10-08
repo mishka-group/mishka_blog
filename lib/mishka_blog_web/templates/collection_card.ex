@@ -31,7 +31,8 @@ defmodule MishkaBlogWeb.Templates.CollectionCard do
 
   import MishkaGervaz.Helpers, only: [dynamic_component: 1]
 
-  alias MishkaCmsCore.{LanguageAccent, LanguageEditions}
+  alias MishkaBlogWeb.Templates.EditionChips
+  alias MishkaCmsCore.LanguageAccent
   alias MishkaCmsCoreWeb.Templates.CardChrome, as: Shared
   alias MishkaGervaz.Table.Templates.Shared, as: Gervaz
 
@@ -130,17 +131,14 @@ defmodule MishkaBlogWeb.Templates.CollectionCard do
 
     checked? = Gervaz.record_checked?(state, record.id)
 
-    editions = editions(record)
-
     assigns =
       assigns
       |> assign(:checked?, checked?)
       |> assign(:row_class, Gervaz.custom_row_class(assigns.static, record))
       |> assign(:status, status_badge(record))
       |> assign(:accent, LanguageAccent.of(record))
-      |> assign(:editions, editions)
-      |> assign(:editions_shown, Enum.take(editions, @editions_shown))
-      |> assign(:editions_rest, Enum.drop(editions, @editions_shown))
+      |> assign(:editions, EditionChips.editions(record))
+      |> assign(:editions_shown, @editions_shown)
       |> assign(:posts, count(record, :post_count))
       |> assign(:versions, count(record, :version_count))
       |> assign(:site, site_name(record))
@@ -211,91 +209,16 @@ defmodule MishkaBlogWeb.Templates.CollectionCard do
         {@record.description}
       </div>
 
-      <%!-- The label and the first chips share one line that never reflows: the rest open underneath
-            rather than pushing the row they came from. `mb-4` is the floor under the row — the footer
-            below is `mt-auto`, which collapses to nothing on a card whose content already fills it,
-            leaving the chips sitting on the rule. --%>
-      <div :if={@editions != []} class="mb-4 mt-3">
-        <div class="flex items-center gap-2">
-          <span class="flex-none text-[9px] font-bold uppercase tracking-[0.05em] text-[#a8a5a0]">
-            {dgettext("mishka_gervaz", "Languages")}
-          </span>
-
-          <%!-- The card's own language is a chip like any other: the reader who can open the Arabic
-                edition to edit it expects the same of the English one they are looking at. --%>
-          <button
-            type="button"
-            phx-click="show_edition"
-            phx-value-id={@record.id}
-            title={Shared.edition_title(%{language: @record.language || ""})}
-            class={[
-              "inline-flex flex-none items-center gap-1 rounded-[20px] border px-2 py-[3px] text-[9.5px] font-bold transition-opacity hover:opacity-70",
-              @accent.chip
-            ]}
-          >
-            <span class={["size-1 rounded-full", @accent.fill]}></span>
-            {String.upcase(@record.language || "")}
-          </button>
-
-          <button
-            :for={edition <- @editions_shown}
-            type="button"
-            phx-click="show_edition"
-            phx-value-id={edition.id}
-            title={Shared.edition_title(edition)}
-            class={[
-              "inline-flex flex-none items-center gap-1 rounded-[20px] border px-2 py-[3px] text-[9.5px] font-bold transition-opacity hover:opacity-70",
-              edition.accent.chip
-            ]}
-          >
-            <span class={["size-1 rounded-full", edition.accent.fill]}></span>
-            {String.upcase(edition.language)}
-          </button>
-
-          <button
-            :if={@editions_rest != []}
-            type="button"
-            id={"#{@id}-editions-more"}
-            phx-click={Shared.expand_editions(@id)}
-            title={dgettext("mishka_gervaz", "Show every language")}
-            class="inline-flex flex-none items-center rounded-[20px] border border-[#e0ddd6] bg-[#f4f3ef] px-2 py-[3px] text-[9.5px] font-bold text-[#6d6a63] transition-colors hover:bg-[#eceae4]"
-          >
-            +{length(@editions_rest)}
-          </button>
-
-          <button
-            :if={@editions_rest != []}
-            type="button"
-            id={"#{@id}-editions-less"}
-            phx-click={Shared.collapse_editions(@id)}
-            title={dgettext("mishka_gervaz", "Show fewer languages")}
-            class="hidden flex-none items-center rounded-[20px] border border-[#e0ddd6] bg-[#f4f3ef] px-2.5 py-[3px] text-[9.5px] font-bold leading-none text-[#6d6a63] transition-colors hover:bg-[#eceae4]"
-          >
-            −
-          </button>
-        </div>
-
-        <div
-          :if={@editions_rest != []}
-          id={"#{@id}-editions-rest"}
-          class="mt-[7px] hidden flex-wrap gap-[5px]"
-        >
-          <button
-            :for={edition <- @editions_rest}
-            type="button"
-            phx-click="show_edition"
-            phx-value-id={edition.id}
-            title={Shared.edition_title(edition)}
-            class={[
-              "inline-flex items-center gap-1 rounded-[20px] border px-2 py-[3px] text-[9.5px] font-bold transition-opacity hover:opacity-70",
-              edition.accent.chip
-            ]}
-          >
-            <span class={["size-1 rounded-full", edition.accent.fill]}></span>
-            {String.upcase(edition.language)}
-          </button>
-        </div>
-      </div>
+      <%!-- `mb-4` is the floor under the row — the footer below is `mt-auto`, which collapses to
+            nothing on a card whose content already fills it, leaving the chips sitting on the rule. --%>
+      <EditionChips.row
+        id={@id}
+        record={@record}
+        editions={@editions}
+        accent={@accent}
+        shown={@editions_shown}
+        class="mb-4 mt-3"
+      />
 
       <%!-- One line, always: the counts give up width first and the site name truncates, rather than
             the badges dropping to a second row and stretching every card in the track. --%>
@@ -354,19 +277,6 @@ defmodule MishkaBlogWeb.Templates.CollectionCard do
 
   defp site_name(%{site: %{name: name}}) when is_binary(name), do: name
   defp site_name(_record), do: nil
-
-  @doc """
-  The collection's sibling editions — the same collection in other languages — each with its own colour.
-
-  The list shows one row per collection rather than one per translation
-  (`MishkaCmsCore.LanguageEditions`), so this row is the only way to reach a translation without
-  searching for it. A workspace chip also carries how far along that edition is; a collection has no
-  such measure, so its chips carry the language alone.
-  """
-  @spec editions(map()) :: [map()]
-  def editions(record) do
-    LanguageEditions.editions(record, &%{accent: LanguageAccent.of(&1)})
-  end
 
   @impl true
   def render_loading(assigns), do: Shared.loading(assigns)

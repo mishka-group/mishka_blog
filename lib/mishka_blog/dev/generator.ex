@@ -155,6 +155,7 @@ defmodule MishkaBlog.Dev.Generator do
         slug: sequence(:slug, &"test-blog-post-#{&1}"),
         content: sequence(:content, &"<p>Test blog post content #{&1}</p>"),
         excerpt: sequence(:excerpt, &"Test blog post excerpt #{&1}"),
+        subtitle: nil,
         featured_image_url: nil,
         status: :draft,
         published_at: nil,
