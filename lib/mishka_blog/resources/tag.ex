@@ -203,8 +203,13 @@ defmodule MishkaBlog.Tag do
       end
 
       source do
+        # The sibling editions are preloaded rather than loaded by the `on_load` hook, which only
+        # runs for the list read: a single-row re-read — selecting a card — would come back without
+        # them and the card's language row would vanish.
         preload do
           always [:site, :version_count, :post_count]
+          tenant [:language_variants]
+          master master_language_variants: :language_variants
         end
       end
 
@@ -300,7 +305,18 @@ defmodule MishkaBlog.Tag do
         # table, so a reader crossing between the two pages reads the same row of counts.
         column :stats_info do
           static true
-          requires [:post_count, :version_count, :language]
+
+          requires [
+            :id,
+            :archived_at,
+            :post_count,
+            :version_count,
+            :language,
+            :language_group_id,
+            :language_variants,
+            :master_language_variants
+          ]
+
           label fn -> dgettext("mishka_gervaz", "Stats") end
           visible fn state -> state.template.name() == :table end
 
@@ -310,9 +326,12 @@ defmodule MishkaBlog.Tag do
 
           render fn record ->
             assigns = %{
+              record: record,
               post_count: record.post_count || 0,
               version_count: record.version_count || 0,
-              language: record.language
+              language: record.language,
+              editions: MishkaBlogWeb.Templates.EditionChips.editions(record),
+              accent: MishkaCmsCore.LanguageAccent.of(record)
             }
 
             ~H"""
@@ -325,8 +344,14 @@ defmodule MishkaBlog.Tag do
                 <.icon name="hero-clock" class="size-[13px] text-[#c3c0b8]" />
                 {@version_count}
               </span>
+              <MishkaBlogWeb.Templates.EditionChips.inline
+                id={"tag-editions-#{@record.id}"}
+                record={@record}
+                editions={@editions}
+                accent={@accent}
+              />
               <span
-                :if={@language}
+                :if={@language && @editions == []}
                 class="rounded-[5px] bg-[#f4f3ee] px-[6px] py-[2px] text-[10px] font-bold uppercase tracking-[0.04em] text-[#6d6a63]"
                 title={gettext("Language")}
               >
@@ -575,7 +600,23 @@ defmodule MishkaBlog.Tag do
         end
       end
 
+      events do
+        bulk_action MishkaCmsCore.LanguageEditions.BulkActionHandler
+      end
+
       hooks do
+        # One row per tag, not one per translation — see `MishkaCmsCore.LanguageEditions`. This
+        # belongs here rather than on the read action because only a hook runs late enough to see
+        # whether a search is active, and a search must reach every language. A live update is
+        # asked of the same read, and `on_realtime` redraws a translation's master.
+        on_load fn query, state ->
+          {:cont, MishkaCmsCore.LanguageEditions.scope_to_masters(query, state)}
+        end
+
+        on_realtime fn notification, socket ->
+          MishkaCmsCore.LanguageEditions.on_realtime(notification, socket)
+        end
+
         # A delete refused because the tag's translations are live answers with an alert that
         # offers to archive — or delete for good — those translations at once. See
         # `MishkaCmsCore.LanguageEditions`.
@@ -1728,6 +1769,17 @@ defmodule MishkaBlog.Tag do
       destination_attribute :language_group_id
       source_attribute :language_group_id
       description "All language variants (translations) of this tag"
+    end
+
+    # Bypass relationship - for master admin users without tenant
+    has_many :master_language_variants, MishkaBlog.Tag do
+      public? true
+      destination_attribute :language_group_id
+      source_attribute :language_group_id
+      read_action :master_read
+
+      description "All language variants of this tag (master admin access, bypass tenant)"
+      filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
     end
 
     # Relationship - for public with tenant

@@ -295,6 +295,9 @@ defmodule MishkaBlog.BlogPost do
       end
 
       source do
+        # The sibling editions are preloaded rather than loaded by the `on_load` hook, which only
+        # runs for the list read: a single-row re-read — selecting a card — would come back without
+        # them and the card's language row would vanish.
         preload do
           always [
             :site,
@@ -304,6 +307,9 @@ defmodule MishkaBlog.BlogPost do
             :comment_count,
             :view_count
           ]
+
+          tenant [:language_variants]
+          master master_language_variants: :language_variants
         end
       end
 
@@ -421,11 +427,17 @@ defmodule MishkaBlog.BlogPost do
           static true
 
           requires [
+            :id,
+            :status,
+            :archived_at,
             :comment_count,
             :collection_count,
             :tag_count,
             :version_count,
             :language,
+            :language_group_id,
+            :language_variants,
+            :master_language_variants,
             :featured
           ]
 
@@ -438,12 +450,15 @@ defmodule MishkaBlog.BlogPost do
 
           render fn record ->
             assigns = %{
+              record: record,
               comment_count: record.comment_count || 0,
               collection_count: record.collection_count || 0,
               tag_count: record.tag_count || 0,
               version_count: record.version_count || 0,
               language: record.language,
-              featured: record.featured
+              featured: record.featured,
+              editions: MishkaBlogWeb.Templates.EditionChips.editions(record),
+              accent: MishkaCmsCore.LanguageAccent.of(record)
             }
 
             ~H"""
@@ -467,8 +482,14 @@ defmodule MishkaBlog.BlogPost do
                 <.icon name="hero-clock" class="size-[13px] text-[#c3c0b8]" />
                 {@version_count}
               </span>
+              <MishkaBlogWeb.Templates.EditionChips.inline
+                id={"post-editions-#{@record.id}"}
+                record={@record}
+                editions={@editions}
+                accent={@accent}
+              />
               <span
-                :if={@language}
+                :if={@language && @editions == []}
                 class="rounded-[5px] bg-[#f4f3ee] px-[6px] py-[2px] text-[10px] font-bold uppercase tracking-[0.04em] text-[#6d6a63]"
                 title={dgettext("mishka_gervaz", "Language")}
               >
@@ -926,7 +947,23 @@ defmodule MishkaBlog.BlogPost do
         end
       end
 
+      events do
+        bulk_action MishkaCmsCore.LanguageEditions.BulkActionHandler
+      end
+
       hooks do
+        # One row per post, not one per translation — see `MishkaCmsCore.LanguageEditions`. This
+        # belongs here rather than on the read action because only a hook runs late enough to see
+        # whether a search is active, and a search must reach every language. A live update is
+        # asked of the same read, and `on_realtime` redraws a translation's master.
+        on_load fn query, state ->
+          {:cont, MishkaCmsCore.LanguageEditions.scope_to_masters(query, state)}
+        end
+
+        on_realtime fn notification, socket ->
+          MishkaCmsCore.LanguageEditions.on_realtime(notification, socket)
+        end
+
         # A delete refused because the post's translations are live answers with an alert that
         # offers to archive — or delete for good — those translations at once. See
         # `MishkaCmsCore.LanguageEditions`.
@@ -2992,6 +3029,17 @@ defmodule MishkaBlog.BlogPost do
       destination_attribute :language_group_id
       source_attribute :language_group_id
       description "All language variants (translations) of this blog post"
+    end
+
+    # Bypass relationship - for master admin users without tenant
+    has_many :master_language_variants, MishkaBlog.BlogPost do
+      public? true
+      destination_attribute :language_group_id
+      source_attribute :language_group_id
+      read_action :read_any
+
+      description "All language variants of this blog post (master admin access, bypass tenant)"
+      filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
     end
 
     # Relationship - for public/guest users

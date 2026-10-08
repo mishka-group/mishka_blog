@@ -19,6 +19,10 @@ defmodule MishkaBlogWeb.Templates.TagCard do
   - `:bulk_actions` - bulk actions on the selected chips
   - `:paginate` - the page-size picker and Load more under the grid
 
+  The list shows one chip per tag rather than one per translation
+  (`MishkaCmsCore.LanguageEditions`); a translated tag names its languages under its name
+  (`MishkaBlogWeb.Templates.EditionChips`), each the way to that edition.
+
   The furniture is `MishkaCmsCoreWeb.Templates.CardChrome` and the controls are
   `MishkaCmsCoreWeb.UIAdapters.Admin`, both shared with every other blog card page.
   """
@@ -28,6 +32,8 @@ defmodule MishkaBlogWeb.Templates.TagCard do
 
   import MishkaGervaz.Helpers, only: [dynamic_component: 1]
 
+  alias MishkaBlogWeb.Templates.EditionChips
+  alias MishkaCmsCore.LanguageAccent
   alias MishkaCmsCoreWeb.Templates.CardChrome, as: Shared
   alias MishkaGervaz.Table.Templates.Shared, as: Gervaz
 
@@ -116,6 +122,8 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       |> assign(:checked?, checked?)
       |> assign(:row_class, Gervaz.custom_row_class(assigns.static, record))
       |> assign(:tint, tint(record))
+      |> assign(:accent, LanguageAccent.of(record))
+      |> assign(:editions, EditionChips.editions(record))
       |> assign(:posts, count(record, :post_count))
       |> assign(
         :has_actions?,
@@ -158,11 +166,27 @@ defmodule MishkaBlogWeb.Templates.TagCard do
         #
       </span>
 
-      <span class="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-[#1b1a18]">
-        {@record.name}
-      </span>
+      <div class="min-w-0 flex-1">
+        <span class="block truncate text-[12.5px] font-semibold text-[#1b1a18]">
+          {@record.name}
+        </span>
 
-      <span class="flex-none rounded-[5px] bg-[#f2f1ec] px-1.5 py-[2px] text-[8.5px] font-bold uppercase tracking-[0.05em] text-[#8a877f]">
+        <%!-- A translated tag names its languages under its name instead of in the badge at the
+              end: each is the way to that edition. --%>
+        <div :if={@editions != []} class="mt-1.5">
+          <EditionChips.inline
+            id={"#{@id}-editions"}
+            record={@record}
+            editions={@editions}
+            accent={@accent}
+          />
+        </div>
+      </div>
+
+      <span
+        :if={@editions == []}
+        class="flex-none rounded-[5px] bg-[#f2f1ec] px-1.5 py-[2px] text-[8.5px] font-bold uppercase tracking-[0.05em] text-[#8a877f]"
+      >
         {String.upcase(@record.language || "")}
       </span>
 
