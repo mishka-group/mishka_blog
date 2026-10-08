@@ -1192,6 +1192,10 @@ defmodule MishkaBlog.BlogPost do
           ui do
             label fn -> dgettext("mishka_gervaz", "Content") end
             rows 8
+
+            # The rich-text editor, with components placed as blocks; their markers are what is
+            # stored. `MishkaCmsCoreWeb.UIAdapters.Admin.textarea/1` is what reads this.
+            extra %{content_editor: true}
           end
         end
 
@@ -1214,7 +1218,6 @@ defmodule MishkaBlog.BlogPost do
           ui do
             label fn -> dgettext("mishka_gervaz", "Featured Image URL") end
             placeholder fn -> dgettext("mishka_gervaz", "https://example.com/image.jpg") end
-            span 2
           end
         end
 
@@ -1340,36 +1343,11 @@ defmodule MishkaBlog.BlogPost do
         end
       end
 
-      # "Insert component" above the content: a component's marker written into the post, which the
-      # post's page draws as that component — see
-      # `MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker`.
-      layout do
-        notice :content_components do
-          position {:before_group, :content}
-
-          render fn assigns, state ->
-            MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker.picker(
-              assigns,
-              state,
-              :content
-            )
-          end
-        end
-
-        notice :content_components_form do
-          position :form_footer
-
-          render fn assigns, state ->
-            MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker.form_owner(
-              assigns,
-              state,
-              :content
-            )
-          end
-        end
+      # For `textarea/1` only — the adapter falls back to Tailwind for everything else. It is what
+      # turns the `content` field's `extra %{content_editor: true}` into the editor.
+      presentation do
+        ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
       end
-
-      events MishkaCmsCoreWeb.Forms.ContentComponentEvents
 
       hooks do
         on_cancel fn state -> state end
