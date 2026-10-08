@@ -799,15 +799,17 @@ defmodule MishkaBlog.Team do
           end
         end
 
-        field :avatar_url do
+        field :avatar_url, :text do
           ui do
             label fn -> dgettext("mishka_gervaz", "Avatar URL") end
+            extra %{dir: "ltr"}
           end
         end
 
-        field :cover_image_url do
+        field :cover_image_url, :text do
           ui do
             label fn -> dgettext("mishka_gervaz", "Cover Image URL") end
+            extra %{dir: "ltr"}
           end
         end
 
@@ -858,6 +860,11 @@ defmodule MishkaBlog.Team do
       end
 
       hooks do
+        # While a team is added, its slug follows the name until the author types one.
+        on_validate fn params, state ->
+          MishkaCmsCore.Runtime.Helpers.follow_slug(params, state, :name)
+        end
+
         on_cancel fn state -> state end
       end
     end

@@ -1035,9 +1035,9 @@ defmodule MishkaBlog.Collection do
             :slug,
             :status,
             :language,
+            :site_id,
             :language_group_id,
             :parent_collection_id,
-            :site_id,
             :display_order,
             :featured
           ]
@@ -1068,6 +1068,11 @@ defmodule MishkaBlog.Collection do
       end
 
       hooks do
+        # While a collection is added, its slug follows the name until the author types one.
+        on_validate fn params, state ->
+          MishkaCmsCore.Runtime.Helpers.follow_slug(params, state, :name)
+        end
+
         on_cancel fn state -> state end
       end
     end

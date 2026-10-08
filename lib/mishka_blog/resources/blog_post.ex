@@ -974,7 +974,7 @@ defmodule MishkaBlog.BlogPost do
       end
 
       fields do
-        field :title do
+        field :title, :text do
           required true
 
           ui do
@@ -1214,10 +1214,11 @@ defmodule MishkaBlog.BlogPost do
           end
         end
 
-        field :featured_image_url do
+        field :featured_image_url, :text do
           ui do
             label fn -> dgettext("mishka_gervaz", "Featured Image URL") end
             placeholder fn -> dgettext("mishka_gervaz", "https://example.com/image.jpg") end
+            extra %{dir: "ltr"}
           end
         end
 
@@ -1304,8 +1305,8 @@ defmodule MishkaBlog.BlogPost do
             :slug,
             :status,
             :language,
-            :language_group_id,
             :site_id,
+            :language_group_id,
             :featured
           ]
 
@@ -1350,6 +1351,11 @@ defmodule MishkaBlog.BlogPost do
       end
 
       hooks do
+        # While a post is added, its slug follows the title until the author types one.
+        on_validate fn params, state ->
+          MishkaCmsCore.Runtime.Helpers.follow_slug(params, state, :title)
+        end
+
         on_cancel fn state -> state end
       end
     end
