@@ -88,6 +88,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
   require Ash.Query
 
   alias MishkaBlog.{BlogPost, Blogger, Collection, Tag, Team}
+  alias MishkaCmsCore.PlainText
   alias MishkaCmsCore.Runtime.{Languages, Seo}
   alias MishkaCmsCore.Settings
 
@@ -468,8 +469,9 @@ defmodule MishkaBlog.Plugins.PageSeo do
     }
   end
 
+  # The text the bio's HTML shows, on one line: escaped once, where the head writes it out.
   defp plain(html) when is_binary(html),
-    do: html |> HtmlSanitizeEx.strip_tags() |> String.replace(~r/\s+/, " ") |> String.trim()
+    do: html |> PlainText.from_html() |> String.replace(~r/\s+/u, " ") |> String.trim()
 
   defp plain(_none), do: nil
 

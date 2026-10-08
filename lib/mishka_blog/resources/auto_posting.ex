@@ -523,12 +523,16 @@ defmodule MishkaBlog.AutoPosting do
     auto_wire true
 
     field :name, :string,
-      derives: "sanitize(strip_tags, trim) validate(string, not_empty, min_len=1, max_len=255)"
+      validator: {MishkaCmsCore.PlainText, :field},
+      derives: "sanitize(trim) validate(string, not_empty, min_len=1, max_len=255)"
 
     field :plugin, :string,
-      derives: "sanitize(strip_tags, trim) validate(string, not_empty, min_len=1, max_len=255)"
+      validator: {MishkaCmsCore.PlainText, :field},
+      derives: "sanitize(trim) validate(string, not_empty, min_len=1, max_len=255)"
 
-    field :description, :string, derives: "sanitize(strip_tags, trim) validate(optional=[string])"
+    field :description, :string,
+      validator: {MishkaCmsCore.PlainText, :field},
+      derives: "sanitize(trim) validate(optional=[string])"
 
     field :is_active, :boolean, derives: "validate(boolean)"
     field :config, :map, derives: "validate(optional=[map])"
