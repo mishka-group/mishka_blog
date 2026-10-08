@@ -27,7 +27,7 @@
         <button
           type="button"
           id="add-post-btn"
-          phx-click={show_modal("blog-post-form-modal")}
+          phx-click={show_form_modal("blog-post-form-modal", MishkaBlog.BlogPost)}
           class="inline-flex h-[42px] items-center gap-2 rounded-xl bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-[17px] text-[12.5px] font-bold text-white shadow-[0_5px_14px_rgba(79,75,204,0.28)] transition-opacity hover:opacity-95 max-[560px]:flex-1! max-[560px]:justify-center!"
         >
           <.icon name="hero-plus" class="size-4" /> {gettext("Add Post")}
