@@ -2,7 +2,8 @@ defmodule MishkaBlog.Test.FiltersTest do
   @moduledoc """
   Confirms the three "filter" plugin seams added to the blog resources actually take effect:
   the content render filter (calculation), the query filter (preparation), and the before/reject seam
-  (change) — the WordPress `the_content` / `pre_get_posts` / `pre_comment_approved` equivalents.
+  (change) — the WordPress `the_content` / `pre_get_posts` / `pre_comment_approved` equivalents. The
+  query filter is on the public reads of bloggers and teams too, which the blog's people pages run.
   """
   use MishkaBlog.DataCase, async: false
 
@@ -10,7 +11,9 @@ defmodule MishkaBlog.Test.FiltersTest do
     alias MishkaBlog.Test.Plugins.{
       BlogPostRenderContent,
       BlogPostQueryPublished,
-      BlogCommentBeforeCreatePublic
+      BlogCommentBeforeCreatePublic,
+      BlogBloggerQueryPublicBySlug,
+      BlogTeamQueryPublicList
     }
 
     setup do
@@ -37,6 +40,34 @@ defmodule MishkaBlog.Test.FiltersTest do
         Ash.read!(MishkaBlog.BlogPost, action: :published, tenant: site.id, authorize?: false)
 
         assert_receive {:query_hook_fired, :published}, 5000
+      end)
+    end
+
+    test "QUERY filter: a blogger's public read by slug hands the plugin the visitor it reads for" do
+      with_plugin(BlogBloggerQueryPublicBySlug, "blog:blogger:query_public_by_slug", fn ->
+        site = create_site!()
+        create_blogger!(site_id: site.id, slug: "mona")
+        visitor = create_user!(site_id: site.id)
+
+        MishkaBlog.Blogger
+        |> Ash.Query.for_read(:public_by_slug, %{slug: "mona"}, actor: visitor, tenant: site.id)
+        |> Ash.read_one!()
+
+        assert_receive {:query_hook_fired, :public_by_slug, %{id: id}}, 5000
+        assert id == visitor.id
+      end)
+    end
+
+    test "QUERY filter: a plugin's prepare hook fires on a team's public list" do
+      with_plugin(BlogTeamQueryPublicList, "blog:team:query_public_list", fn ->
+        site = create_site!()
+        create_team!(site_id: site.id, status: :active)
+
+        MishkaBlog.Team
+        |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site.id)
+        |> Ash.read!()
+
+        assert_receive {:query_hook_fired, :public_list}, 5000
       end)
     end
 

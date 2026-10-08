@@ -55,8 +55,18 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.PageSeo
   ]
 
+  # Names the components the site's posts draw, so its stylesheet carries them (a
+  # `runtime:compile:content_components` plugin).
+  @runtime_plugins [
+    MishkaBlog.Plugins.ContentComponents
+  ]
+
+  # Each code block of a post being written is lexed in a task of its own under this supervisor — see
+  # `MishkaBlog.Resources.Changes.HighlightCode`.
+  @highlight_supervisor {Task.Supervisor, name: MishkaBlog.HighlightSupervisor}
+
   @doc """
-  Every mishka_installer plugin this extension ships, and exactly what `start/2` supervises. A plugin
+  Every mishka_installer plugin this extension ships, all of which `start/2` supervises. A plugin
   left out of it never registers, so the event it listens on never reaches it.
   """
   @spec plugins() :: [module()]
@@ -64,11 +74,12 @@ defmodule MishkaBlog.Application do
     do:
       @dashboard_widgets ++
         @notify_plugins ++
-        @settings_plugins ++ @sidebar_menus ++ @provision_plugins ++ @seo_plugins
+        @settings_plugins ++
+        @sidebar_menus ++ @provision_plugins ++ @seo_plugins ++ @runtime_plugins
 
   @impl true
   def start(_type, _args) do
     opts = [strategy: :one_for_one, name: MishkaBlog.Supervisor]
-    Supervisor.start_link(plugins(), opts)
+    Supervisor.start_link([@highlight_supervisor | plugins()], opts)
   end
 end

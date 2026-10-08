@@ -4,7 +4,7 @@ defmodule MishkaBlog.KitTest do
 
   ## Why the components are data and not code
 
-  Six live components arrive as `priv/cms_ui_kits/mishka_blog.json` and are installed through the
+  The live components arrive as `priv/cms_ui_kits/mishka_blog.json` and are installed through the
   CMS's own kit machinery — the same path Chelekom's 136 take. Everything a component is travels in
   that file: its markup, its declarations, and its own code, including the Ash reads it runs.
 
@@ -21,7 +21,7 @@ defmodule MishkaBlog.KitTest do
   """
   use MishkaBlog.DataCase, async: false
 
-  alias MishkaCmsCore.Runtime.Component
+  alias MishkaCmsCore.Runtime.{Component, Stylesheet}
 
   require Ash.Query
 
@@ -32,9 +32,10 @@ defmodule MishkaBlog.KitTest do
   # lets every assertion below ask the right question of each — a function component has no socket,
   # so it has no `mount/1`, no `id={@id}` and nothing to aim an event at.
   @live ~w(blog-post-list blog-featured-posts blog-post-search blog-tag-cloud blog-post-detail
-           blog-category-list blog-post-comments)
+           blog-category-list blog-post-comments blog-author-profile blog-team-profile blog-people)
 
-  @functions ~w(blog-post-card blog-post-meta blog-term-row blog-pager blog-notice)
+  @functions ~w(blog-post-card blog-post-meta blog-term-row blog-pager blog-notice
+                blog-profile-card)
 
   @names @live ++ @functions
 
@@ -42,7 +43,7 @@ defmodule MishkaBlog.KitTest do
   # extension's Elixir, and a component that called one would stop being installable by anyone who
   # does not also have that code.
   @resources ~w(MishkaBlog.BlogPost MishkaBlog.Tag MishkaBlog.Collection MishkaBlog.Comment
-                MishkaBlog.Blogger)
+                MishkaBlog.Blogger MishkaBlog.Team)
 
   # A read as the stored code writes it: the resource, then the action it is run for.
   @read_call ~r/MishkaBlog\.(\w+)\s*\|>\s*Ash\.Query\.for_read\(\s*:(\w+)/
@@ -80,7 +81,7 @@ defmodule MishkaBlog.KitTest do
       assert bundle()["name"] == "mishka_blog"
     end
 
-    test "ships exactly the twelve components, each of the kind it is listed under" do
+    test "ships exactly the sixteen components, each of the kind it is listed under" do
       assert Enum.map(components(), & &1["name"]) |> Enum.sort() == Enum.sort(@names)
 
       for component <- components() do
@@ -303,6 +304,57 @@ defmodule MishkaBlog.KitTest do
              "no read that keeps to its reader was recognised, so this asserts nothing"
     end
 
+    # AND READS AS THAT VISITOR, through the public action's own policies. `authorize?: false` with
+    # the visitor named beside it is a read of the system's that filters itself, and every rule the
+    # action keeps that the filter does not repeat is skipped for every visitor at once.
+    test "and reads as the visitor, never as the system" do
+      for component <- components(), helper <- component["helpers"] do
+        refute helper["code"] =~ "authorize?: false",
+               "#{component["name"]}'s #{helper["name"]} reads as the system"
+      end
+
+      read_as =
+        for component <- components(),
+            helper <- component["helpers"],
+            helper["name"] == "read_as",
+            do: {component["name"], helper["code"]}
+
+      assert read_as != [], "no component carries read_as/1, so this asserts nothing"
+
+      for {name, code} <- read_as do
+        assert code =~ "actor: visitor", "#{name}'s read_as/1 does not read as the visitor"
+      end
+    end
+
+    # A BACKGROUND READ RUNS IN THE PAGE'S LOCALE. `MishkaGervaz.Messages.start_async/4` carries the
+    # page's Gettext locales into the task; Phoenix's own leaves it in the default one. The host's
+    # `MishkaCms.AsyncLocaleTest` holds compiled code to that, and a component's code is not compiled
+    # until a site draws it.
+    test "and starts a background read in the page's locale" do
+      started =
+        for component <- components(),
+            helper <- component["helpers"],
+            helper["code"] =~ ~r/\b(start|assign)_async\(/ do
+          refute helper["code"] =~ ~r/Phoenix\.LiveView\.(start_async|assign_async)\(/,
+                 "#{component["name"]}'s #{helper["name"]} starts a read through Phoenix's own"
+
+          component["name"]
+        end
+
+      assert started != [], "no component starts a background read, so this asserts nothing"
+    end
+
+    # A READ THAT FAILS IS A TUPLE THE BLOCK DRAWS ITS ERROR FROM, on the builder's canvas as in a
+    # task; anything else is a bug, and is let crash.
+    test "and catches nothing: no rescue, catch or try" do
+      for component <- components(), helper <- component["helpers"] do
+        code = String.replace(helper["code"], ~r/^\s*#.*$/m, "")
+
+        refute code =~ ~r/\b(rescue|catch|try)\b/,
+               "#{component["name"]}'s #{helper["name"]} catches what it should let crash"
+      end
+    end
+
     # A HELPER NOBODY CALLS IS CODE A SITE STILL COMPILES AND AN ADMIN STILL READS. Six components
     # share one set of small helpers, and each carries only its own copies, so a helper dropped from
     # a template has to be dropped from the component too.
@@ -385,6 +437,29 @@ defmodule MishkaBlog.KitTest do
         assert found.stateful == name in @live
         assert found.site_id == site.id
         assert found.helpers != [], "#{name} arrived with no code"
+      end
+    end
+
+    # THE COLOURS OF A HIGHLIGHTED POST travel with the components. Every class Makeup's own Monokai
+    # style colours is coloured here, read off Makeup rather than listed in this test.
+    test "writes the stylesheet a highlighted code block is coloured by", %{site: site} do
+      reader = create_user_with_permissions!(["admin:dashboard:runtime:stylesheet"])
+
+      sheet =
+        Stylesheet
+        |> Ash.Query.for_read(:read, %{}, actor: reader, tenant: site.id)
+        |> Ash.Query.filter(name == "blog-code-highlight" and site_id == ^site.id)
+        |> Ash.read_one!()
+
+      assert sheet, "the stylesheet was not installed"
+      assert sheet.kind == :base
+      assert sheet.content =~ "background-color: #272822"
+
+      monokai = Makeup.stylesheet(:monokai_style, "highlight")
+
+      for [class] <- Regex.scan(~r/^\.highlight \.([\w-]+) \{/m, monokai, capture: :all_but_first),
+          class != "hll" do
+        assert sheet.content =~ ".highlight .#{class} {", "nothing colours .#{class}"
       end
     end
 

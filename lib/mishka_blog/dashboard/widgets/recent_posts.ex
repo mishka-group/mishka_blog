@@ -63,7 +63,8 @@ defmodule MishkaBlog.Dashboard.Widgets.RecentPosts do
       |> Ash.Query.for_read(:master_read, %{}, authorize?: false)
       |> scope_filter(scope)
       |> Ash.Query.sort(inserted_at: :desc)
-      |> Ash.Query.load([:view_count, :comment_count, :reading_time_minutes, authors(scope)])
+      |> Ash.Query.select([:id, :title, :excerpt, :status, :featured, :reading_time_minutes])
+      |> Ash.Query.load([:view_count, :comment_count, authors(scope)])
       |> Ash.read!(page: [limit: count], actor: user, tenant: scope, authorize?: false)
 
     %{posts: posts, count: count}

@@ -1,12 +1,12 @@
 defmodule MishkaBlog.VisitorListsTest do
   @moduledoc """
   What a page's read of posts, categories and tags keeps to for its visitor
-  (`MishkaBlog.Resources.Preparations.OpenToActor`): a read naming the visitor in its shared context
-  — what the blog's components pass — leaves out, in its own query, what that visitor may not open,
-  so its count and its pages are of what the visitor sees. A category's and a tag's
+  (`MishkaBlog.Resources.Preparations.OpenToActor`): a read with the visitor as its actor — what the
+  blog's components pass, `nil` for a guest — leaves out, in its own query, what that visitor may not
+  open, so its count and its pages are of what the visitor sees. A category's and a tag's
   `published_post_count`, loaded or sorted by, counts the posts that visitor may open, and a check of
   a row's posts (`exists(tenant_posts, …)`) finds only those. A read of the system's,
-  `authorize?: false` and no visitor, sees everything. A lock written is kept to by the next read.
+  `authorize?: false`, sees everything. A lock written is kept to by the next read.
 
   members (locked) → guides (names nothing); open names nothing.
   """
@@ -54,19 +54,16 @@ defmodule MishkaBlog.VisitorListsTest do
     post
   end
 
-  # A read the way the blog's components read: as the system, for the visitor named.
+  # A read the way the blog's components read: through the public action, as the visitor.
   defp visible(resource, site, visitor, opts \\ []) do
     resource
-    |> Ash.Query.for_read(:public_list, %{},
-      authorize?: false,
-      context: %{shared: %{visitor: visitor}}
-    )
-    |> Ash.read!(Keyword.merge([tenant: site.id], opts))
+    |> Ash.Query.for_read(:public_list, %{}, actor: visitor, tenant: site.id)
+    |> Ash.read!(opts)
   end
 
   defp counts(resource, site, visitor) do
     resource
-    |> read_as(visitor)
+    |> read_as(site, visitor)
     |> Ash.Query.load(:published_post_count)
     |> Ash.read!(tenant: site.id)
     |> rows()
@@ -75,10 +72,7 @@ defmodule MishkaBlog.VisitorListsTest do
 
   defp one_count(resource, record, site, visitor) do
     resource
-    |> Ash.Query.for_read(:public_get, %{},
-      authorize?: false,
-      context: %{shared: %{visitor: visitor}}
-    )
+    |> Ash.Query.for_read(:public_get, %{}, actor: visitor, tenant: site.id)
     |> Ash.Query.filter(id == ^record.id)
     |> Ash.Query.load(:published_post_count)
     |> Ash.read_one!(tenant: site.id)
@@ -87,7 +81,7 @@ defmodule MishkaBlog.VisitorListsTest do
 
   defp by_count(resource, site, visitor) do
     resource
-    |> read_as(visitor)
+    |> read_as(site, visitor)
     |> Ash.Query.load(:published_post_count)
     |> Ash.Query.sort(published_post_count: :desc, name: :asc)
     |> Ash.read!(tenant: site.id)
@@ -98,16 +92,13 @@ defmodule MishkaBlog.VisitorListsTest do
   # The rows with a published post, as a block leaving out the ones with nothing to read asks.
   defp with_post(resource, site, visitor) do
     resource
-    |> read_as(visitor)
+    |> read_as(site, visitor)
     |> Ash.Query.filter(exists(tenant_posts, status == :published))
     |> Ash.read!(tenant: site.id)
   end
 
-  defp read_as(resource, visitor) do
-    Ash.Query.for_read(resource, :public_list, %{},
-      authorize?: false,
-      context: %{shared: %{visitor: visitor}}
-    )
+  defp read_as(resource, site, visitor) do
+    Ash.Query.for_read(resource, :public_list, %{}, actor: visitor, tenant: site.id)
   end
 
   defp ids(read), do: read |> rows() |> Enum.map(& &1.id) |> Enum.sort()

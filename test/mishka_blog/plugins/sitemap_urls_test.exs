@@ -8,7 +8,9 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   from core's. Every status the generators could pick is pinned. What it returns is a stream, as
   core reads it, so each test reads it to the end.
   """
-  use MishkaBlog.DataCase, async: false
+  use MishkaBlog.DataCase,
+    async: false,
+    parameterize: for(mode <- ~w(prefix_others prefix_all), do: %{mode: mode})
 
   alias MishkaBlog.Plugins.SitemapUrls
   alias MishkaBlog.Provision
@@ -20,21 +22,38 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   alias MishkaInstaller.Event.EventHandler
   alias MishkaInstaller.Event.Hook
 
-  setup do
+  setup %{mode: mode} do
     site = create_site!(active: true)
-
-    on_exit(fn -> SettingsState.delete(site.id, "site.languages") end)
-    {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+    in_mode!(site, mode)
 
     {:ok, site: site}
   end
 
-  # The blog's page reading one `kind` of row, answering every language, as the provision writes it.
+  # English and Persian on `site`, its addresses named in `mode`.
+  defp in_mode!(site, mode) do
+    on_exit(fn ->
+      SettingsState.delete(site.id, "site.languages")
+      SettingsState.delete(site.id, "site.language_urls")
+    end)
+
+    {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+    {:ok, _} = Settings.put("site.language_urls", mode, site_id: site.id)
+  end
+
+  # Where English, the site's first language, puts `path` in `mode`: under no prefix while the first
+  # language goes without one, under its own once every language carries one.
+  defp english("prefix_others", path), do: path
+  defp english("prefix_all", path), do: "/en" <> path
+
+  # The blog's page reading one `kind` of row, answering every language, saying the kind it shows, as
+  # the provision writes it.
   defp item_page!(site, kind, overrides \\ []) do
+    {extra, overrides} = Keyword.pop(overrides, :extra, %{"serves_all_languages" => true})
+
     [
       site_id: site.id,
       path: Provision.item_paths()[kind],
-      extra: %{"serves_all_languages" => true},
+      extra: Map.put(extra, "record", "blog:#{kind}"),
       active: true,
       permissions: []
     ]
@@ -61,9 +80,61 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
 
   defp robots(content), do: [%{tag: "meta", attrs: %{"name" => "robots"}, content: content}]
 
+  # A page at a path of the site's own choosing, with no language in it, saying the kind it shows.
+  defp record_page!(site, path, record) do
+    create_page!(
+      site_id: site.id,
+      path: path,
+      extra: %{"record" => record},
+      active: true,
+      permissions: []
+    )
+  end
+
+  describe "a blog at the site's root" do
+    test "is found by the kind each page shows, not by the provision's path", %{site: site} do
+      record_page!(site, "/blog/:slug", "blog:post")
+      record_page!(site, "/blog/tag/:slug", "blog:tag")
+      post = post!(site, :published)
+      tag = create_blog_tag!(site_id: site.id, name: "elixir", language: "en")
+      create_post_tag!(post_id: post.id, tag_id: tag.id)
+
+      assert paths(site) == Enum.sort(["/blog/#{post.slug}", "/blog/tag/#{tag.slug}"])
+    end
+  end
+
+  describe "bloggers and teams" do
+    test "a blogger with a published post and that blogger's team are listed, once each", %{
+      site: site
+    } do
+      record_page!(site, "/blog/author/:slug", "blog:author")
+      record_page!(site, "/blog/team/:slug", "blog:team")
+
+      writer = create_blogger!(site_id: site.id, slug: "shahryar")
+      create_blogger!(site_id: site.id, slug: "silent")
+      team = create_team!(site_id: site.id, slug: "core", status: :active)
+      create_team!(site_id: site.id, slug: "empty", status: :active)
+      create_team_member!(team_id: team.id, blogger_id: writer.id)
+
+      post = post!(site, :published)
+      create_post_blogger!(post_id: post.id, blogger_id: writer.id)
+
+      assert paths(site) == ["/blog/author/shahryar", "/blog/team/core"]
+    end
+
+    test "nothing is listed without their pages", %{site: site} do
+      writer = create_blogger!(site_id: site.id)
+      post = post!(site, :published)
+      create_post_blogger!(post_id: post.id, blogger_id: writer.id)
+
+      assert paths(site) == []
+    end
+  end
+
   describe "posts" do
     test "a published post is listed in its own language, after what the payload held", %{
-      site: site
+      site: site,
+      mode: mode
     } do
       item_page!(site, :post)
       persian = post!(site, :published, language: "fa")
@@ -75,28 +146,36 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       assert Enum.sort_by(added, & &1.path) ==
                Enum.sort_by(
                  [
-                   %{path: "/en/blog/#{english.slug}", lastmod: english.updated_at, images: []},
+                   %{
+                     path: english(mode, "/blog/#{english.slug}"),
+                     lastmod: english.updated_at,
+                     images: []
+                   },
                    %{path: "/fa/blog/#{persian.slug}", lastmod: persian.updated_at, images: []}
                  ],
                  & &1.path
                )
     end
 
-    test "each carries its featured image, a path or an address as it is stored", %{site: site} do
+    test "each carries its featured image, a path or an address as it is stored", %{
+      site: site,
+      mode: mode
+    } do
       item_page!(site, :post)
       hosted = post!(site, :published, featured_image_url: "https://cdn.example.com/cover.png")
       local = post!(site, :published, featured_image_url: "/media/cover.png")
       bare = post!(site, :published)
 
       assert site |> urls() |> Map.new(&{&1.path, &1.images}) == %{
-               "/en/blog/#{hosted.slug}" => ["https://cdn.example.com/cover.png"],
-               "/en/blog/#{local.slug}" => ["/media/cover.png"],
-               "/en/blog/#{bare.slug}" => []
+               english(mode, "/blog/#{hosted.slug}") => ["https://cdn.example.com/cover.png"],
+               english(mode, "/blog/#{local.slug}") => ["/media/cover.png"],
+               english(mode, "/blog/#{bare.slug}") => []
              }
     end
 
     test "a draft, a scheduled, an archived post and one in a language the site lacks are not", %{
-      site: site
+      site: site,
+      mode: mode
     } do
       item_page!(site, :post)
       published = post!(site, :published)
@@ -114,11 +193,12 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id)
       |> Ash.destroy!(authorize?: false)
 
-      assert paths(site) == ["/en/blog/#{published.slug}"]
+      assert paths(site) == [english(mode, "/blog/#{published.slug}")]
     end
 
     test "one that names a permission, or whose own robots meta says noindex or none, is not", %{
-      site: site
+      site: site,
+      mode: mode
     } do
       item_page!(site, :post)
       listed = post!(site, :published, seo_tags: robots("index, follow"))
@@ -127,10 +207,13 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       post!(site, :published, seo_tags: robots("noindex, follow"))
       post!(site, :published, seo_tags: robots("none"))
 
-      assert paths(site) == ["/en/blog/#{listed.slug}"]
+      assert paths(site) == [english(mode, "/blog/#{listed.slug}")]
     end
 
-    test "one filed under a locked category, or a category under one, is not", %{site: site} do
+    test "one filed under a locked category, or a category under one, is not", %{
+      site: site,
+      mode: mode
+    } do
       item_page!(site, :post)
       item_page!(site, :category)
 
@@ -160,7 +243,10 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
         end
 
       assert paths(site) ==
-               Enum.sort(["/en/blog/#{listed.slug}", "/en/blog/category/#{open.slug}"])
+               Enum.sort([
+                 english(mode, "/blog/#{listed.slug}"),
+                 english(mode, "/blog/category/#{open.slug}")
+               ])
     end
 
     test "a post page written in one language lists that language's posts alone", %{site: site} do
@@ -180,8 +266,12 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
     end
 
     # EACH READ STARTS AFTER THE LAST ROW THE ONE BEFORE IT RETURNED, never at an offset that walks
-    # every row before it again.
-    test "every one is listed, a hundred read at a time after the last one read", %{site: site} do
+    # every row before it again. Beside each one is the read of the site's locked posts that keeps
+    # it to what a guest may open, which reads no rows of the page.
+    test "every one is listed, a hundred read at a time after the last one read", %{
+      site: site,
+      mode: mode
+    } do
       item_page!(site, :post)
       slugs = for _ <- 1..101, do: post!(site, :published).slug
       parent = self()
@@ -189,10 +279,12 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       asked = queries_while(fn -> send(parent, {:paths, paths(site)}) end)
 
       assert_received {:paths, listed}
-      assert listed == slugs |> Enum.map(&"/en/blog/#{&1}") |> Enum.sort()
+      assert listed == slugs |> Enum.map(&english(mode, "/blog/#{&1}")) |> Enum.sort()
 
       assert [first, second] =
-               asked |> Enum.reverse() |> Enum.filter(&(&1 =~ ~s("mishka_blog_posts")))
+               asked
+               |> Enum.reverse()
+               |> Enum.filter(&(&1 =~ ~s("mishka_blog_posts") and &1 =~ ~s(ORDER BY m0."id")))
 
       refute first =~ ~s("id"::uuid >)
       assert second =~ ~s("id"::uuid >)
@@ -201,7 +293,7 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   end
 
   describe "categories and tags" do
-    test "each holding a published post is listed, with no lastmod", %{site: site} do
+    test "each holding a published post is listed, with no lastmod", %{site: site, mode: mode} do
       item_page!(site, :category)
       item_page!(site, :tag)
 
@@ -215,27 +307,30 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       create_post_tag!(post_id: persian.id, tag_id: tag.id)
 
       assert Enum.sort_by(urls(site), & &1.path) == [
-               %{path: "/en/blog/category/#{category.slug}", lastmod: nil},
+               %{path: english(mode, "/blog/category/#{category.slug}"), lastmod: nil},
                %{path: "/fa/blog/tag/#{tag.slug}", lastmod: nil}
              ]
     end
 
     test "one that names a permission, or whose own robots meta says noindex or none, is not", %{
-      site: site
+      site: site,
+      mode: mode
     } do
       item_page!(site, :category)
       item_page!(site, :tag)
 
-      post = post!(site, :published)
-
+      # A POST OF ITS OWN IN EACH CATEGORY. One post filed under all three would be filed under the
+      # locked one, which locks it — and the open category would then hold nothing a guest may open.
       [category | _hidden] =
         for overrides <- [[], [permissions: ["members:read"]], [seo_tags: robots("noindex")]] do
           category =
             create_collection!([site_id: site.id, status: :active, language: "en"] ++ overrides)
 
-          create_post_collection!(post_id: post.id, collection_id: category.id)
+          create_post_collection!(post_id: post!(site, :published).id, collection_id: category.id)
           category
         end
+
+      post = post!(site, :published)
 
       [tag | _hidden] =
         for overrides <- [[], [permissions: ["members:read"]], [seo_tags: robots("none")]] do
@@ -245,13 +340,35 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
         end
 
       assert paths(site) == [
-               "/en/blog/category/#{category.slug}",
-               "/en/blog/tag/#{tag.slug}"
+               english(mode, "/blog/category/#{category.slug}"),
+               english(mode, "/blog/tag/#{tag.slug}")
              ]
     end
 
     # ITS PAGE LISTS ITS OWN LANGUAGE'S POSTS ALONE, so one whose published posts are all in another
     # language opens on "nothing is published" — the rule the blog kit's `with_public_post` keeps.
+    # THE SITEMAP IS READ AS A GUEST, as a crawler reads the site: a category or a tag whose only
+    # published post is locked opens on "nothing is published" for them, so it is not listed.
+    test "one whose only published post is locked is not", %{site: site, mode: mode} do
+      item_page!(site, :category)
+      item_page!(site, :tag)
+
+      locked = post!(site, :published, permissions: ["members:read"])
+      open = post!(site, :published)
+
+      [listed, _hidden] =
+        for post <- [open, locked] do
+          category = create_collection!(site_id: site.id, status: :active, language: "en")
+          create_post_collection!(post_id: post.id, collection_id: category.id)
+          category
+        end
+
+      tag = create_blog_tag!(site_id: site.id, language: "en")
+      create_post_tag!(post_id: locked.id, tag_id: tag.id)
+
+      assert paths(site) == [english(mode, "/blog/category/#{listed.slug}")]
+    end
+
     test "one whose only published post is in another language is not", %{site: site} do
       item_page!(site, :category)
       item_page!(site, :tag)
@@ -303,7 +420,10 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
 
     # CORE READS THE STREAM ONCE THE WHOLE CHAIN HAS RUN, in the site's sitemap job, so a row written
     # between the two is in it.
-    test "reads nothing while it is called, and every row once its stream is read", %{site: site} do
+    test "reads nothing while it is called, and every row once its stream is read", %{
+      site: site,
+      mode: mode
+    } do
       for kind <- [:post, :category, :tag], do: item_page!(site, kind)
       data = payload(site)
       parent = self()
@@ -313,7 +433,7 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
 
       post = post!(site, :published)
 
-      assert Enum.map(urls, & &1.path) == ["/en/blog/#{post.slug}"]
+      assert Enum.map(urls, & &1.path) == [english(mode, "/blog/#{post.slug}")]
     end
 
     test "hands back a payload whose addresses are not enumerable as it came", %{site: site} do
@@ -326,7 +446,7 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
 
     # Registered by hand for the reason `MishkaBlog.ProvisionTest`'s `listening!/0` gives: this
     # suite's registry is not up when the extension's supervisor starts its plugins.
-    test "answers `seo:sitemap:urls`, the event core fires", %{site: site} do
+    test "answers `seo:sitemap:urls`, the event core fires", %{site: site, mode: mode} do
       {:ok, _registered} = SitemapUrls.register()
       :ok = EventHandler.do_compile(SitemapUrls.config(:__event__), :start, false)
 
@@ -335,20 +455,20 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
 
       assert %{urls: urls} = Hook.call("seo:sitemap:urls", payload(site))
       assert [%{path: path}] = Enum.to_list(urls)
-      assert path == "/en/blog/#{post.slug}"
+      assert path == english(mode, "/blog/#{post.slug}")
     end
 
     # THE CONTRACT AS CORE READS IT: the build of the site's sitemap reads the stream this returns,
     # writes each address on the site's own address with its date to the second, and makes a post's
     # image absolute there. A site of its own, cached as the build finds it: the generator's names
     # start over in every test, and the cache outlives the rollback.
-    test "is read by the build of the site's sitemap, on the site's own address" do
+    test "is read by the build of the site's sitemap, on the site's own address", %{mode: mode} do
       {:ok, _registered} = SitemapUrls.register()
       :ok = EventHandler.do_compile(SitemapUrls.config(:__event__), :start, false)
 
       name = "sitemapblog#{System.unique_integer([:positive])}"
       site = create_site!(name: name, host: "#{name}.test", active: true)
-      {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+      in_mode!(site, mode)
 
       :ok =
         SiteState.save(%{
@@ -361,7 +481,6 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
         })
 
       on_exit(fn ->
-        SettingsState.delete(site.id, "site.languages")
         SiteState.delete(site.id)
         AssetsState.delete(site.name, "sitemap")
       end)
@@ -377,7 +496,7 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       file = :zlib.gunzip(gz)
 
       assert Regex.scan(~r{<loc>([^<]*)</loc>}, file, capture: :all_but_first) == [
-               ["#{origin}/en/blog/#{post.slug}"]
+               [origin <> english(mode, "/blog/#{post.slug}")]
              ]
 
       assert file =~ "<lastmod>#{lastmod}</lastmod>"

@@ -116,7 +116,19 @@ defmodule MishkaBlog.ProvisionTest do
       Provision.ensure!(site)
       templates = site |> pages() |> Enum.map(& &1.template) |> Enum.join("\n")
 
-      for word <- ["Categories", "Tags", "Latest posts", "Recent posts", "Search", "Blog"] do
+      for word <- [
+            "Categories",
+            "Tags",
+            "People",
+            "Latest posts",
+            "Recent posts",
+            "Search",
+            "Blog",
+            "Posts",
+            "Teams",
+            "Members",
+            "Writers"
+          ] do
         assert templates =~ ~s|t("#{word}")|, "#{word} is not asked of t/1"
       end
 
@@ -197,10 +209,56 @@ defmodule MishkaBlog.ProvisionTest do
       assert page(site, paths.post).extra["record"] == "blog:post"
       assert page(site, paths.category).extra["record"] == "blog:category"
       assert page(site, paths.tag).extra["record"] == "blog:tag"
+      assert page(site, paths.author).extra["record"] == "blog:author"
+      assert page(site, paths.team).extra["record"] == "blog:team"
       refute Map.has_key?(page(site, "/:lang/blog").extra || %{}, "record")
+      refute Map.has_key?(page(site, "/:lang/blog/people").extra || %{}, "record")
 
+      # EVERY KIND THE BLOG NAMES HAS A PAGE OF ITS OWN HERE, so none of them is offered to an
+      # editor with nowhere to be shown.
       kinds = Enum.map(MishkaBlog.Plugins.PageRecords.types(site.id), & &1.id)
-      assert Enum.sort(kinds) == ["blog:category", "blog:post", "blog:tag"]
+
+      shown =
+        for path <- Provision.page_paths(),
+            record = (page(site, path).extra || %{})["record"],
+            is_binary(record),
+            do: record
+
+      assert Enum.sort(kinds) ==
+               ["blog:author", "blog:category", "blog:post", "blog:tag", "blog:team"]
+
+      assert Enum.sort(shown) == Enum.sort(kinds)
+    end
+
+    # WHO WRITES THE BLOG HAS PAGES TOO: a blogger's, a team's, and everybody at once, each drawn by
+    # the block that reads it and linking to the others under the language capture.
+    test "gives a blogger, a team and everybody who writes a page of their own", %{site: site} do
+      Provision.ensure!(site)
+      paths = Provision.item_paths()
+
+      assert paths.author == "/:lang/blog/author/:slug"
+      assert paths.team == "/:lang/blog/team/:slug"
+
+      for {path, block} <- [
+            {paths.author, "blog-author-profile"},
+            {paths.team, "blog-team-profile"},
+            {"/:lang/blog/people", "blog-people"}
+          ] do
+        calls = component_calls(page(site, path).template)
+        assert Enum.any?(calls, &(elem(&1, 0) == block)), "#{path} does not draw #{block}"
+      end
+
+      {"blog-people", given} =
+        Enum.find(
+          component_calls(page(site, "/:lang/blog/people").template),
+          &(elem(&1, 0) == "blog-people")
+        )
+
+      assert {"author_base", {:literal, "/:lang/blog/author"}} in given
+      assert {"team_base", {:literal, "/:lang/blog/team"}} in given
+
+      assert page(site, "/:lang/blog").template =~
+               ~s|site_path("/:lang/blog/people", @page.language)|
     end
 
     # A PAGE IS ONE ROW FOR EVERY LANGUAGE. `:lang` is a capture the resolver fills from the URL and
@@ -255,17 +313,17 @@ defmodule MishkaBlog.ProvisionTest do
     # THE ONE WAY A LINK BASE MAY BE WRITTEN, held to for every call rather than for the ones
     # somebody remembered. A `*_base` is a path a component appends a row's slug to and fills the
     # `lang` segment of from THAT ROW's language, so it is a literal carrying the capture: written
-    # with the reader's own language in it — `"/" <> @page.language <> "/blog"` — every translation
-    # of a post is offered under the language the reader is leaving, and written with no language in
-    # it at all the link is a path this site has no page at. `base` is the opposite and has to be
-    # this page's real URL, because it is what a pager writes to the address bar: a capture left in
-    # one is `?page=2` on a path nobody can type.
+    # with the reader's own language in it every translation of a post is offered under the language
+    # the reader is leaving, and written with no language in it at all the link is a path this site
+    # has no page at. `base` is the opposite and has to be this page's real URL, because it is what a
+    # pager writes to the address bar — so it is the address `site_path/2` builds from the page's own
+    # language, at the place the site's URL mode puts it.
     #
     # Which names those are is read off the components, so a base added to the bundle is covered here
     # the day it arrives rather than the day somebody remembers this test. The capture is looked for
     # as the literal `:lang` segment rather than through `Languages.captures?/1`, which is a question
-    # about a page's PATH and admits `*lang` as well: `lang_base/2` in the bundle fills the one
-    # spelling, so a base written the other way is a base nothing fills.
+    # about a page's PATH and admits `*lang` as well: `slug_href/4` in the bundle fills a base as a
+    # pattern of `:name` segments, and a base is written in that one spelling.
     test "builds every link base from the language capture and every URL from the page", %{
       site: site
     } do
@@ -290,11 +348,11 @@ defmodule MishkaBlog.ProvisionTest do
               assert {:expression, expression} = value,
                      "#{where} writes #{name}'s base as #{inspect(value)}, and a pager's URL is this page's own"
 
+              assert expression =~ ~r/^site_path\(/,
+                     "#{where} writes #{name} a pager URL the site's URL mode does not build: #{expression}"
+
               assert expression =~ "@page.language",
                      "#{where} writes #{name} a base holding no language of its own: #{expression}"
-
-              refute expression =~ capture,
-                     "#{where} writes #{name} a pager URL a reader cannot type: #{expression}"
 
             _link_base ->
               assert {:literal, literal} = value,
@@ -314,18 +372,15 @@ defmodule MishkaBlog.ProvisionTest do
     # AND EVERY URL WRITTEN OUT BY HAND IS ONE OF THE PAGES THIS MODULE CREATES. A base names a row's
     # address and the rule above holds it to the capture; the pagers' and the header's URLs are the
     # other kind — they name a PAGE — so one that has drifted from the path it was copied from is a
-    # link to the 404 with nothing in this suite to notice it. Read back as the address with the
-    # capture put in again, which is the form the page definitions themselves are in.
+    # link to the 404 with nothing in this suite to notice it. Read as the pattern `site_path/2` is
+    # handed, which is the form the page definitions themselves are in.
     test "writes no URL of its own that it does not also create a page at", %{site: site} do
       Provision.ensure!(site)
       paths = Enum.map(Provision.page_paths(), &String.split(&1, "/", trim: true))
 
       written =
         for {where, source} <- templates(site),
-            [_whole, before_it, after_it] <-
-              Regex.scan(~r/"([^"]*)" <> @page\.language <> "([^"]*)"/, source) do
-          address = before_it <> ":" <> Languages.capture() <> after_it
-
+            [_whole, address] <- Regex.scan(~r/site_path\("([^"]*)"/, source) do
           assert Enum.any?(paths, &List.starts_with?(&1, String.split(address, "/", trim: true))),
                  "#{where} links #{address}, which is no page this module creates"
 

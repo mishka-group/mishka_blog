@@ -18,7 +18,7 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
 
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
-  alias MishkaCmsCore.Runtime.Component
+  alias MishkaCmsCore.Runtime.{Component, ExtensionProvision}
   alias MishkaCmsCore.Runtime.Handlers.UiKitUpgrade
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.PageDraft
@@ -323,6 +323,50 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
       close(view)
     end
 
+    # A PAGE THIS VERSION ADDED is a page a site set up before it does not have, and neither are the
+    # components it draws. The check names both, and Repair — the other half of the same modal —
+    # writes both, as it writes anything a site is missing.
+    test "names a page this version added as missing, and Repair writes it", %{
+      conn: conn,
+      site: site
+    } do
+      added = [Provision.item_paths().author, Provision.item_paths().team, "/:lang/blog/people"]
+      drawn = ~w(blog-author-profile blog-team-profile blog-people blog-profile-card)
+
+      for path <- added do
+        site
+        |> page!(path)
+        |> Ash.destroy!(action: :master_permanent_destroy, authorize?: false, tenant: site.id)
+      end
+
+      for name <- drawn do
+        site
+        |> component!(name)
+        |> Ash.destroy!(action: :master_permanent_destroy, authorize?: false, tenant: site.id)
+      end
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/blog")
+
+      view |> form("#blog-kit-upgrade-form", %{"site_id" => site.id}) |> render_submit()
+
+      for path <- added do
+        assert has_element?(view, "#blog-kit-upgrade-pages-absent", path),
+               "#{path} is not named as missing"
+      end
+
+      for name <- drawn do
+        assert has_element?(view, "#blog-kit-upgrade-absent", name),
+               "#{name} is not named as missing"
+      end
+
+      view |> form("#blog-provision-form", %{"site_id" => site.id}) |> render_submit()
+
+      for path <- added, do: assert(page!(site, path), "Repair did not write #{path}")
+      for name <- drawn, do: assert(component!(site, name), "Repair did not install #{name}")
+
+      close(view)
+    end
+
     test "are offered as drafts, and the live page is left exactly where it is", %{
       conn: conn,
       site: site
@@ -421,12 +465,7 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
       test "#{who} updates the components and drafts the sample page", %{conn: conn, site: site} do
         admin =
           create_user_with_permissions!(
-            [
-              "admin:dashboard:blog:post",
-              "admin:dashboard:runtime:page",
-              "admin:dashboard:runtime:component",
-              "admin:dashboard:runtime:site"
-            ],
+            ["admin:dashboard:blog:post" | ExtensionProvision.required(Provision.manifest())],
             site_id: if(@master?, do: nil, else: site.id)
           )
 

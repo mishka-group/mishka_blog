@@ -8,6 +8,9 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   """
   use MishkaBlog.DataCase, async: false
 
+  import Phoenix.Component, only: [sigil_H: 2]
+  import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
+
   alias MishkaBlog.Plugins.PageSeo
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Runtime.Seo
@@ -23,6 +26,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
 
     on_exit(fn ->
       SettingsState.delete(site.id, "site.languages")
+      SettingsState.delete(site.id, "site.language_urls")
       SettingsState.delete(site.id, "site.title")
     end)
 
@@ -35,7 +39,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   # The map core hands the plugins for a request to the `kind` page, storing `schema`, with `params`.
   defp given(site, kind, params, schema \\ []) do
     path = Provision.item_paths()[kind]
-    filled = MishkaCmsCore.Runtime.PageEditions.path(path, params)
+    filled = MishkaCmsCore.Runtime.Languages.url(path, params, site.id)
 
     Seo.given(
       %{
@@ -53,6 +57,14 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
 
   # The site's address as core writes it in this environment.
   defp base, do: Seo.base(@host)
+
+  # Where English, the site's first language, puts `path` in `mode`: under no prefix while the first
+  # language goes without one, under its own once every language carries one.
+  defp english("prefix_others", path), do: path
+  defp english("prefix_all", path), do: "/en" <> path
+
+  defp url_mode!(site, mode),
+    do: {:ok, _} = Settings.put("site.language_urls", mode, site_id: site.id)
 
   # A page of the blog's own kinds is answered with `:halt`; any other is handed back to the chain.
   defp answer(given) do
@@ -90,114 +102,168 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
 
   defp keys(var_docs), do: Enum.map(var_docs, & &1.key)
 
+  # The head as `MishkaCmsWeb.RuntimeLive.page_head/1` writes it into the page.
+  defp rendered_head(head) do
+    assigns = %{seo: head}
+
+    rendered_to_string(~H"""
+    <meta :for={{"meta", attrs} <- @seo.tags} {attrs} />
+    <script :for={json <- @seo.schema} type="application/ld+json">
+      <%= Phoenix.HTML.raw(json) %>
+    </script>
+    """)
+  end
+
+  defp meta_content(html, selector),
+    do:
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(selector)
+      |> LazyHTML.attribute("content")
+
+  defp json_ld(html, type) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(~s(script[type="application/ld+json"]))
+    |> Enum.map(&(&1 |> LazyHTML.text() |> Jason.decode!()))
+    |> Enum.find(&(&1["@type"] == type))
+  end
+
   describe "the post page" do
-    test "is the post's own head: its text, its people, its filing and its translations", %{
+    for mode <- ~w(prefix_others prefix_all) do
+      test "is the post's own head: its text, its people, its filing and its translations, in #{mode}",
+           %{site: site} do
+        url_mode!(site, unquote(mode))
+
+        post =
+          published!(site,
+            title: "Ash in production",
+            excerpt: "What a year of Ash taught us.",
+            featured_image_url: "/media/cover.png"
+          )
+
+        persian =
+          published!(site,
+            title: "Ash fa",
+            language: "fa",
+            language_group_id: post.language_group_id || post.id
+          )
+
+        blogger = create_blogger!(site_id: site.id, display_name: "Shahryar")
+        create_post_blogger!(post_id: post.id, blogger_id: blogger.id)
+
+        category = create_collection!(site_id: site.id, status: :active, name: "Engineering")
+        create_post_collection!(post_id: post.id, collection_id: category.id)
+
+        for name <- ["elixir", "ash"] do
+          tag = create_blog_tag!(site_id: site.id, name: name)
+          create_post_tag!(post_id: post.id, tag_id: tag.id)
+        end
+
+        base = base()
+        url = base <> english(unquote(mode), "/blog/#{post.slug}")
+        image = base <> "/media/cover.png"
+        answered = answer(given(site, :post, %{"lang" => "en", "slug" => post.slug}))
+
+        assert answered.title == "Ash in production"
+        assert answered.description == "What a year of Ash taught us."
+        assert answered.image == "/media/cover.png"
+        assert answered.type == "article"
+        assert answered.url == url
+
+        assert contents(answered.tags, "name", "author") == ["Shahryar"]
+
+        assert contents(answered.tags, "property", "article:published_time") == [
+                 "2026-09-01T08:30:00Z"
+               ]
+
+        assert [_modified] = contents(answered.tags, "property", "article:modified_time")
+        assert contents(answered.tags, "property", "article:section") == ["Engineering"]
+        assert contents(answered.tags, "property", "article:tag") == ["ash", "elixir"]
+
+        alternates =
+          for %{tag: "link", attrs: %{"rel" => "alternate"} = attrs} <- answered.tags,
+              do: {attrs["hreflang"], attrs["href"]}
+
+        assert Enum.sort(alternates) == [
+                 {"en", url},
+                 {"fa", base <> "/fa/blog/#{persian.slug}"},
+                 {"x-default", url}
+               ]
+
+        posting = schema_of(answered, "BlogPosting")
+
+        assert %{
+                 "headline" => "Ash in production",
+                 "description" => "What a year of Ash taught us.",
+                 "image" => ^image,
+                 "datePublished" => "2026-09-01T08:30:00Z",
+                 "author" => [%{"@type" => "Person", "name" => "Shahryar"}],
+                 "publisher" => %{
+                   "@type" => "Organization",
+                   "name" => "The Studio",
+                   "url" => ^base
+                 },
+                 "mainEntityOfPage" => ^url,
+                 "inLanguage" => "en",
+                 "keywords" => "ash, elixir"
+               } = posting
+
+        assert %{"itemListElement" => crumbs} = schema_of(answered, "BreadcrumbList")
+
+        assert Enum.map(crumbs, &{&1["position"], &1["name"], &1["item"]}) == [
+                 {1, "Home", base},
+                 {2, "Blog", base <> english(unquote(mode), "/blog")},
+                 {3, "Ash in production", url}
+               ]
+
+        assert %{
+                 "post.title" => "Ash in production",
+                 "post.excerpt" => "What a year of Ash taught us.",
+                 "post.image" => ^image,
+                 "post.author" => "Shahryar",
+                 "post.published_at" => "2026-09-01T08:30:00Z",
+                 "post.url" => ^url,
+                 "post.collection" => "Engineering",
+                 "post.tags" => "ash, elixir"
+               } = answered.vars
+
+        assert keys(answered.var_docs) == [
+                 "post.title",
+                 "post.excerpt",
+                 "post.image",
+                 "post.author",
+                 "post.published_at",
+                 "post.modified_at",
+                 "post.url",
+                 "post.collection",
+                 "post.tags",
+                 "post.rating",
+                 "post.rating_count"
+               ]
+
+        assert Enum.all?(answered.var_docs, &(is_binary(&1.label) and is_binary(&1.help)))
+      end
+    end
+
+    # A title is stored as typed (`MishkaCmsCore.PlainText`), so the head escapes it once: `&amp;`
+    # in the page's source, `&` to whoever reads it.
+    test "writes a title with an ampersand escaped once, in the tags and in the JSON-LD", %{
       site: site
     } do
-      post =
-        published!(site,
-          title: "Ash in production",
-          excerpt: "What a year of Ash taught us.",
-          featured_image_url: "/media/cover.png"
-        )
+      post = published!(site, title: "MCP & AI-Ready")
 
-      persian =
-        published!(site,
-          title: "Ash fa",
-          language: "fa",
-          language_group_id: post.language_group_id || post.id
-        )
+      html =
+        site
+        |> given(:post, %{"lang" => "en", "slug" => post.slug})
+        |> head()
+        |> rendered_head()
 
-      blogger = create_blogger!(site_id: site.id, display_name: "Shahryar")
-      create_post_blogger!(post_id: post.id, blogger_id: blogger.id)
-
-      category = create_collection!(site_id: site.id, status: :active, name: "Engineering")
-      create_post_collection!(post_id: post.id, collection_id: category.id)
-
-      for name <- ["elixir", "ash"] do
-        tag = create_blog_tag!(site_id: site.id, name: name)
-        create_post_tag!(post_id: post.id, tag_id: tag.id)
-      end
-
-      base = base()
-      url = base <> "/en/blog/#{post.slug}"
-      image = base <> "/media/cover.png"
-      answered = answer(given(site, :post, %{"lang" => "en", "slug" => post.slug}))
-
-      assert answered.title == "Ash in production"
-      assert answered.description == "What a year of Ash taught us."
-      assert answered.image == "/media/cover.png"
-      assert answered.type == "article"
-      assert answered.url == url
-
-      assert contents(answered.tags, "name", "author") == ["Shahryar"]
-
-      assert contents(answered.tags, "property", "article:published_time") == [
-               "2026-09-01T08:30:00Z"
-             ]
-
-      assert [_modified] = contents(answered.tags, "property", "article:modified_time")
-      assert contents(answered.tags, "property", "article:section") == ["Engineering"]
-      assert contents(answered.tags, "property", "article:tag") == ["ash", "elixir"]
-
-      alternates =
-        for %{tag: "link", attrs: %{"rel" => "alternate"} = attrs} <- answered.tags,
-            do: {attrs["hreflang"], attrs["href"]}
-
-      assert Enum.sort(alternates) == [
-               {"en", url},
-               {"fa", base <> "/fa/blog/#{persian.slug}"},
-               {"x-default", url}
-             ]
-
-      posting = schema_of(answered, "BlogPosting")
-
-      assert %{
-               "headline" => "Ash in production",
-               "description" => "What a year of Ash taught us.",
-               "image" => ^image,
-               "datePublished" => "2026-09-01T08:30:00Z",
-               "author" => [%{"@type" => "Person", "name" => "Shahryar"}],
-               "publisher" => %{"@type" => "Organization", "name" => "The Studio", "url" => ^base},
-               "mainEntityOfPage" => ^url,
-               "inLanguage" => "en",
-               "keywords" => "ash, elixir"
-             } = posting
-
-      assert %{"itemListElement" => crumbs} = schema_of(answered, "BreadcrumbList")
-
-      assert Enum.map(crumbs, &{&1["position"], &1["name"], &1["item"]}) == [
-               {1, "Home", base},
-               {2, "Blog", base <> "/en/blog"},
-               {3, "Ash in production", url}
-             ]
-
-      assert %{
-               "post.title" => "Ash in production",
-               "post.excerpt" => "What a year of Ash taught us.",
-               "post.image" => ^image,
-               "post.author" => "Shahryar",
-               "post.published_at" => "2026-09-01T08:30:00Z",
-               "post.url" => ^url,
-               "post.collection" => "Engineering",
-               "post.tags" => "ash, elixir"
-             } = answered.vars
-
-      assert keys(answered.var_docs) == [
-               "post.title",
-               "post.excerpt",
-               "post.image",
-               "post.author",
-               "post.published_at",
-               "post.modified_at",
-               "post.url",
-               "post.collection",
-               "post.tags",
-               "post.rating",
-               "post.rating_count"
-             ]
-
-      assert Enum.all?(answered.var_docs, &(is_binary(&1.label) and is_binary(&1.help)))
+      assert html =~ ~s(content="MCP &amp; AI-Ready")
+      refute html =~ "&amp;amp;"
+      assert html =~ ~S("headline":"MCP \u0026 AI-Ready")
+      assert meta_content(html, ~s(meta[property="og:title"])) == ["MCP & AI-Ready"]
+      assert %{"headline" => "MCP & AI-Ready"} = json_ld(html, "BlogPosting")
     end
 
     test "a post in one language offers no alternates, and one with no authors no author", %{
@@ -333,41 +399,45 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   end
 
   describe "the category page" do
-    test "is the category's own head", %{site: site} do
-      category =
-        create_collection!(
-          site_id: site.id,
-          status: :active,
-          name: "Engineering",
-          description: "How we build.",
-          seo_tags: [%{tag: "meta", attrs: %{"name" => "robots"}, content: "noindex"}]
-        )
+    for mode <- ~w(prefix_others prefix_all) do
+      test "is the category's own head, in #{mode}", %{site: site} do
+        url_mode!(site, unquote(mode))
 
-      url = base() <> "/en/blog/category/#{category.slug}"
-      answered = answer(given(site, :category, %{"lang" => "en", "slug" => category.slug}))
+        category =
+          create_collection!(
+            site_id: site.id,
+            status: :active,
+            name: "Engineering",
+            description: "How we build.",
+            seo_tags: [%{tag: "meta", attrs: %{"name" => "robots"}, content: "noindex"}]
+          )
 
-      assert answered.title == "Engineering"
-      assert answered.description == "How we build."
-      assert answered.type == "website"
-      assert contents(answered.tags, "name", "robots") == ["noindex"]
+        url = base() <> english(unquote(mode), "/blog/category/#{category.slug}")
+        answered = answer(given(site, :category, %{"lang" => "en", "slug" => category.slug}))
 
-      assert %{"name" => "Engineering", "description" => "How we build.", "url" => ^url} =
-               schema_of(answered, "CollectionPage")
+        assert answered.title == "Engineering"
+        assert answered.description == "How we build."
+        assert answered.type == "website"
+        assert contents(answered.tags, "name", "robots") == ["noindex"]
 
-      assert %{"itemListElement" => [_home, _blog, %{"name" => "Engineering", "item" => ^url}]} =
-               schema_of(answered, "BreadcrumbList")
+        assert %{"name" => "Engineering", "description" => "How we build.", "url" => ^url} =
+                 schema_of(answered, "CollectionPage")
 
-      assert answered.vars == %{
-               "collection.name" => "Engineering",
-               "collection.description" => "How we build.",
-               "collection.url" => url
-             }
+        assert %{"itemListElement" => [_home, _blog, %{"name" => "Engineering", "item" => ^url}]} =
+                 schema_of(answered, "BreadcrumbList")
 
-      assert keys(answered.var_docs) == [
-               "collection.name",
-               "collection.description",
-               "collection.url"
-             ]
+        assert answered.vars == %{
+                 "collection.name" => "Engineering",
+                 "collection.description" => "How we build.",
+                 "collection.url" => url
+               }
+
+        assert keys(answered.var_docs) == [
+                 "collection.name",
+                 "collection.description",
+                 "collection.url"
+               ]
+      end
     end
 
     test "answers the category's own permissions", %{site: site} do
@@ -545,9 +615,10 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   end
 
   describe "the kinds it names" do
-    test "are a post, a collection and a tag, named as the blog's admin names them, each with the site's own to preview with",
+    test "are a post, a collection, a tag, a blogger and a team, named as the blog's admin names them, each with the site's own to preview with",
          %{site: site} do
       post = published!(site, title: "Ash in production")
+      create_blogger!(site_id: site.id, display_name: "Mona", slug: "mona")
 
       assert [
                %{
@@ -558,7 +629,15 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
                  samples: posts
                },
                %{id: "blog:category", group: "Blog", label: "Collection", captures: ["slug"]},
-               %{id: "blog:tag", group: "Blog", label: "Tag", captures: ["slug"]}
+               %{id: "blog:tag", group: "Blog", label: "Tag", captures: ["slug"]},
+               %{
+                 id: "blog:author",
+                 group: "Blog",
+                 label: "Blogger",
+                 captures: ["slug"],
+                 samples: [%{label: "Mona", params: %{"slug" => "mona"}}]
+               },
+               %{id: "blog:team", group: "Blog", label: "Team", captures: ["slug"]}
              ] = MishkaBlog.Plugins.PageRecords.types(site.id)
 
       assert %{label: "Ash in production · en", params: %{"slug" => slug, "lang" => "en"}} =
@@ -570,6 +649,138 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
         MishkaBlog.Plugins.PageRecords.call(%{site_id: site.id, records: [%{id: "other"}]})
 
       assert [%{id: "other"} | _blog] = records
+    end
+  end
+
+  # A site that answers its primary language at the root has the blog at `/blog`, not
+  # `/:lang/blog`: the page's own path says where the blog is.
+  defp given_at(site, path, record, params) do
+    Seo.given(
+      %{title: "Blog", path: path, language: "en", seo: %{description: nil, schema: []}},
+      site_id: site.id,
+      url: base() <> MishkaCmsCore.Runtime.Languages.url(path, params, site.id),
+      params: params,
+      record: record
+    )
+  end
+
+  defp blog_crumb(answered) do
+    %{"itemListElement" => [_home, blog | _]} = schema_of(answered, "BreadcrumbList")
+    blog
+  end
+
+  describe "a blog at the site's root" do
+    test "leads its breadcrumb's Blog to /blog, from every kind of page", %{site: site} do
+      post = published!(site, title: "Ash in production")
+      tag = create_blog_tag!(site_id: site.id, name: "elixir")
+      create_post_tag!(post_id: post.id, tag_id: tag.id)
+
+      for {path, record, slug} <- [
+            {"/blog/:slug", "blog:post", post.slug},
+            {"/blog/tag/:slug", "blog:tag", tag.slug}
+          ] do
+        answered = answer(given_at(site, path, record, %{"slug" => slug}))
+
+        assert blog_crumb(answered)["item"] == base() <> "/blog",
+               "#{record} led Blog elsewhere"
+      end
+    end
+  end
+
+  describe "the blogger page" do
+    test "is the blogger's own profile: name, plain bio, photo, links and expertise", %{
+      site: site
+    } do
+      create_blogger!(
+        site_id: site.id,
+        display_name: "Shahryar Tavakkoli",
+        slug: "shahryar",
+        bio: "<p>Builds <b>Mishka</b>.</p>",
+        avatar_url: "/media/shahryar.jpg",
+        social_links: [%{platform: "github", url: "https://github.com/shahryarjb"}],
+        expertise_areas: ["Elixir", "Phoenix"]
+      )
+
+      answered =
+        answer(given_at(site, "/blog/author/:slug", "blog:author", %{"slug" => "shahryar"}))
+
+      assert answered.title == "Shahryar Tavakkoli"
+      assert answered.description == "Builds Mishka."
+      assert answered.image == "/media/shahryar.jpg"
+      assert answered.type == "profile"
+      assert answered.permissions == []
+
+      assert %{"mainEntity" => person} = schema_of(answered, "ProfilePage")
+      assert person["@type"] == "Person"
+      assert person["name"] == "Shahryar Tavakkoli"
+      assert person["sameAs"] == ["https://github.com/shahryarjb"]
+      assert person["knowsAbout"] == ["Elixir", "Phoenix"]
+      assert person["image"] == base() <> "/media/shahryar.jpg"
+      assert blog_crumb(answered)["item"] == base() <> "/blog"
+      assert answered.vars["author.name"] == "Shahryar Tavakkoli"
+    end
+
+    test "reads the bio's entities once, so the head escapes them once", %{site: site} do
+      create_blogger!(
+        site_id: site.id,
+        display_name: "Tom & Jerry",
+        slug: "tom-and-jerry",
+        bio: "<p>Cats &amp; mice, <b>since 1940</b>.</p>"
+      )
+
+      given = given_at(site, "/blog/author/:slug", "blog:author", %{"slug" => "tom-and-jerry"})
+      answered = answer(given)
+
+      assert answered.title == "Tom & Jerry"
+      assert answered.description == "Cats & mice, since 1940."
+      assert answered.vars["author.bio"] == "Cats & mice, since 1940."
+
+      html = answered |> Seo.accept(given) |> Seo.head(base: base()) |> rendered_head()
+
+      assert html =~ ~s(content="Cats &amp; mice, since 1940.")
+      refute html =~ "&amp;amp;"
+      assert meta_content(html, ~s(meta[name="description"])) == ["Cats & mice, since 1940."]
+
+      assert %{"mainEntity" => %{"description" => "Cats & mice, since 1940."}} =
+               json_ld(html, "ProfilePage")
+    end
+
+    test "is left alone for a slug no blogger has", %{site: site} do
+      given = given_at(site, "/blog/author/:slug", "blog:author", %{"slug" => "nobody"})
+      answered = answer(given)
+
+      assert answered.title == given.title
+      assert keys(answered.var_docs) == ~w(author.name author.bio author.image author.url)
+    end
+  end
+
+  describe "the team page" do
+    test "is the team as an organization, with its members", %{site: site} do
+      team =
+        create_team!(
+          site_id: site.id,
+          name: "Mishka group core",
+          slug: "mishka-group-core",
+          description: "The people behind Mishka.",
+          status: :active
+        )
+
+      for name <- ["Mona Aghili", "Shahryar Tavakkoli"] do
+        blogger = create_blogger!(site_id: site.id, display_name: name)
+        create_team_member!(team_id: team.id, blogger_id: blogger.id)
+      end
+
+      answered =
+        answer(given_at(site, "/blog/team/:slug", "blog:team", %{"slug" => "mishka-group-core"}))
+
+      assert answered.title == "Mishka group core"
+      assert answered.description == "The people behind Mishka."
+
+      assert %{"mainEntity" => %{"@type" => "Organization", "member" => members}} =
+               schema_of(answered, "ProfilePage")
+
+      assert Enum.map(members, & &1["name"]) == ["Mona Aghili", "Shahryar Tavakkoli"]
+      assert blog_crumb(answered)["item"] == base() <> "/blog"
     end
   end
 

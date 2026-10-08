@@ -7,9 +7,9 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
   same component with another noun, and a second file would test the same module twice and leave
   the two free to drift in their wording instead.
 
-  The blog is the one driven because it is the extension with the most to install: six pages, a
-  snippet, and a name (`Blog`) the dev seeds already take on every site, which is what makes the
-  rename path reachable at all.
+  The blog is the one driven because it is the extension with the most to install: nine pages, a
+  snippet, and a name (`Blog`) a site may well hold already, which is what makes the rename path
+  reachable at all.
   """
   use MishkaBlog.ConnCase
 
@@ -19,8 +19,9 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
 
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
-  alias MishkaCmsCore.Runtime.Page
-  alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Runtime.{ExtensionProvision, Page}
+  alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
+  alias MishkaCmsCore.Settings
 
   require Ash.Query
 
@@ -31,6 +32,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
   # those into a test failure that says nothing.
   @components length(MishkaBlog.Provision.component_names())
   @permissions length(MishkaBlog.Provision.manifest().permissions)
+  @pages length(MishkaBlog.Provision.page_paths())
 
   setup %{conn: conn} do
     SiteState.clear()
@@ -155,25 +157,29 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
         |> render_submit()
 
       assert html =~
-               "Added #{@permissions} permissions, #{@components} components, 6 pages, 1 snippet."
+               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages, 1 snippet."
 
       assert Enum.sort(paths(site)) == Enum.sort(Provision.page_paths())
 
       close(view)
     end
 
-    # THE SITE THE BUG WAS FOUND ON. `MishkaCmsCore.Dev.Seeds` writes a page called "Blog" at
-    # `/blog`, so every seeded site holds the first sample page's NAME at an address of its own —
-    # first the button answered "The blog could not be set up. The logs say why.", having
-    # created no page at all, and then it created five of the six and skipped the one that matters:
-    # `/:lang/blog` is the only page carrying `blog-featured-posts`. The name is now answered with
-    # the next free one, and the card says which page that happened to.
+    # A SITE HOLDING THE FIRST SAMPLE PAGE'S NAME at an address of its own — first the button
+    # answered "The blog could not be set up. The logs say why.", having created no page at all,
+    # and then it created five of the six and skipped the one that matters: `/:lang/blog` is the
+    # only page carrying `blog-featured-posts`. The name is now answered with the next free one, and
+    # the card says which page that happened to.
     test "names the page itself on a site that already has a page called Blog", %{
       conn: conn,
       site: site
     } do
       mine =
-        create_page!(site_id: site.id, name: "Blog", path: "/blog", template: "<div>mine</div>")
+        create_page!(
+          site_id: site.id,
+          name: "Blog",
+          path: "/our-blog",
+          template: "<div>mine</div>"
+        )
 
       {:ok, view, _html} = live(conn, "/admin/dashboard/blog")
 
@@ -183,7 +189,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
         |> render_submit()
 
       assert html =~
-               "Added #{@permissions} permissions, #{@components} components, 6 pages, 1 snippet. 1 page created under another name."
+               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages, 1 snippet. 1 page created under another name."
 
       assert has_element?(view, "#blog-provision-report")
       assert has_element?(view, "#blog-provision-renamed-0", "/:lang/blog")
@@ -191,7 +197,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       refute has_element?(view, "#blog-provision-renamed-1")
       refute has_element?(view, "#blog-provision-skipped-0")
 
-      assert Enum.sort(paths(site)) == Enum.sort(["/blog" | Provision.page_paths()])
+      assert Enum.sort(paths(site)) == Enum.sort(["/our-blog" | Provision.page_paths()])
 
       html =
         view
@@ -207,9 +213,36 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       refute html =~ "created under another name"
 
       assert length(paths(site)) == length(Provision.page_paths()) + 1
-      assert page!(site, "/blog").id == mine.id
+      assert page!(site, "/our-blog").id == mine.id
 
       close(view)
+    end
+
+    # ONE ADDRESS, ONE PAGE. A page of the site's own at `/blog` answers the address the blog's home
+    # has in the site's first language while that language goes unprefixed, so the home is left out
+    # and the card names the page in its way — in either URL mode, because a site that switches to
+    # the other one later must not find one of the two hidden behind the other.
+    for mode <- ~w(prefix_others prefix_all) do
+      test "leaves the blog's home out where a page of the site answers its address, in #{mode}",
+           %{conn: conn, site: site} do
+        on_exit(fn -> SettingsState.delete(site.id, "site.language_urls") end)
+        {:ok, _} = Settings.put("site.language_urls", unquote(mode), site_id: site.id)
+        create_page!(site_id: site.id, name: "Mine", path: "/blog", template: "<div>mine</div>")
+
+        {:ok, view, _html} = live(conn, "/admin/dashboard/blog")
+
+        html =
+          view
+          |> form("#blog-provision-form", %{"site_id" => site.id})
+          |> render_submit()
+
+        assert html =~ "#{@components} components, #{@pages - 1} pages, 1 snippet."
+        assert has_element?(view, "#blog-provision-skipped-0", "/:lang/blog")
+        assert has_element?(view, "#blog-provision-skipped-0", ~s("/blog"))
+        refute "/:lang/blog" in paths(site)
+
+        close(view)
+      end
     end
 
     # A PATH IS THE ONE CLASH A RUN CANNOT ANSWER ON ITS OWN. A name it can take another of; an
@@ -264,7 +297,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       |> form("#blog-provision-clashes", %{"site_id" => site.id, "prefix" => "/mish"})
       |> render_submit()
 
-      assert "/mish/:lang/blog" in paths(site)
+      assert "/:lang/mish/blog" in paths(site)
       assert page!(site, "/:lang/blog").name == "mine"
 
       close(view)
@@ -284,7 +317,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       assert has_element?(
                view,
                "#blog-provision-added",
-               "Added #{@permissions} permissions, #{@components} components, 6 pages, 1 snippet."
+               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages, 1 snippet."
              )
 
       Ash.destroy!(gone, action: :permanent_destroy, authorize?: false)
@@ -303,7 +336,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       assert has_element?(
                view,
                "#blog-provision-added",
-               "Added #{@permissions} permissions, #{@components} components, 6 pages, 1 snippet."
+               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages, 1 snippet."
              )
 
       close(view)
@@ -365,23 +398,18 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
     end
   end
 
-  # EVERY NAME OF WHAT THE BUTTON WRITES: pages and the page builder's snippet, components, and the
-  # site read. Holding all three offers it; missing any one does not.
+  # EVERY NAME OF WHAT THE BUTTON WRITES: pages and the page builder's snippet, components, the
+  # bundle's stylesheet, and the site read — read off the bundle, as the button reads them. Holding
+  # all of them offers it; missing any one does not.
   describe "who is offered the control" do
-    @provision [
-      "admin:dashboard:runtime:page",
-      "admin:dashboard:runtime:component",
-      "admin:dashboard:runtime:site"
-    ]
-
     # OFFERED IS NOT ENOUGH: the button has to finish for whoever it is offered to, so the holder
     # presses it, as a master and as an admin of the site alone.
     for {who, master?} <- [{"a master", true}, {"a site admin", false}] do
       @master? master?
 
-      test "#{who} holding the three names, who sets the site up", %{conn: conn, site: site} do
+      test "#{who} holding every name, who sets the site up", %{conn: conn, site: site} do
         admin =
-          create_user_with_permissions!(["admin:dashboard:blog:post" | @provision],
+          create_user_with_permissions!(["admin:dashboard:blog:post" | provision_names()],
             site_id: if(@master?, do: nil, else: site.id)
           )
 
@@ -398,10 +426,12 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       end
     end
 
-    test "not a holder of two of them, who is refused the event too", %{conn: conn, site: site} do
-      for missing <- @provision do
+    test "missing any one of them, and refused the event too", %{conn: conn, site: site} do
+      for missing <- provision_names() do
         admin =
-          create_user_with_permissions!(["admin:dashboard:blog:post" | @provision -- [missing]])
+          create_user_with_permissions!([
+            "admin:dashboard:blog:post" | provision_names() -- [missing]
+          ])
 
         {:ok, view, _html} = live(log_in(conn, admin), "/admin/dashboard/blog")
 
@@ -413,6 +443,8 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       end
     end
   end
+
+  defp provision_names, do: ExtensionProvision.required(Provision.manifest())
 
   describe "a tenant admin" do
     test "sets up their own site, whatever the event asks for", %{conn: conn, site: site} do

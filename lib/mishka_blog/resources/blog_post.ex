@@ -82,6 +82,7 @@ defmodule MishkaBlog.BlogPost do
 
   @admin_fields [
     :title,
+    :subtitle,
     :slug,
     :content,
     :excerpt,
@@ -1194,6 +1195,14 @@ defmodule MishkaBlog.BlogPost do
           end
         end
 
+        field :subtitle, :textarea do
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Subtitle") end
+            placeholder fn -> dgettext("mishka_gervaz", "One line under the title") end
+            rows 2
+          end
+        end
+
         field :excerpt, :textarea do
           ui do
             label fn -> dgettext("mishka_gervaz", "Excerpt") end
@@ -1313,7 +1322,7 @@ defmodule MishkaBlog.BlogPost do
         end
 
         group :content do
-          fields [:content, :excerpt, :featured_image_url]
+          fields [:subtitle, :content, :excerpt, :featured_image_url]
 
           ui do
             columns 1
@@ -1331,6 +1340,37 @@ defmodule MishkaBlog.BlogPost do
         end
       end
 
+      # "Insert component" above the content: a component's marker written into the post, which the
+      # post's page draws as that component — see
+      # `MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker`.
+      layout do
+        notice :content_components do
+          position {:before_group, :content}
+
+          render fn assigns, state ->
+            MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker.picker(
+              assigns,
+              state,
+              :content
+            )
+          end
+        end
+
+        notice :content_components_form do
+          position :form_footer
+
+          render fn assigns, state ->
+            MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker.form_owner(
+              assigns,
+              state,
+              :content
+            )
+          end
+        end
+      end
+
+      events MishkaCmsCoreWeb.Forms.ContentComponentEvents
+
       hooks do
         on_cancel fn state -> state end
       end
@@ -1341,12 +1381,17 @@ defmodule MishkaBlog.BlogPost do
     auto_wire true
 
     field :title, :string,
-      derives: "sanitize(strip_tags, trim) validate(string, not_empty, min_len=1, max_len=500)"
+      validator: {MishkaCmsCore.PlainText, :field},
+      derives: "sanitize(trim) validate(string, not_empty, min_len=1, max_len=500)"
+
+    field :subtitle, :string,
+      validator: {MishkaCmsCore.PlainText, :field},
+      derives: "sanitize(trim) validate(optional=[string, max_len=300])"
 
     field :slug, :string,
       derives: "sanitize(trim) validate(string, not_empty, min_len=1, max_len=255)"
 
-    field :content, :string, derives: "sanitize(basic_html) validate(string, not_empty)"
+    field :content, :string, derives: "sanitize(html5) validate(string, not_empty)"
 
     field :excerpt, :string,
       derives: "sanitize(basic_html, trim) validate(optional=[string, max_len=1000])"
@@ -1494,6 +1539,11 @@ defmodule MishkaBlog.BlogPost do
         changeset
       end
 
+      # Highlights the code blocks of the sanitized content, before the row is written, and stores
+      # what the content says: its reading time and the components it names.
+      change MishkaBlog.Resources.Changes.HighlightCode
+      change MishkaBlog.Resources.Changes.ContentFacts
+
       description "Creates blog post for tenant users - requires tenant context, auto-assigns site_id and language_group_id for master posts"
     end
 
@@ -1583,6 +1633,11 @@ defmodule MishkaBlog.BlogPost do
 
         changeset
       end
+
+      # Highlights the code blocks of the sanitized content, before the row is written, and stores
+      # what the content says: its reading time and the components it names.
+      change MishkaBlog.Resources.Changes.HighlightCode
+      change MishkaBlog.Resources.Changes.ContentFacts
 
       description "Creates blog post for master users - bypasses multi-tenancy, requires explicit site_id, auto-assigns language_group_id for master posts"
     end
@@ -1688,6 +1743,11 @@ defmodule MishkaBlog.BlogPost do
         changeset
       end
 
+      # Highlights the code blocks of the sanitized content, before the row is written, and stores
+      # what the content says: its reading time and the components it names.
+      change MishkaBlog.Resources.Changes.HighlightCode
+      change MishkaBlog.Resources.Changes.ContentFacts
+
       description "Updates blog post for tenant users - requires tenant context, prevents site_id changes"
     end
 
@@ -1787,6 +1847,11 @@ defmodule MishkaBlog.BlogPost do
 
         changeset
       end
+
+      # Highlights the code blocks of the sanitized content, before the row is written, and stores
+      # what the content says: its reading time and the components it names.
+      change MishkaBlog.Resources.Changes.HighlightCode
+      change MishkaBlog.Resources.Changes.ContentFacts
     end
 
     read :published do
@@ -1939,6 +2004,9 @@ defmodule MishkaBlog.BlogPost do
         end
       end
 
+      # A post published names its components to its site's stylesheet.
+      change MishkaBlog.Resources.Changes.ContentFacts
+
       description "Publishes a draft or scheduled blog post immediately"
     end
 
@@ -1963,6 +2031,9 @@ defmodule MishkaBlog.BlogPost do
           changeset
         end
       end
+
+      # A post published names its components to its site's stylesheet.
+      change MishkaBlog.Resources.Changes.ContentFacts
     end
 
     update :unpublish do
@@ -2413,6 +2484,11 @@ defmodule MishkaBlog.BlogPost do
               version: MishkaBlog.BlogPost.Version,
               fields: List.delete(@admin_fields, :site_id),
               label: dgettext_noop("errors", "blog post")}
+
+      # A version written before code was highlighted comes back highlighted, with what its content
+      # says worked out again.
+      change MishkaBlog.Resources.Changes.HighlightCode
+      change MishkaBlog.Resources.Changes.ContentFacts
     end
 
     action :restore_version_api, :struct do
@@ -2487,6 +2563,11 @@ defmodule MishkaBlog.BlogPost do
               version: MishkaBlog.BlogPost.Version,
               fields: List.delete(@admin_fields, :site_id),
               label: dgettext_noop("errors", "blog post")}
+
+      # A version written before code was highlighted comes back highlighted, with what its content
+      # says worked out again.
+      change MishkaBlog.Resources.Changes.HighlightCode
+      change MishkaBlog.Resources.Changes.ContentFacts
     end
 
     action :master_restore_version_api, :struct do
@@ -2791,6 +2872,13 @@ defmodule MishkaBlog.BlogPost do
       description "Title of the blog post"
     end
 
+    attribute :subtitle, :string do
+      allow_nil? true
+      public? true
+      constraints max_length: 300, trim?: true
+      description "A line under the title saying what the post is about"
+    end
+
     attribute :slug, :string do
       allow_nil? false
       public? true
@@ -2802,6 +2890,21 @@ defmodule MishkaBlog.BlogPost do
       allow_nil? false
       public? true
       description "Rich text content of the blog post"
+    end
+
+    # WORKED OUT WITH THE CONTENT, never written by hand nor on a read —
+    # `MishkaBlog.Resources.Changes.ContentFacts`.
+    attribute :content_components, {:array, :string} do
+      allow_nil? true
+      public? false
+      description "The components the content's markers name, nil when it names none"
+    end
+
+    attribute :reading_time_minutes, :integer do
+      allow_nil? true
+      public? true
+
+      description "Estimated reading time in minutes: the content's words at 200 a minute, at least 1"
     end
 
     attribute :excerpt, :string do
@@ -3072,21 +3175,6 @@ defmodule MishkaBlog.BlogPost do
     calculate :effective_permissions,
               {:array, :string},
               {MishkaBlog.Resources.Calculations.EffectivePermissions, kind: :post}
-
-    calculate :reading_time_minutes, :integer do
-      public? true
-
-      calculation fn records, _context ->
-        Enum.map(records, fn post ->
-          plain_text = HtmlSanitizeEx.strip_tags(post.content || "")
-          word_count = plain_text |> String.split(~r/\s+/, trim: true) |> length()
-          reading_time = ceil(word_count / 200.0)
-          max(reading_time, 1)
-        end)
-      end
-
-      description "Calculates estimated reading time in minutes based on content word count (assumes 200 words per minute)"
-    end
 
     calculate :latest_version, :struct do
       public? true
