@@ -214,6 +214,14 @@ defmodule MishkaBlog.Comment do
       end
 
       columns do
+        # WHEN A COMMENT CAME, sorted by but drawn inside the author's line: newest first, and the card
+        # page's Sort by turns it around.
+        column :inserted_at do
+          visible false
+          sortable true
+          label fn -> dgettext("mishka_gervaz", "Date") end
+        end
+
         # The author's initial tile and name, at the row's scale — the same pair the card leads
         # with; see `MishkaBlogWeb.Templates.CommentCard.author/1` for who the name is.
         column :author_info do

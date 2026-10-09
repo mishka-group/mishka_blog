@@ -314,6 +314,10 @@ defmodule MishkaBlog.BlogPost do
       end
 
       columns do
+        # Newest first, as every runtime list is, by the date each post is shown with; the card page's
+        # Sort by turns it around.
+        default_sort [{:listed_at, :desc}]
+
         column :featured_image do
           static true
           requires [:featured_image_url, :title]
@@ -363,7 +367,9 @@ defmodule MishkaBlog.BlogPost do
 
         column :site_datetime do
           static true
-          requires [:site_id, :site, :inserted_at]
+          requires [:site_id, :site, :inserted_at, :status, :published_at, :scheduled_publish_at]
+          sortable true
+          sort_field [:listed_at]
           label fn -> dgettext("mishka_gervaz", "Site / Date") end
 
           ui do
@@ -376,11 +382,7 @@ defmodule MishkaBlog.BlogPost do
 
             assigns = %{
               site_name: site_name,
-              date:
-                MishkaBlogWeb.Live.Admin.Dashboard.Home.Index.strftime(
-                  record.inserted_at,
-                  "%b %d, %Y"
-                ),
+              date: MishkaBlogWeb.Templates.PostCard.date_label(record),
               master_user?: state.master_user?
             }
 
@@ -3200,6 +3202,20 @@ defmodule MishkaBlog.BlogPost do
   end
 
   calculations do
+    # THE DATE A POST IS LISTED BY — the one its card and its row show
+    # (`MishkaBlogWeb.Templates.PostCard.date_label/1`): a scheduled post's due date, else when it was
+    # published, else when it was written. The admin list sorts by it, so the order is the order of the
+    # dates the reader sees.
+    calculate :listed_at,
+              :utc_datetime_usec,
+              expr(
+                if status == :scheduled and not is_nil(scheduled_publish_at) do
+                  scheduled_publish_at
+                else
+                  if is_nil(published_at), do: inserted_at, else: published_at
+                end
+              )
+
     # the_content / onContentPrepare equivalent: load :rendered_content to display plugin-transformed body.
     calculate :rendered_content,
               :string,
