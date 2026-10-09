@@ -801,15 +801,15 @@ defmodule MishkaBlog.Team do
 
         field :avatar_url, :text do
           ui do
-            label fn -> dgettext("mishka_gervaz", "Avatar URL") end
-            extra %{dir: "ltr"}
+            label fn -> dgettext("mishka_gervaz", "Avatar") end
+            extra %{dir: "ltr", media: :images, folder: "blog"}
           end
         end
 
         field :cover_image_url, :text do
           ui do
-            label fn -> dgettext("mishka_gervaz", "Cover Image URL") end
-            extra %{dir: "ltr"}
+            label fn -> dgettext("mishka_gervaz", "Cover Image") end
+            extra %{dir: "ltr", media: :images, folder: "blog"}
           end
         end
 
@@ -857,6 +857,12 @@ defmodule MishkaBlog.Team do
             columns 1
           end
         end
+      end
+
+      # For `text_input/1` only — the adapter falls back to Tailwind for everything else. It is what
+      # turns the pictures' `extra %{media: :images}` into a field filled from the media library.
+      presentation do
+        ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
       end
 
       hooks do

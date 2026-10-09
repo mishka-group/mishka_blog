@@ -825,17 +825,17 @@ defmodule MishkaBlog.Blogger do
 
         field :avatar_url, :text do
           ui do
-            label fn -> dgettext("mishka_gervaz", "Avatar URL") end
+            label fn -> dgettext("mishka_gervaz", "Avatar") end
             placeholder fn -> dgettext("mishka_gervaz", "https://example.com/avatar.jpg") end
-            extra %{dir: "ltr"}
+            extra %{dir: "ltr", media: :images, folder: "blog"}
           end
         end
 
         field :cover_image_url, :text do
           ui do
-            label fn -> dgettext("mishka_gervaz", "Cover Image URL") end
+            label fn -> dgettext("mishka_gervaz", "Cover Image") end
             placeholder fn -> dgettext("mishka_gervaz", "https://example.com/cover.jpg") end
-            extra %{dir: "ltr"}
+            extra %{dir: "ltr", media: :images, folder: "blog"}
           end
         end
 
@@ -918,6 +918,12 @@ defmodule MishkaBlog.Blogger do
             class ""
           end
         end
+      end
+
+      # For `text_input/1` only — the adapter falls back to Tailwind for everything else. It is what
+      # turns the pictures' `extra %{media: :images}` into a field filled from the media library.
+      presentation do
+        ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
       end
 
       hooks do
