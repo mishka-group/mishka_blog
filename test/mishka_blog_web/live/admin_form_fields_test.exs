@@ -128,6 +128,17 @@ defmodule MishkaBlogWeb.Test.AdminFormFieldsTest do
       refute has_element?(view, "#{@form} textarea[name='form[featured_image_url]']")
     end
 
+    test "draws the cover as a picture from the site's media library", ctx do
+      view = open(ctx, @posts)
+
+      assert has_element?(
+               view,
+               "#{@form} #post_form-form_featured_image_url-media[data-role=media-field] input[name='form[featured_image_url]']"
+             )
+
+      assert has_element?(view, "#post_form-form_featured_image_url-media-library-browse")
+    end
+
     test "draws every textarea but the content editor as the adapter's full-width field", ctx do
       view = open(ctx, @posts)
       field = Tailwind.multiline_class("")

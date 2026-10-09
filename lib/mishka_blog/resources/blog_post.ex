@@ -1251,11 +1251,13 @@ defmodule MishkaBlog.BlogPost do
           end
         end
 
+        # THE COVER PICTURE: dropped here, or chosen from the site's media library, and filed in its
+        # `blog` folder. `MishkaCmsCoreWeb.UIAdapters.Admin.text_input/1` is what reads `media`.
         field :featured_image_url, :text do
           ui do
-            label fn -> dgettext("mishka_gervaz", "Featured Image URL") end
+            label fn -> dgettext("mishka_gervaz", "Featured Image") end
             placeholder fn -> dgettext("mishka_gervaz", "https://example.com/image.jpg") end
-            extra %{dir: "ltr"}
+            extra %{dir: "ltr", media: :images, folder: "blog"}
           end
         end
 
