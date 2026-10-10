@@ -2875,6 +2875,21 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert form_at < list_at
     end
 
+    # `whitespace-pre-line` KEEPS EVERY LINE BREAK, the template's own too: text on a line of its own
+    # drew a blank line above and below every comment.
+    test "draws a comment's text with no blank line around it", %{site: site} do
+      [post] = publish!(site, ["Ours"])
+      comment!(site, post, content: "Just this")
+
+      {:ok, view, _html} = mount_page(site, "blog-post-comments", %{slug: post.slug})
+
+      assert view
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query(~s([data-role="blog-comment-body"]))
+             |> Enum.map(&LazyHTML.text/1) == ["Just this"]
+    end
+
     test "puts the pinned ones first", %{site: site} do
       [post] = publish!(site, ["Ours"])
 
