@@ -55,6 +55,16 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.PageSeo
   ]
 
+  # Each record's share card looked at again after the record is saved, on its own
+  # `blog:<resource>:after_save` event (`MishkaCmsCore.Runtime.ShareCard`).
+  @share_card_plugins [
+    MishkaBlog.Plugins.PostShareCard,
+    MishkaBlog.Plugins.CollectionShareCard,
+    MishkaBlog.Plugins.TagShareCard,
+    MishkaBlog.Plugins.BloggerShareCard,
+    MishkaBlog.Plugins.TeamShareCard
+  ]
+
   # Names the components the site's posts draw, so its stylesheet carries them (a
   # `runtime:compile:content_components` plugin).
   @runtime_plugins [
@@ -75,7 +85,8 @@ defmodule MishkaBlog.Application do
       @dashboard_widgets ++
         @notify_plugins ++
         @settings_plugins ++
-        @sidebar_menus ++ @provision_plugins ++ @seo_plugins ++ @runtime_plugins
+        @sidebar_menus ++
+        @provision_plugins ++ @seo_plugins ++ @share_card_plugins ++ @runtime_plugins
 
   @impl true
   def start(_type, _args) do

@@ -980,6 +980,18 @@ defmodule MishkaBlog.Collection do
           end
         end
 
+        # THE SHARE CARD a link to it shows, as drawn, and Regenerate. One being added has none yet.
+        # `MishkaCmsCoreWeb.UIAdapters.Admin.text_input/1` is what reads `share_card`.
+        field :share_card, :text do
+          virtual true
+          show_on :update
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Share image") end
+            extra %{share_card: &MishkaBlog.ShareCards.target/1}
+          end
+        end
+
         field :seo_tags, :nested do
           ui do
             label fn -> dgettext("mishka_gervaz", "SEO Tags") end
@@ -1071,7 +1083,7 @@ defmodule MishkaBlog.Collection do
         end
 
         group :content do
-          fields [:description]
+          fields [:description, :share_card]
 
           ui do
             columns 1
@@ -1087,6 +1099,12 @@ defmodule MishkaBlog.Collection do
             class ""
           end
         end
+      end
+
+      # For `text_input/1` only — the adapter falls back to Tailwind for everything else. It is what
+      # turns the Share image field's `extra %{share_card: …}` into the card and its Regenerate.
+      presentation do
+        ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
       end
 
       hooks do
