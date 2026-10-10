@@ -35,32 +35,38 @@ defmodule MishkaBlog.Plugins.PageSeo do
       `post.modified_at`, `post.url`, `post.collection`, `post.tags`, and `post.rating` (the
       readers' average, one decimal) with `post.rating_count` once a reader has rated it.
 
+  `card` — what its share card shows (`MishkaCmsCore.Runtime.ShareCard`): the first category above
+  the title, the authors' photos and names, their teams, the date and the reading time, over the
+  featured image.
+
   ## A category, `"blog:category"`
 
   The active category the `slug` capture names in the page's language: its name and description,
   its own `seo_tags`, its own `schema` (else a `CollectionPage`) and a
   `BreadcrumbList`, Home → Blog → the category. `vars` — `collection.name`,
-  `collection.description`, `collection.url`.
+  `collection.description`, `collection.url`. Its share card says "Category" above the name.
 
   ## A tag, `"blog:tag"`
 
   The tag the `slug` capture names in the page's language: its name and description, its own
   `seo_tags`, a `CollectionPage` and a `BreadcrumbList`, Home → Blog → the tag. `vars` —
-  `tag.name`, `tag.description`, `tag.url`.
+  `tag.name`, `tag.description`, `tag.url`. Its share card says "Tag" above the name.
 
   ## A blogger, `"blog:author"`
 
   The blogger the `slug` capture names: their name, their bio as plain text, their avatar, a
   `ProfilePage` whose `mainEntity` is the `Person` — with `sameAs` their social links and
   `knowsAbout` their expertise — and a `BreadcrumbList`, Home → Blog → the blogger. `vars` —
-  `author.name`, `author.bio`, `author.image`, `author.url`. A blogger is the same row in every
-  language, so the slug alone names them.
+  `author.name`, `author.bio`, `author.image`, `author.url`. Its share card says "Author" above the
+  name, with their photo and their teams. A blogger is the same row in every language, so the slug
+  alone names them.
 
   ## A team, `"blog:team"`
 
   The active team the `slug` capture names: its name, description and avatar, a `ProfilePage`
   whose `mainEntity` is the `Organization` with its members as `Person`s, and a `BreadcrumbList`,
-  Home → Blog → the team. `vars` — `team.name`, `team.description`, `team.url`.
+  Home → Blog → the team. `vars` — `team.name`, `team.description`, `team.url`. Its share card
+  says "Team" above the name, with the members' photos and how many they are.
 
   ## Where "Blog" points
 
@@ -98,6 +104,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
     :slug,
     :excerpt,
     :featured_image_url,
+    :reading_time_minutes,
     :published_at,
     :updated_at,
     :language,
@@ -129,6 +136,20 @@ defmodule MishkaBlog.Plugins.PageSeo do
   def call(%{record: "blog:team"} = seo), do: {:reply, :halt, team(seo)}
   def call(seo), do: {:reply, seo}
 
+  # The photos, names and teams a share card shows of a post's authors, a blogger, a team.
+  defp people_query do
+    Blogger
+    |> Ash.Query.select([:display_name, :avatar_url])
+    |> Ash.Query.sort(display_name: :asc)
+    |> Ash.Query.load(
+      teams:
+        Team
+        |> Ash.Query.select([:name])
+        |> Ash.Query.sort(name: :asc)
+        |> Ash.Query.page(limit: 5)
+    )
+  end
+
   defp post(seo) do
     seo = %{seo | var_docs: post_docs()}
 
@@ -159,7 +180,13 @@ defmodule MishkaBlog.Plugins.PageSeo do
   defp author(seo) do
     seo = %{seo | var_docs: author_docs()}
 
-    case read_one(Blogger, seo, @blogger_fields, []) do
+    case read_one(Blogger, seo, @blogger_fields,
+           teams:
+             Team
+             |> Ash.Query.select([:name])
+             |> Ash.Query.sort(name: :asc)
+             |> Ash.Query.page(limit: 5)
+         ) do
       %Blogger{} = blogger -> author_seo(seo, blogger)
       nil -> seo
     end
@@ -169,7 +196,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
     members =
       Blogger
       |> Ash.Query.for_read(:public_list)
-      |> Ash.Query.select([:display_name, :slug])
+      |> Ash.Query.select([:display_name, :slug, :avatar_url])
       |> Ash.Query.sort(:display_name)
 
     seo = %{seo | var_docs: team_docs()}
@@ -230,8 +257,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
       :rating_average,
       :rating_count,
       :effective_permissions,
-      bloggers:
-        Blogger |> Ash.Query.select([:display_name]) |> Ash.Query.sort(display_name: :asc),
+      bloggers: people_query(),
       collections:
         Collection
         |> Ash.Query.select([:name])
@@ -295,6 +321,13 @@ defmodule MishkaBlog.Plugins.PageSeo do
           own_schema(post.schema, posting) ++
             breadcrumb(seo, base, 1, post.title),
         permissions: post.effective_permissions,
+        card: %{
+          eyebrow: section,
+          people: Enum.map(post.bloggers, &person/1),
+          byline: teams_of(post.bloggers),
+          meta: Enum.reject([day(post.published_at, post.language), minutes(post)], &is_nil/1),
+          picture: post.featured_image_url
+        },
         vars:
           Map.merge(
             seo.vars,
@@ -338,6 +371,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
           own_schema(collection.schema, page) ++
             breadcrumb(seo, base, 2, collection.name),
         permissions: collection.effective_permissions,
+        card: %{eyebrow: gettext("Category")},
         vars:
           Map.merge(
             seo.vars,
@@ -371,6 +405,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         tags: List.wrap(tag.seo_tags),
         schema: [page | breadcrumb(seo, base, 2, tag.name)],
         permissions: List.wrap(tag.permissions),
+        card: %{eyebrow: gettext("Tag")},
         vars:
           Map.merge(
             seo.vars,
@@ -415,6 +450,12 @@ defmodule MishkaBlog.Plugins.PageSeo do
         type: "profile",
         schema: [profile | breadcrumb(seo, base, 2, blogger.display_name)],
         permissions: [],
+        card: %{
+          eyebrow: gettext("Author"),
+          people: [person(blogger)],
+          byline: teams_of([blogger]),
+          picture: nil
+        },
         vars:
           Map.merge(
             seo.vars,
@@ -457,6 +498,12 @@ defmodule MishkaBlog.Plugins.PageSeo do
         image: team.avatar_url || seo.image,
         schema: [profile | breadcrumb(seo, base, 2, team.name)],
         permissions: [],
+        card: %{
+          eyebrow: gettext("Team"),
+          people: team.tenant_members |> rows() |> Enum.map(&person/1),
+          meta: [members(length(rows(team.tenant_members)))],
+          picture: nil
+        },
         vars:
           Map.merge(
             seo.vars,
@@ -468,6 +515,30 @@ defmodule MishkaBlog.Plugins.PageSeo do
           )
     }
   end
+
+  defp person(blogger), do: %{name: blogger.display_name, image: blogger.avatar_url}
+
+  # The teams of `bloggers`, each once; `nil` for none.
+  defp teams_of(bloggers) do
+    case bloggers |> Enum.flat_map(&rows(&1.teams)) |> Enum.map(& &1.name) |> Enum.uniq() do
+      [] -> nil
+      names -> names |> Enum.take(2) |> Enum.join(", ")
+    end
+  end
+
+  # The day a post was published: `Mar 3, 2025` in English, `2025-03-03` in any other language.
+  defp day(%DateTime{} = at, language) when language in [nil, "en"],
+    do: Calendar.strftime(at, "%b %-d, %Y")
+
+  defp day(%DateTime{} = at, _language), do: Calendar.strftime(at, "%Y-%m-%d")
+  defp day(_never, _language), do: nil
+
+  defp minutes(%{reading_time_minutes: minutes}) when is_integer(minutes) and minutes > 0,
+    do: ngettext("%{count} min read", "%{count} min read", minutes)
+
+  defp minutes(_unknown), do: nil
+
+  defp members(count), do: ngettext("%{count} member", "%{count} members", count)
 
   # The text the bio's HTML shows, on one line: escaped once, where the head writes it out.
   defp plain(html) when is_binary(html),

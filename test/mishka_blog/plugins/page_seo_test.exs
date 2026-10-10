@@ -784,6 +784,88 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
     end
   end
 
+  # What each place adds to its share card (`MishkaCmsCore.Runtime.ShareCard`); core draws it.
+  describe "share cards" do
+    test "a post's shows its category, its authors with their photos and teams, the day and the cover",
+         %{site: site} do
+      post = published!(site, title: "Ash in production", featured_image_url: "/media/cover.png")
+      team = create_team!(site_id: site.id, name: "Core team", status: :active)
+
+      for {name, avatar} <- [{"Shahryar", "/media/s.jpg"}, {"Mona", nil}] do
+        blogger = create_blogger!(site_id: site.id, display_name: name, avatar_url: avatar)
+        create_post_blogger!(post_id: post.id, blogger_id: blogger.id)
+        create_team_member!(team_id: team.id, blogger_id: blogger.id)
+      end
+
+      category = create_collection!(site_id: site.id, status: :active, name: "Engineering")
+      create_post_collection!(post_id: post.id, collection_id: category.id)
+
+      card = answer(given(site, :post, %{"lang" => "en", "slug" => post.slug})).card
+
+      assert card.eyebrow == "Engineering"
+
+      assert card.people == [
+               %{name: "Mona", image: nil},
+               %{name: "Shahryar", image: "/media/s.jpg"}
+             ]
+
+      assert card.byline == "Core team"
+      assert ["Sep 1, 2026" | _reading] = card.meta
+      assert card.picture == "/media/cover.png"
+    end
+
+    test "a blogger's names them as the author, with their photo and teams, and no backdrop", %{
+      site: site
+    } do
+      team = create_team!(site_id: site.id, name: "Core team", status: :active)
+
+      blogger =
+        create_blogger!(
+          site_id: site.id,
+          display_name: "Shahryar",
+          slug: "shahryar",
+          avatar_url: "/media/s.jpg"
+        )
+
+      create_team_member!(team_id: team.id, blogger_id: blogger.id)
+
+      card =
+        answer(given_at(site, "/blog/author/:slug", "blog:author", %{"slug" => "shahryar"})).card
+
+      assert card.eyebrow == "Author"
+      assert card.people == [%{name: "Shahryar", image: "/media/s.jpg"}]
+      assert card.byline == "Core team"
+      assert card.picture == nil
+    end
+
+    test "a team's shows its members and how many they are", %{site: site} do
+      team = create_team!(site_id: site.id, name: "Core", slug: "core", status: :active)
+
+      for name <- ["Mona", "Shahryar"] do
+        blogger = create_blogger!(site_id: site.id, display_name: name)
+        create_team_member!(team_id: team.id, blogger_id: blogger.id)
+      end
+
+      card = answer(given_at(site, "/blog/team/:slug", "blog:team", %{"slug" => "core"})).card
+
+      assert card.eyebrow == "Team"
+      assert Enum.map(card.people, & &1.name) == ["Mona", "Shahryar"]
+      assert card.meta == ["2 members"]
+      assert card.picture == nil
+    end
+
+    test "a category's and a tag's say what they are", %{site: site} do
+      create_collection!(site_id: site.id, status: :active, name: "Engineering", slug: "eng")
+      create_blog_tag!(site_id: site.id, name: "elixir", slug: "elixir")
+
+      assert answer(given(site, :category, %{"lang" => "en", "slug" => "eng"})).card ==
+               %{eyebrow: "Category"}
+
+      assert answer(given(site, :tag, %{"lang" => "en", "slug" => "elixir"})).card ==
+               %{eyebrow: "Tag"}
+    end
+  end
+
   describe "a page of another kind" do
     test "is handed back as it came, with nothing read, whatever its path", %{site: site} do
       post = published!(site)
