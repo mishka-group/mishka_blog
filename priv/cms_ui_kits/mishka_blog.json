@@ -1,7 +1,7 @@
 {
   "$schema": "mishka.ui_kit.bundle.v3",
   "name": "mishka_blog",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "components": [
     {
       "name": "blog-post-list",
@@ -487,7 +487,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -838,7 +838,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -1266,7 +1266,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:tags, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:tags, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -1998,7 +1998,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:categories, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:categories, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -2387,7 +2387,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:comments, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:comments, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],
@@ -2873,12 +2873,12 @@
         {
           "name": "load_profile",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:profile, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:profile, fn -> fetch(asked) end)\n    end\nend\n"
         },
         {
           "name": "load_posts",
           "args": "socket",
-          "code": "listed = listed(socket.assigns)\n\ncase socket.assigns[:listed] == listed do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :listed, listed)\n\n    case cold?(socket) do\n      true ->\n        posts_arrived(socket, fetch_posts(listed))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(posts_loading: true, posts_failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch_posts(listed) end)\n    end\nend\n"
+          "code": "listed = listed(socket.assigns)\n\ncase socket.assigns[:listed] do\n  ^listed ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :listed, listed)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        posts_arrived(socket, fetch_posts(listed))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(posts_loading: true, posts_failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch_posts(listed) end)\n    end\nend\n"
         },
         {
           "name": "load",
@@ -3373,12 +3373,12 @@
         {
           "name": "load_profile",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:profile, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:profile, fn -> fetch(asked) end)\n    end\nend\n"
         },
         {
           "name": "load_posts",
           "args": "socket",
-          "code": "listed = listed(socket.assigns)\n\ncase socket.assigns[:listed] == listed do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :listed, listed)\n\n    case cold?(socket) do\n      true ->\n        posts_arrived(socket, fetch_posts(listed))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(posts_loading: true, posts_failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch_posts(listed) end)\n    end\nend\n"
+          "code": "listed = listed(socket.assigns)\n\ncase socket.assigns[:listed] do\n  ^listed ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :listed, listed)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        posts_arrived(socket, fetch_posts(listed))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(posts_loading: true, posts_failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch_posts(listed) end)\n    end\nend\n"
         },
         {
           "name": "load",
@@ -3669,7 +3669,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] == asked do\n  true ->\n    socket\n\n  false ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:people, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:people, fn -> fetch(asked) end)\n    end\nend\n"
         }
       ],
       "permissions": [],

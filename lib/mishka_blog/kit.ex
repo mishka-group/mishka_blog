@@ -58,27 +58,21 @@ defmodule MishkaBlog.Kit do
   A component for it would be `blog-post-list` with two attributes fixed and a second copy of the
   read, which is the duplication the split exists to remove rather than an example of it.
 
-  ## Which blocks read in the background, and why not all of them
+  ## When a block reads in step, and when in the background
 
-  A block that runs its own query and can be waited for reads it in a task, and reads it inline in
-  exactly one place: the builder's canvas and the Preview, where
-  `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2` renders a component with no process at all and a
-  task would have nobody to answer. Every block's `cold?/1` asks THAT, not
-  `Phoenix.LiveView.connected?/1`, because a visit renders a page twice — once for the GET, once
-  when the socket connects — and `connected?/1` is false for both. Forking on it meant the HTTP
-  response waited for every block on the page in turn, threw the rows away with that socket, and
-  read them all again a moment later behind a skeleton the reader watched replace them. While it is
-  loading a block draws a skeleton, and when the read fails it draws a line and a button to ask
-  again rather than taking the page down. That is `blog-post-list`, `blog-featured-posts`,
-  `blog-tag-cloud`, `blog-category-list`, `blog-post-comments`, `blog-people`, and both profiles —
-  `blog-author-profile` and `blog-team-profile` read the profile and its page of posts as two loads,
-  so turning a page reads the posts alone. Each starts its read through
-  `MishkaGervaz.Messages.start_async/4`, which runs it in the page's own locale.
-
-  WHICH IS A TRADE, AND THE TRADE IS THE POINT: a reader with no JavaScript, and a crawler that
-  does not run any, is served the skeleton of a listing rather than its rows. What it is NOT served
-  a skeleton of is an article — `blog-post-detail` and `blog-post-search` read in step with the
-  page, so every post's own URL answers with its whole text in the HTTP response.
+  A block that runs its own query reads its FIRST page in step with the page, on both of a visit's
+  renders: the GET, so a crawler and a reader with no JavaScript are served the rows themselves —
+  every post a listing links, every tag and category — and the connected one, so the rows are drawn
+  straight away rather than replaced by a skeleton while they are read again. Every later read —
+  another page, another filter, another sort — runs in a task, and while it does the block draws a
+  skeleton; when a read fails it draws a line and a button to ask again. `cold?/1` still answers
+  for the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`
+  renders a component with no process at all, and reads inline there too. That is
+  `blog-post-list`, `blog-featured-posts`, `blog-tag-cloud`, `blog-category-list`,
+  `blog-post-comments`, `blog-people`, and both profiles — `blog-author-profile` and
+  `blog-team-profile` read the profile and its page of posts as two loads, so turning a page reads
+  the posts alone. Each starts a task through `MishkaGervaz.Messages.start_async/4`, which runs it in
+  the page's own locale.
 
   A block that streams its rows says `phx-update="stream"` only where there is a socket to stream
   from — `@myself` is nil in a cold render, and a stream container is one the client never removes a
@@ -91,7 +85,7 @@ defmodule MishkaBlog.Kit do
   What puts the rows INTO the new one is `asked/1`: a streamed row is drawn once and never
   re-rendered, so everything a row is built from is part of the read's own signature.
 
-  Two read in step with the page instead, and both on purpose:
+  Two read in step with the page on every read, not only the first, and both on purpose:
 
     * `blog-post-detail` is what the page IS. A skeleton where the article should be is a worse
       page than one that takes as long as the article does, and a crawler that is served the

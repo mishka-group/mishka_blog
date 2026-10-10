@@ -813,6 +813,18 @@ defmodule MishkaBlog.Team do
           end
         end
 
+        # THE SHARE CARD a link to it shows, as drawn, and Regenerate. One being added has none yet.
+        # `MishkaCmsCoreWeb.UIAdapters.Admin.text_input/1` is what reads `share_card`.
+        field :share_card, :text do
+          virtual true
+          show_on :update
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Share image") end
+            extra %{share_card: &MishkaBlog.ShareCards.target/1}
+          end
+        end
+
         field :status, :select do
           required true
 
@@ -841,7 +853,7 @@ defmodule MishkaBlog.Team do
         end
 
         group :media do
-          fields [:avatar_url, :cover_image_url]
+          fields [:avatar_url, :cover_image_url, :share_card]
 
           ui do
             label fn -> dgettext("mishka_gervaz", "Media") end
