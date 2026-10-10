@@ -2859,6 +2859,22 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
              ) == []
     end
 
+    # THE BOX TO WRITE IN COMES FIRST, under the heading, and the conversation follows it, so a
+    # long thread never pushes it out of reach.
+    test "puts the box to write in above the conversation", %{site: site} do
+      [post] = publish!(site, ["Ours"])
+      comment!(site, post, content: "First")
+
+      {:ok, view, _html} =
+        mount_page(site, "blog-post-comments", %{slug: post.slug, current_user: create_user!()})
+
+      html = render(view)
+      {form_at, _} = :binary.match(html, ~s(data-role="blog-comments-form"))
+      {list_at, _} = :binary.match(html, ~s(data-role="blog-comments-list"))
+
+      assert form_at < list_at
+    end
+
     test "puts the pinned ones first", %{site: site} do
       [post] = publish!(site, ["Ours"])
 
