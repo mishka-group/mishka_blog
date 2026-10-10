@@ -229,6 +229,27 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     kept
   end
 
+  # A READ THAT ANSWERS WITH AN ERROR, which is what a read the database refuses looks like: Ash
+  # hands back `{:error, _}` rather than raising. A block's FIRST read is in step with the page, so
+  # this is how a first read fails; `break!/2`'s raise is a read in the background dying.
+  defp refuse!(site, name) do
+    kept = site |> component_row(name) |> Map.fetch!(:helpers) |> Enum.map(&helper_map/1)
+
+    refused =
+      Enum.map(kept, fn helper ->
+        case helper.name do
+          "fetch" -> %{helper | args: "_asked", code: "{:error, :refused}"}
+          _left_alone -> helper
+        end
+      end)
+
+    refute refused == kept, "#{name} has no fetch/1, so nothing was refused"
+
+    write_helpers!(site, name, refused)
+
+    kept
+  end
+
   # THE CLOUD TWICE ON ONE PAGE, because it has TWO row containers and draws whichever one the page
   # gave it a base for — a guard put on one of them is a guard missing from the other, and one
   # stalled read reaches both.
@@ -995,32 +1016,28 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
 
   # WHAT A READER SEES WHILE A BLOCK IS READING, AND IF IT CANNOT. Three states, each drawn by
   # `blog-notice` and each asserted on a real page rather than on a rendered string.
-  describe "a block that reads in the background" do
-    test "draws its skeleton first and its rows after", %{site: site} do
+  describe "a block that reads" do
+    # ITS FIRST PAINT HOLDS ITS ROWS, because what a crawler and a reader without JavaScript are
+    # served is the first paint: a skeleton there was a listing with no posts in it, and no link to
+    # any of them.
+    test "draws its rows in its first paint, with no skeleton", %{site: site} do
       publish!(site, ["A", "B"])
 
       {view, first_paint} =
         mount_blocks(site, [%{"name" => "blog-post-list", "id" => "one", "attrs" => %{}}])
 
-      assert roles(first_paint, "blog-list-loading") == 1,
-             "the first paint held no skeleton, so nothing was read in the background"
+      assert roles(first_paint, "blog-list-loading") == 0,
+             "the first paint held a skeleton, so a crawler was served no posts"
 
-      assert roles(first_paint, "blog-list-item") == 0
-
-      arrived = render_async(view, @async)
-
-      assert roles(arrived, "blog-list-loading") == 0
-      assert roles(arrived, "blog-list-item") == 2
+      assert roles(first_paint, "blog-list-item") == 2
+      assert roles(render_async(view, @async), "blog-list-item") == 2
     end
 
-    # AND THE HTTP RESPONSE IS NOT WHERE IT READS. A page is rendered TWICE for one visit — once for
-    # the GET, once when the socket connects — and `Phoenix.LiveView.connected?/1` is false for both,
-    # so a block forking on it read the whole page of posts inside the HTTP request, threw the rows
-    # away with that socket, and read them again behind a skeleton the reader watched replace them.
-    # `cold?/1` is the difference: the builder's canvas is the only render with nobody to hand a
-    # task's answer to. Counted off the repo's telemetry because the second read left no mark on the
-    # markup — `live_isolated/3` is the whole visit, its dead render and its connected mount.
-    test "and one visit reads once, not once per render", %{site: site} do
+    # ONE READ PER RENDER OF THE VISIT, AND NONE IN A TASK. A visit renders the page twice — the GET
+    # and the connected mount — and each reads its first page in step: the GET so its HTML holds the
+    # rows, the connected mount so they are drawn at once rather than behind a skeleton. Counted off
+    # the repo's telemetry: `live_isolated/3` is the whole visit, its dead render and its mount.
+    test "and one visit reads once per render, and starts no background read", %{site: site} do
       publish!(site, ["A", "B"])
 
       asked =
@@ -1032,18 +1049,16 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
         end)
 
       # One load reads the posts that name a lock of their own — what the list is kept to for its
-      # visitor — then the page of rows and its count. A second load would be three more.
-      assert Enum.count(asked, &String.contains?(&1, "mishka_blog_posts")) == 3,
-             "one load is the locked posts, the page of rows and its count — anything else is a second load"
+      # visitor — then the page of rows and its count: three per render, two renders.
+      assert Enum.count(asked, &String.contains?(&1, "mishka_blog_posts")) == 6,
+             "a load is the locked posts, the page of rows and its count, once for each render"
     end
 
-    # EVERY BLOCK ON THE PAGE IS ITS OWN LOAD. Three of them, three skeletons in the same first
-    # paint and three answers after it — which is the point of the split: a page does not wait for
-    # its slowest block.
-    test "beside other blocks, each of which loads on its own", %{site: site} do
+    # EVERY BLOCK ON THE PAGE ANSWERS IN THE SAME FIRST PAINT.
+    test "beside other blocks, each with its rows in the first paint", %{site: site} do
       create_blog_post!(site_id: site.id, title: "A", status: :published, featured: true)
 
-      {view, first_paint} =
+      {_view, first_paint} =
         mount_blocks(site, [
           %{"name" => "blog-featured-posts", "id" => "featured", "attrs" => %{}},
           %{"name" => "blog-post-list", "id" => "list", "attrs" => %{}},
@@ -1051,18 +1066,12 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
         ])
 
       for role <- ~w(blog-featured-loading blog-list-loading blog-category-loading) do
-        assert roles(first_paint, role) == 1, "#{role} was not drawn while its block was reading"
+        assert roles(first_paint, role) == 0, "#{role} was drawn in the first paint"
       end
 
-      arrived = render_async(view, @async)
-
-      for role <- ~w(blog-featured-loading blog-list-loading blog-category-loading) do
-        assert roles(arrived, role) == 0, "#{role} was still drawn after its block had read"
-      end
-
-      assert roles(arrived, "blog-featured-items") == 1
-      assert roles(arrived, "blog-list-items") == 1
-      assert roles(arrived, "blog-category-empty") == 1
+      assert roles(first_paint, "blog-featured-items") == 1
+      assert roles(first_paint, "blog-list-items") == 1
+      assert roles(first_paint, "blog-category-empty") == 1
     end
 
     # AND A CHANGE THAT IS NOT THE READ'S DOES NOT REACH THE DATABASE. `update_many/1` runs whenever
@@ -1119,12 +1128,11 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert has_element?(view, ~s(ul[data-role="blog-list-items"]))
     end
 
-    # ONE BLOCK FAILING IS ONE BLOCK'S PROBLEM. The task raises, LiveView unlinks it before the
-    # raise escapes and hands the component `{:exit, reason}` — so the block draws its own error and
-    # the page around it, blocks and all, is still standing.
+    # ONE BLOCK FAILING IS ONE BLOCK'S PROBLEM. The read answers with an error, so the block draws
+    # its own error and the page around it, blocks and all, is still standing.
     test "and a block whose read fails takes nothing else down with it", %{site: site} do
       publish!(site, ["A", "B"])
-      break!(site, "blog-tag-cloud")
+      refuse!(site, "blog-tag-cloud")
 
       {view, _first_paint} =
         mount_blocks(site, [
@@ -1146,7 +1154,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     # that has to be cleared for this, which is what the button's own handler does.
     test "and asking again reads again", %{site: site} do
       publish!(site, ["A"])
-      kept = break!(site, "blog-post-list")
+      kept = refuse!(site, "blog-post-list")
 
       {view, _first_paint} =
         mount_blocks(site, [%{"name" => "blog-post-list", "id" => "list", "attrs" => %{}}])
@@ -3232,19 +3240,14 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
              "turning a page read the profile again"
     end
 
-    test "draws its skeleton first and the blogger after", %{site: site} do
-      {view, first_paint} =
+    test "draws the blogger in its first paint, with no skeleton", %{site: site} do
+      {_view, first_paint} =
         mount_blocks(site, [
           %{"name" => "blog-author-profile", "id" => "one", "attrs" => %{slug: "mona"}}
         ])
 
-      assert roles(first_paint, "blog-author-loading") == 1
-      assert roles(first_paint, "blog-author-card") == 0
-
-      arrived = render_async(view, @async)
-
-      assert roles(arrived, "blog-author-loading") == 0
-      assert roles(arrived, "blog-author-card") == 1
+      assert roles(first_paint, "blog-author-loading") == 0
+      assert roles(first_paint, "blog-author-card") == 1
     end
   end
 
@@ -3433,16 +3436,17 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       refute has_element?(view, ~s([data-role="blog-people-unteamed"]))
     end
 
-    test "draws its skeleton first, and an error with a way out when the read fails", %{
-      site: site
-    } do
-      {view, first_paint} =
+    test "draws its people in its first paint, and an error with a way out when the read fails",
+         %{
+           site: site
+         } do
+      {_view, first_paint} =
         mount_blocks(site, [%{"name" => "blog-people", "id" => "people", "attrs" => %{}}])
 
-      assert roles(first_paint, "blog-people-loading") == 1
-      assert roles(render_async(view, @async), "blog-people-team") == 2
+      assert roles(first_paint, "blog-people-loading") == 0
+      assert roles(first_paint, "blog-people-team") == 2
 
-      kept = break!(site, "blog-people")
+      kept = refuse!(site, "blog-people")
       recompile!(site, "blog-people")
 
       {view, _first_paint} =
