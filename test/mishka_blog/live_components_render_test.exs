@@ -2836,6 +2836,29 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
                ["Approved reply"]
     end
 
+    # PLAIN TEXT, WHATEVER IS STORED. A comment written before tags were stripped on save, or one a
+    # render_content plugin reshaped, may still hold markup: it is drawn as the characters it is.
+    test "draws a comment's markup as text, never as HTML", %{site: site} do
+      [post] = publish!(site, ["Ours"])
+      markup = ~s(<b>bold</b> <a href="https://evil.example">link</a>)
+
+      Ash.Seed.seed!(MishkaBlog.Comment, %{
+        site_id: site.id,
+        post_id: post.id,
+        status: :approved,
+        content: markup
+      })
+
+      {:ok, view, _html} = mount_page(site, "blog-post-comments", %{slug: post.slug})
+
+      assert text_of(view, ~s([data-role="blog-comment-body"])) == [markup]
+
+      assert text_of(
+               view,
+               ~s([data-role="blog-comment-body"] b, [data-role="blog-comment-body"] a)
+             ) == []
+    end
+
     test "puts the pinned ones first", %{site: site} do
       [post] = publish!(site, ["Ours"])
 

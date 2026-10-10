@@ -17,7 +17,7 @@ defmodule MishkaBlog.Test.CommentGuardedStructTest do
     end
 
     describe "direct __guarded_change__/1" do
-      test "content basic_html (keeps safe tags, drops scripts); status enum accept" do
+      test "content is plain text, every tag stripped; status enum accept" do
         assert {:ok,
                 %{
                   content: content,
@@ -30,8 +30,8 @@ defmodule MishkaBlog.Test.CommentGuardedStructTest do
                    is_pinned: true
                  })
 
-        assert content =~ "<p>hello <b>world</b></p>"
-        refute content =~ "<script"
+        assert content =~ "hello world"
+        refute content =~ "<"
       end
 
       test "status outside enum rejected" do

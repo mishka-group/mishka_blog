@@ -1031,7 +1031,9 @@ defmodule MishkaBlog.Comment do
   guardedstruct do
     auto_wire true
 
-    field :content, :string, derives: "sanitize(basic_html) validate(string, not_empty)"
+    field :content, :string,
+      validator: {MishkaCmsCore.PlainText, :field},
+      derives: "sanitize(trim) validate(string, not_empty)"
 
     field :status, :atom, derives: "validate(atom, enum=Atom[pending::approved::flagged::spam])"
 
