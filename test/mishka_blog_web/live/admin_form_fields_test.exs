@@ -3,7 +3,8 @@ defmodule MishkaBlogWeb.Test.AdminFormFieldsTest do
   The blog's admin forms draw each field as the box it holds, and fill a record's slug while the
   record is added.
 
-  A title and an image address are one line — an `<input>`, never a textarea. Every textarea the
+  A title and an image address are one line — an `<input>`, never a textarea — and every picture
+  (a post's cover, a team's and a blogger's avatar and cover) is filled from the site's media library. Every textarea the
   post form draws besides the content editor — the subtitle, the excerpt, an SEO tag's content —
   carries the Tailwind adapter's field class, so it is bordered and as wide as its group, though the
   form is drawn by `MishkaCmsCoreWeb.UIAdapters.Admin`. The post form asks for the Site before the
@@ -128,6 +129,17 @@ defmodule MishkaBlogWeb.Test.AdminFormFieldsTest do
       refute has_element?(view, "#{@form} textarea[name='form[featured_image_url]']")
     end
 
+    test "draws the cover as a picture from the site's media library", ctx do
+      view = open(ctx, @posts)
+
+      assert has_element?(
+               view,
+               "#{@form} #post_form-form_featured_image_url-media[data-role=media-field] input[name='form[featured_image_url]']"
+             )
+
+      assert has_element?(view, "#post_form-form_featured_image_url-media-library-browse")
+    end
+
     test "draws every textarea but the content editor as the adapter's full-width field", ctx do
       view = open(ctx, @posts)
       field = Tailwind.multiline_class("")
@@ -235,6 +247,25 @@ defmodule MishkaBlogWeb.Test.AdminFormFieldsTest do
 
         assert has_element?(view, "#{form} input[type=text][name='form[#{field}]'][dir=ltr]")
         refute has_element?(view, "#{form} textarea[name='form[#{field}]']")
+      end
+    end
+
+    test "draw a team's and a blogger's pictures from the site's media library", ctx do
+      for {path, form} <- [
+            {"/admin/dashboard/blog/teams", "team_form-form"},
+            {"/admin/dashboard/blog/bloggers", "blogger_form-form"}
+          ],
+          field <- ~w(avatar_url cover_image_url) do
+        view = open(ctx, path)
+        media = "##{form}_#{field}-media"
+
+        assert has_element?(
+                 view,
+                 "##{form} #{media}[data-role=media-field] input[name='form[#{field}]']"
+               ),
+               "#{form} #{field} is not a picture field"
+
+        assert has_element?(view, "#{media}-library-browse")
       end
     end
   end
