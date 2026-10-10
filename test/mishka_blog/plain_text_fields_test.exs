@@ -1,7 +1,7 @@
 defmodule MishkaBlog.Test.PlainTextFieldsTest do
   @moduledoc """
   The blog's plain-text fields — a post's title and subtitle, a category's, a tag's, a team's and an
-  auto-posting's name and description, a blogger's name — store what was typed, without its markup
+  auto-posting's name and description, a blogger's name, a comment — store what was typed, without its markup
   and with nothing escaped (`MishkaCmsCore.PlainText`). Escaping is the page's and the head's job.
   """
   use MishkaBlog.DataCase, async: false
@@ -40,6 +40,7 @@ defmodule MishkaBlog.Test.PlainTextFieldsTest do
                  {MishkaBlog.BlogPost, :title},
                  {MishkaBlog.Blogger, :display_name},
                  {MishkaBlog.Collection, :description},
+                 {MishkaBlog.Comment, :content},
                  {MishkaBlog.Collection, :name},
                  {MishkaBlog.Tag, :description},
                  {MishkaBlog.Tag, :name},

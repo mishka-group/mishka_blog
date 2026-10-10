@@ -23,8 +23,10 @@ defmodule MishkaBlog.ShareCardsTest do
   alias MishkaGervaz.Resource.Info.Form, as: FormInfo
   alias MishkaInstaller.Event.{Event, EventHandler}
 
-  # THE APPLICATION'S PLUGIN PROCESSES ARE NOT RUNNING IN THIS SUITE: each is registered the way the
-  # CMS boot registers it, and unregistered when the test exits, since Mnesia is on disk.
+  # Each plugin a test needs is registered the way the CMS boot registers it, and unregistered when
+  # the test exits, since Mnesia is on disk. The application's own plugin processes run in this suite
+  # too and register themselves once the installer is ready, so a plugin a test did not register may
+  # still be answering.
   defp register(plugin) do
     PluginRegistrations.reconcile(false)
     {:ok, _} = plugin.register()
@@ -115,9 +117,17 @@ defmodule MishkaBlog.ShareCardsTest do
     create_team!(site_id: site.id, status: :active, slug: "core")
     create_blog_post!(site_id: site.id, status: :published, slug: "no-plugin-here")
 
-    kinds = for %{"target" => %{"record" => kind}} <- looks(), do: kind
+    looked =
+      for %{"target" => %{"record" => kind, "params" => %{"slug" => slug}}} <- looks(),
+          do: {kind, slug}
 
-    assert Enum.sort(kinds) == ["blog:author", "blog:category", "blog:tag", "blog:team"]
+    # The post's own plugin may be running (see `register/1`); if it is, its card is the post's alone.
+    assert Enum.sort(looked -- [{"blog:post", "no-plugin-here"}]) == [
+             {"blog:author", "mona"},
+             {"blog:category", "eng"},
+             {"blog:tag", "elixir"},
+             {"blog:team", "core"}
+           ]
   end
 
   test "each record's edit modal has a Share image field, on an update" do

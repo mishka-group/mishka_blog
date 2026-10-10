@@ -2836,6 +2836,60 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
                ["Approved reply"]
     end
 
+    # PLAIN TEXT, WHATEVER IS STORED. A comment written before tags were stripped on save, or one a
+    # render_content plugin reshaped, may still hold markup: it is drawn as the characters it is.
+    test "draws a comment's markup as text, never as HTML", %{site: site} do
+      [post] = publish!(site, ["Ours"])
+      markup = ~s(<b>bold</b> <a href="https://evil.example">link</a>)
+
+      Ash.Seed.seed!(MishkaBlog.Comment, %{
+        site_id: site.id,
+        post_id: post.id,
+        status: :approved,
+        content: markup
+      })
+
+      {:ok, view, _html} = mount_page(site, "blog-post-comments", %{slug: post.slug})
+
+      assert text_of(view, ~s([data-role="blog-comment-body"])) == [markup]
+
+      assert text_of(
+               view,
+               ~s([data-role="blog-comment-body"] b, [data-role="blog-comment-body"] a)
+             ) == []
+    end
+
+    # THE BOX TO WRITE IN COMES FIRST, under the heading, and the conversation follows it, so a
+    # long thread never pushes it out of reach.
+    test "puts the box to write in above the conversation", %{site: site} do
+      [post] = publish!(site, ["Ours"])
+      comment!(site, post, content: "First")
+
+      {:ok, view, _html} =
+        mount_page(site, "blog-post-comments", %{slug: post.slug, current_user: create_user!()})
+
+      html = render(view)
+      {form_at, _} = :binary.match(html, ~s(data-role="blog-comments-form"))
+      {list_at, _} = :binary.match(html, ~s(data-role="blog-comments-list"))
+
+      assert form_at < list_at
+    end
+
+    # `whitespace-pre-line` KEEPS EVERY LINE BREAK, the template's own too: text on a line of its own
+    # drew a blank line above and below every comment.
+    test "draws a comment's text with no blank line around it", %{site: site} do
+      [post] = publish!(site, ["Ours"])
+      comment!(site, post, content: "Just this")
+
+      {:ok, view, _html} = mount_page(site, "blog-post-comments", %{slug: post.slug})
+
+      assert view
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query(~s([data-role="blog-comment-body"]))
+             |> Enum.map(&LazyHTML.text/1) == ["Just this"]
+    end
+
     test "puts the pinned ones first", %{site: site} do
       [post] = publish!(site, ["Ours"])
 
