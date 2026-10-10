@@ -154,8 +154,7 @@ defmodule MishkaBlogWeb.Test.LanguageGroupsTest do
           assert has_element?(view, ~s(#{cell.(master)} button[phx-value-id="#{edition.id}"]))
         end
 
-        view |> element(~s(#{cell.(master)} button[phx-value-id="#{fa.id}"])) |> render_click()
-        render_async(view, @await)
+        open_edition(view, ~s(#{cell.(master)} button[phx-value-id="#{fa.id}"]))
 
         form = view |> element("form[method=put]") |> render()
         assert form =~ Map.fetch!(fa, @field), "#{@label}: the badge did not open the edition"
@@ -253,6 +252,16 @@ defmodule MishkaBlogWeb.Test.LanguageGroupsTest do
 
   # A CHANGE REACHES THE TABLE AS A BROADCAST THE PAGE HANDS ON WITH `send_update/3`, which the page
   # runs after the render that delivered the broadcast — so it is the second render that shows it.
+  # A BADGE OPENS ITS EDITION IN TWO TASKS: the page reads the edition, and the form that then draws
+  # reads its record. `render_async/2` awaits only the tasks running when it is called, so the first
+  # await ends with the form still loading — on a slow machine, every time.
+  defp open_edition(view, badge) do
+    view |> element(badge) |> render_click()
+    render_async(view, @await)
+    render_async(view, @await)
+    view
+  end
+
   defp settle(view) do
     render(view)
     render_async(view, @await)
