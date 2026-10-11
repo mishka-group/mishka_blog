@@ -784,6 +784,143 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
     end
   end
 
+  # `twitter:creator`: the X account of each person a post or a blogger's page is about.
+  describe "the X account of whoever a page is about" do
+    defp author!(site, post, name, links) do
+      blogger = create_blogger!(site_id: site.id, display_name: name, social_links: links)
+      create_post_blogger!(post_id: post.id, blogger_id: blogger.id)
+    end
+
+    defp post_given(site, post), do: given(site, :post, %{"lang" => "en", "slug" => post.slug})
+
+    defp profile(site, slug),
+      do: answer(given_at(site, "/blog/author/:slug", "blog:author", %{"slug" => slug}))
+
+    defp creators(answered), do: contents(answered.tags, "name", "twitter:creator")
+
+    test "a post names each author who has one, and nothing for one who has none", %{site: site} do
+      post = published!(site)
+      author!(site, post, "Ava", [%{platform: "x", url: "https://x.com/some_one"}])
+      author!(site, post, "Ben", [%{platform: "github", url: "https://github.com/ben"}])
+
+      assert creators(answer(post_given(site, post))) == ["@some_one"]
+    end
+
+    test "a post names every author's, in its authors' order, and the head keeps them all", %{
+      site: site
+    } do
+      post = published!(site)
+      author!(site, post, "Zed", [%{"platform" => "x", "url" => "https://x.com/zed_x/"}])
+
+      author!(site, post, "Ava", [
+        %{"platform" => "website", "url" => "https://twitter.com/ava_x"}
+      ])
+
+      given = post_given(site, post)
+
+      assert creators(answer(given)) == ["@ava_x", "@zed_x"]
+      assert head_contents(head(given), "twitter:creator") == ["@ava_x", "@zed_x"]
+    end
+
+    test "a post's own twitter:creator replaces every one built for it", %{site: site} do
+      own = %{tag: "meta", attrs: %{"name" => "twitter:creator"}, content: "@own"}
+      post = published!(site, seo_tags: [own])
+      author!(site, post, "Ava", [%{platform: "x", url: "https://x.com/ava_x"}])
+      author!(site, post, "Ben", [%{platform: "x", url: "https://x.com/ben_x"}])
+
+      assert creators(answer(post_given(site, post))) == ["@own"]
+    end
+
+    test "a blogger's page names their X account", %{site: site} do
+      create_blogger!(
+        site_id: site.id,
+        slug: "abc",
+        social_links: [
+          %{platform: "github", url: "https://github.com/abc"},
+          %{platform: "twitter", url: "https://twitter.com/Abc_12?ref=x"}
+        ]
+      )
+
+      assert profile(site, "abc").tags == [
+               %{tag: "meta", attrs: %{"name" => "twitter:creator"}, content: "@Abc_12"}
+             ]
+    end
+
+    test "a blogger with no X account, or one X would not accept, has none", %{site: site} do
+      for {slug, links} <- [
+            {"no-links", []},
+            {"no-x", [%{platform: "github", url: "https://github.com/abc"}]},
+            {"bad-x", [%{platform: "x", url: "https://x.com/this-is-not-valid"}]}
+          ] do
+        create_blogger!(site_id: site.id, slug: slug, social_links: links)
+
+        assert creators(profile(site, slug)) == [], slug
+      end
+    end
+
+    test "reads the handle however the link is written, and only a handle X accepts", %{
+      site: site
+    } do
+      cases = [
+        {"x", "https://x.com/shahryar_tbiz/", "@shahryar_tbiz"},
+        {" X ", "@bare_at", "@bare_at"},
+        {"Twitter", "bare_word", "@bare_word"},
+        {"x", "x.com/no_scheme", "@no_scheme"},
+        {"website", "https://www.x.com/www_x#fragment", "@www_x"},
+        {"website", "https://WWW.TWITTER.COM/upper_host", "@upper_host"},
+        {"website", "https://mobile.twitter.com/mobile_one", "@mobile_one"},
+        {"website", "https://x.com/abcdefghijklmno", "@abcdefghijklmno"},
+        {"website", "https://x.com/abcdefghijklmnop", nil},
+        {"x", "https://x.com", nil},
+        {"x", "https://x.com/@at_in_path", nil},
+        {"x", "https://github.com/not_x", nil},
+        {"website", "https://example.com/not_x", nil},
+        {"website", "bare_word", nil},
+        {"x", "mailto:someone", nil},
+        {"x", "https://x.com@evil.example/user_at_host", nil},
+        {"x", "https://evil.example@x.com/userinfo", nil},
+        {"x", "https://evil.example/x.com/path_host", nil},
+        {"x", "https://x.com.evil.example/look_alike", nil},
+        {"x", "javascript://x.com/script_scheme", nil},
+        {"x", "ftp://x.com/ftp_scheme", nil}
+      ]
+
+      for {{platform, url, expected}, index} <- Enum.with_index(cases) do
+        slug = "case-#{index}"
+
+        create_blogger!(
+          site_id: site.id,
+          slug: slug,
+          social_links: [%{platform: platform, url: url}]
+        )
+
+        assert creators(profile(site, slug)) == List.wrap(expected), "#{platform} #{url}"
+      end
+    end
+
+    test "the first X link that names a handle wins", %{site: site} do
+      create_blogger!(
+        site_id: site.id,
+        slug: "many",
+        social_links: [
+          %{platform: "x", url: "https://x.com/not-valid"},
+          %{platform: "x", url: "https://x.com/first_one"},
+          %{platform: "twitter", url: "https://twitter.com/second_one"}
+        ]
+      )
+
+      assert creators(profile(site, "many")) == ["@first_one"]
+    end
+
+    test "a team has none", %{site: site} do
+      create_team!(site_id: site.id, name: "Core", slug: "core", status: :active)
+
+      answered = answer(given_at(site, "/blog/team/:slug", "blog:team", %{"slug" => "core"}))
+
+      assert creators(answered) == []
+    end
+  end
+
   # What each place adds to its share card (`MishkaCmsCore.Runtime.ShareCard`); core draws it.
   describe "share cards" do
     test "a post's shows its category, its authors with their photos and teams, the day and the cover",
