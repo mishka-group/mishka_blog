@@ -15,6 +15,7 @@ defmodule MishkaBlog.Dashboard.Widgets.RecentPosts do
   require Ash.Query
 
   alias MishkaCmsCore.Dashboard.Widget
+  alias MishkaCmsCore.Localized
 
   @count %{
     key: "count",
@@ -156,9 +157,6 @@ defmodule MishkaBlog.Dashboard.Widgets.RecentPosts do
   defp author_name(%{tenant_bloggers: [%{display_name: name} | _]}) when is_binary(name), do: name
   defp author_name(_post), do: nil
 
-  defp fmt_count(n) when is_integer(n) and n >= 1000,
-    do: "#{Float.round(n / 1000, 1)}k"
-
-  defp fmt_count(n) when is_integer(n), do: Integer.to_string(n)
-  defp fmt_count(_n), do: "0"
+  defp fmt_count(n) when is_integer(n), do: Localized.compact(n)
+  defp fmt_count(_n), do: Localized.compact(0)
 end

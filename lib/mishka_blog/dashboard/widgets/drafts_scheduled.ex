@@ -118,7 +118,7 @@ defmodule MishkaBlog.Dashboard.Widgets.DraftsScheduled do
   defp scope_filter(query, site_id), do: Ash.Query.filter(query, site_id == ^site_id)
 
   defp time_label(%{status: :scheduled, scheduled_publish_at: %DateTime{} = at}),
-    do: MishkaBlogWeb.Live.Admin.Dashboard.Home.Index.strftime(at, "%b %d, %H:%M")
+    do: MishkaCmsCore.Localized.datetime(at, :MMMdHm)
 
   defp time_label(post), do: Widget.relative_time(post.inserted_at)
 end

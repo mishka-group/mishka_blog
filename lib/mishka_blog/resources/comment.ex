@@ -241,11 +241,7 @@ defmodule MishkaBlog.Comment do
               id: record.id,
               author: author,
               initial: author |> String.first() |> String.upcase(),
-              date:
-                MishkaBlogWeb.Live.Admin.Dashboard.Home.Index.strftime(
-                  record.inserted_at,
-                  "%b %d, %Y"
-                )
+              date: MishkaCmsCore.Localized.date(record.inserted_at, :yMMMd)
             }
 
             ~H"""

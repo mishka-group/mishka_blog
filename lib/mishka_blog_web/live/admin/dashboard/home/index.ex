@@ -12,8 +12,9 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   assigned when its month is still the selected one, so paging quickly cannot land an older read on
   top of a newer one.
 
-  Everything from `kpi_cards/1` down is presentation: `delta/2`, `growth/2` and `compact/1` turn raw
-  counts into the labels the design shows. `MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed`
+  Everything from `kpi_cards/1` down is presentation: `delta/2`, `growth/2` and `percent/2` turn raw
+  counts into the labels the design shows, and every number, date and time is written in the reader's
+  language by `MishkaCmsCore.Localized`. `MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed`
   supplies the "Logs" panel and the Calendar toggle rides in its `:toggles` slot, so both controls
   sit on one row as the design has them.
 
@@ -38,6 +39,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
 
   alias MishkaBlog.Dashboard.Overview
   alias MishkaBlog.Kit
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.{ExtensionProvision, Site}
   alias MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed
   alias MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel
@@ -58,6 +60,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
     MishkaBlog.Blogger,
     MishkaBlog.Tag
   ]
+
+  @a_sunday ~D[2023-01-01]
 
   @body "text-[#1b1a18]"
   @muted "text-[#8a877f]"
@@ -281,25 +285,25 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
 
   defp kpi("Today's Posts", stats),
     do:
-      {compact(stats.posts_today), delta(stats.posts_today, stats.posts_yesterday),
+      {Localized.compact(stats.posts_today), delta(stats.posts_today, stats.posts_yesterday),
        move_tone(stats.posts_today, stats.posts_yesterday)}
 
   defp kpi("Today's Views", stats),
     do:
-      {compact(stats.views_today), views_note(stats.views_today, stats.views_yesterday),
+      {Localized.compact(stats.views_today), views_note(stats.views_today, stats.views_yesterday),
        move_tone(stats.views_today, stats.views_yesterday)}
 
   defp kpi("New Comments", stats),
     do:
-      {compact(stats.comments_recent), pending_note(stats.comments_pending),
+      {Localized.compact(stats.comments_recent), pending_note(stats.comments_pending),
        pending_tone(stats.comments_pending)}
 
   defp kpi("Active Bloggers", stats),
-    do: {compact(stats.bloggers_active), joined_note(stats.bloggers_new), @muted}
+    do: {Localized.compact(stats.bloggers_active), joined_note(stats.bloggers_new), @muted}
 
   defp kpi("Engagement", stats),
     do:
-      {"#{stats.engagement_rate}%", points(stats.engagement_rate, stats.engagement_previous),
+      {percent(stats.engagement_rate), points(stats.engagement_rate, stats.engagement_previous),
        move_tone(stats.engagement_rate, stats.engagement_previous)}
 
   @doc """
@@ -324,31 +328,41 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   defp section(_title, nil), do: {"—", @waiting, "—", @waiting}
 
   defp section("Collections", stats),
-    do: {compact(stats.collections_total), @body, compact(stats.posts_organised), @body}
+    do:
+      {Localized.compact(stats.collections_total), @body,
+       Localized.compact(stats.posts_organised), @body}
 
   defp section("Blog Posts", stats),
-    do: {compact(stats.posts_published), @body, compact(stats.posts_drafts), @body}
+    do:
+      {Localized.compact(stats.posts_published), @body, Localized.compact(stats.posts_drafts),
+       @body}
 
   defp section("Bloggers", stats),
-    do: {compact(stats.bloggers_active), @body, compact(stats.bloggers_publishers), @body}
+    do:
+      {Localized.compact(stats.bloggers_active), @body,
+       Localized.compact(stats.bloggers_publishers), @body}
 
   defp section("Teams", stats),
-    do: {compact(stats.teams_active), @body, compact(stats.team_members), @body}
+    do:
+      {Localized.compact(stats.teams_active), @body, Localized.compact(stats.team_members), @body}
 
   defp section("Comments", stats),
     do:
-      {compact(stats.comments_total), @body, compact(stats.comments_pending),
+      {Localized.compact(stats.comments_total), @body, Localized.compact(stats.comments_pending),
        pending_tone(stats.comments_pending)}
 
   defp section("Auto Posting", stats),
-    do: {compact(stats.posts_scheduled), @body, compact(stats.automation_rules), @body}
+    do:
+      {Localized.compact(stats.posts_scheduled), @body, Localized.compact(stats.automation_rules),
+       @body}
 
   defp section("Tags", stats),
-    do: {compact(stats.tags_total), @body, stats.tags_top || "—", @body}
+    do: {Localized.compact(stats.tags_total), @body, stats.tags_top || "—", @body}
 
   defp section("Analytics", stats),
     do:
-      {compact(stats.views_total), @body, growth(stats.views_window, stats.views_previous),
+      {Localized.compact(stats.views_total), @body,
+       growth(stats.views_window, stats.views_previous),
        move_tone(stats.views_window, stats.views_previous)}
 
   @doc """
@@ -363,10 +377,10 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   end
 
   defp month(_label, nil), do: {"—", @waiting}
-  defp month("Posts Published", stats), do: {compact(stats.month_posts), @body}
-  defp month("Total Views", stats), do: {compact(stats.month_views), @body}
-  defp month("New Comments", stats), do: {compact(stats.month_comments), @body}
-  defp month("Engagement Rate", stats), do: {"#{stats.month_engagement}%", @up}
+  defp month("Posts Published", stats), do: {Localized.compact(stats.month_posts), @body}
+  defp month("Total Views", stats), do: {Localized.compact(stats.month_views), @body}
+  defp month("New Comments", stats), do: {Localized.compact(stats.month_comments), @body}
+  defp month("Engagement Rate", stats), do: {percent(stats.month_engagement), @up}
 
   @doc "The Quick Actions rows `areas` may follow, as `{label, icon, path, primary?}`."
   @spec quick_actions(Overview.areas()) ::
@@ -381,38 +395,28 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   @spec holds?(Overview.areas(), [:post | :comment]) :: boolean()
   def holds?(areas, needs), do: Enum.all?(needs, &Map.get(areas, &1, false))
 
-  @doc """
-  Abbreviates a count the way the design writes it — 8429 becomes `8.4K`, 1_240_000 `1.2M`.
-
-  Each tier ends just below the rounding that would carry into the next one, so 999_950 reads `1M`
-  rather than `1000K`.
-  """
-  @spec compact(integer()) :: String.t()
-  def compact(value) when value < 1_000, do: Integer.to_string(value)
-
-  def compact(value) when value < 999_500,
-    do: shorten(value, 1_000, pgettext("thousands abbreviation", "K"))
-
-  def compact(value) when value < 999_500_000,
-    do: shorten(value, 1_000_000, pgettext("millions abbreviation", "M"))
-
-  def compact(value), do: shorten(value, 1_000_000_000, pgettext("billions abbreviation", "B"))
-
   @doc "The `+2 from yesterday` line under a day counter, worded for every sign including zero."
   @spec delta(integer(), integer()) :: String.t()
   def delta(today, today), do: gettext("Same as yesterday")
 
   def delta(today, yesterday) when today > yesterday,
-    do: gettext("+%{difference} from yesterday", difference: today - yesterday)
+    do: gettext("+%{difference} from yesterday", difference: Localized.number(today - yesterday))
 
   def delta(today, yesterday),
-    do: gettext("−%{difference} from yesterday", difference: yesterday - today)
+    do: gettext("−%{difference} from yesterday", difference: Localized.number(yesterday - today))
 
   @doc "The move between two windows as a percentage, or a word when there is nothing to compare to."
   @spec growth(integer(), integer()) :: String.t()
   def growth(0, 0), do: gettext("No data")
   def growth(_current, 0), do: gettext("New")
-  def growth(current, previous), do: percentage(round((current - previous) * 100 / previous))
+
+  def growth(current, previous),
+    do: percent(round((current - previous) * 100 / previous), sign_display: :except_zero)
+
+  @doc "`points` per hundred as the reader's language writes a percentage, e.g. `\"12%\"`."
+  @spec percent(number(), keyword()) :: String.t()
+  def percent(points, opts \\ []),
+    do: Localized.number(points / 100, Keyword.put(opts, :format, :percent))
 
   @doc "Tone for a figure that moved: green when it rose, red when it fell, muted when it held."
   @spec move_tone(number(), number()) :: String.t()
@@ -420,13 +424,17 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   def move_tone(current, previous) when current < previous, do: @down
   def move_tone(_current, _previous), do: @muted
 
-  @doc "Long month and year for the calendar header, e.g. `\"July 2026\"`."
+  @doc "Month and year for the calendar header, e.g. `\"July 2026\"`."
   @spec month_label(Date.t()) :: String.t()
-  def month_label(date), do: strftime(date, "%B %Y")
+  def month_label(date), do: Localized.date(date, :yMMMM)
 
-  @doc "Weekday with short month and day for the calendar sidebar, e.g. `\"Monday, Jul 20\"`."
+  @doc "Weekday, month and day for the calendar sidebar, e.g. `\"Mon, Jul 20\"`."
   @spec day_label(Date.t()) :: String.t()
-  def day_label(date), do: strftime(date, "%A, %b %-d")
+  def day_label(date), do: Localized.date(date, :MMMEd)
+
+  @doc "The calendar's column heads, Sunday first, e.g. `[\"Sun\", \"Mon\", …]`."
+  @spec weekday_labels() :: [String.t()]
+  def weekday_labels, do: Enum.map(0..6, &Localized.date(Date.add(@a_sunday, &1), :E))
 
   @doc "The calendar sidebar's count line, e.g. `\"1 post on this day\"`."
   @spec day_count_label(non_neg_integer()) :: String.t()
@@ -444,9 +452,9 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   @doc "Time of day a post went out, or is due to — the calendar sidebar's second line."
   @spec post_time(map()) :: String.t()
   def post_time(%{status: :scheduled, scheduled_publish_at: %DateTime{} = at}),
-    do: gettext("Scheduled · %{time}", time: Calendar.strftime(at, "%H:%M"))
+    do: gettext("Scheduled · %{time}", time: Localized.time(at, :Hm))
 
-  def post_time(%{published_at: %DateTime{} = at}), do: Calendar.strftime(at, "%H:%M")
+  def post_time(%{published_at: %DateTime{} = at}), do: Localized.time(at, :Hm)
   def post_time(_post), do: "—"
 
   @doc "Fill for one calendar square: outside the month, selected, today, or an ordinary day."
@@ -492,33 +500,13 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   def activity_label(:comment, _status), do: gettext("New comment posted")
   def activity_label(:blogger, _status), do: gettext("New blogger joined")
 
-  @doc "How long ago something happened, to the coarsest unit that still says something."
-  @spec ago(DateTime.t()) :: String.t()
-  def ago(at) do
-    seconds = DateTime.diff(DateTime.utc_now(), at, :second)
-
-    cond do
-      seconds < 60 -> gettext("just now")
-      seconds < 3_600 -> minutes_ago(div(seconds, 60))
-      seconds < 86_400 -> hours_ago(div(seconds, 3_600))
-      seconds < 2_592_000 -> days_ago(div(seconds, 86_400))
-      true -> strftime(at, "%b %d, %Y")
-    end
-  end
-
   @doc """
-  `Calendar.strftime/3` with the month and weekday names spelled in the language of the process that
-  renders, for a date or datetime shown on a screen.
+  How long before `now` `at` was, e.g. `"3 minutes ago"` or `"yesterday"`; a moment after `now`
+  reads as `"now"`.
   """
-  @spec strftime(Calendar.date() | Calendar.datetime(), String.t()) :: String.t()
-  def strftime(date, format) do
-    Calendar.strftime(date, format,
-      day_of_week_names: &day_name/1,
-      abbreviated_day_of_week_names: &short_day_name/1,
-      month_names: &month_name/1,
-      abbreviated_month_names: &short_month_name/1
-    )
-  end
+  @spec ago(DateTime.t(), DateTime.t()) :: String.t()
+  def ago(at, now \\ DateTime.utc_now()),
+    do: Localized.ago(Enum.min([at, now], DateTime), relative_to: now)
 
   # THE GATE, ANSWERED ON EVERY RENDER rather than once at mount: an install, a skip or the badge all
   # change it, and each of them is an event. `MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel`
@@ -635,53 +623,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
     MishkaGervaz.Messages.start_async(socket, :calendar, fn -> Overview.calendar(user, month) end)
   end
 
-  defp minutes_ago(count), do: ngettext("1 minute ago", "%{count} minutes ago", count)
-  defp hours_ago(count), do: ngettext("1 hour ago", "%{count} hours ago", count)
-  defp days_ago(count), do: ngettext("1 day ago", "%{count} days ago", count)
-
   defp translate(text), do: Gettext.gettext(MishkaCmsCore.Gettext, text)
-
-  defp day_name(1), do: gettext("Monday")
-  defp day_name(2), do: gettext("Tuesday")
-  defp day_name(3), do: gettext("Wednesday")
-  defp day_name(4), do: gettext("Thursday")
-  defp day_name(5), do: gettext("Friday")
-  defp day_name(6), do: gettext("Saturday")
-  defp day_name(7), do: gettext("Sunday")
-
-  defp short_day_name(1), do: gettext("Mon")
-  defp short_day_name(2), do: gettext("Tue")
-  defp short_day_name(3), do: gettext("Wed")
-  defp short_day_name(4), do: gettext("Thu")
-  defp short_day_name(5), do: gettext("Fri")
-  defp short_day_name(6), do: gettext("Sat")
-  defp short_day_name(7), do: gettext("Sun")
-
-  defp month_name(1), do: gettext("January")
-  defp month_name(2), do: gettext("February")
-  defp month_name(3), do: gettext("March")
-  defp month_name(4), do: gettext("April")
-  defp month_name(5), do: gettext("May")
-  defp month_name(6), do: gettext("June")
-  defp month_name(7), do: gettext("July")
-  defp month_name(8), do: gettext("August")
-  defp month_name(9), do: gettext("September")
-  defp month_name(10), do: gettext("October")
-  defp month_name(11), do: gettext("November")
-  defp month_name(12), do: gettext("December")
-
-  defp short_month_name(1), do: gettext("Jan")
-  defp short_month_name(2), do: gettext("Feb")
-  defp short_month_name(3), do: gettext("Mar")
-  defp short_month_name(4), do: gettext("Apr")
-  defp short_month_name(5), do: gettext("May")
-  defp short_month_name(6), do: gettext("Jun")
-  defp short_month_name(7), do: gettext("Jul")
-  defp short_month_name(8), do: gettext("Aug")
-  defp short_month_name(9), do: gettext("Sep")
-  defp short_month_name(10), do: gettext("Oct")
-  defp short_month_name(11), do: gettext("Nov")
-  defp short_month_name(12), do: gettext("Dec")
 
   defp shift_month(month, step) do
     months = month.year * 12 + month.month - 1 + step
@@ -711,20 +653,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   defp points(rate, rate), do: gettext("Steady vs prev. 30d")
 
   defp points(rate, previous) when rate > previous,
-    do: gettext("+%{points} pts vs prev. 30d", points: rate - previous)
+    do: gettext("+%{points} pts vs prev. 30d", points: Localized.number(rate - previous))
 
   defp points(rate, previous),
-    do: gettext("−%{points} pts vs prev. 30d", points: previous - rate)
-
-  defp percentage(points) when points > 0, do: "+#{points}%"
-  defp percentage(points), do: "#{points}%"
-
-  defp shorten(value, unit, suffix) do
-    tenths = round(value / (unit / 10))
-
-    case {div(tenths, 10), rem(tenths, 10)} do
-      {whole, 0} -> "#{whole}#{suffix}"
-      {whole, part} -> "#{whole}.#{part}#{suffix}"
-    end
-  end
+    do: gettext("−%{points} pts vs prev. 30d", points: Localized.number(previous - rate))
 end

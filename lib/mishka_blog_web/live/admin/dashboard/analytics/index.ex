@@ -18,9 +18,10 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   counts onto a fixed viewBox, and `vector-effect="non-scaling-stroke"` keeps the stroke even once
   the box has been stretched to the card's width.
 
-  Number formatting is `MishkaBlogWeb.Live.Admin.Dashboard.Home.Index`'s — `compact/1`, `growth/2`,
-  `move_tone/2`, `delta/2` and `status_tone/1` — so the overview and this page abbreviate, colour and
-  word the same figures identically rather than drifting apart.
+  Number formatting is `MishkaBlogWeb.Live.Admin.Dashboard.Home.Index`'s — `growth/2`, `percent/2`,
+  `move_tone/2`, `delta/2` and `status_tone/1` — so the overview and this page colour and word the
+  same figures identically rather than drifting apart; counts, dates and percentages are written in
+  the reader's language by `MishkaCmsCore.Localized`.
 
   The page is a holder's of the blog's `admin:dashboard:blog:post` (`MishkaBlogWeb.SidebarMenu`).
   The Engagement tile divides comments by views, so it is drawn only for a viewer who also holds
@@ -35,6 +36,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   alias MishkaBlog.Dashboard.Analytics
   alias MishkaBlog.Dashboard.Overview
   alias MishkaBlogWeb.Live.Admin.Dashboard.Home.Index, as: Home
+  alias MishkaCmsCore.Localized
 
   @chart_width 720
   @chart_height 180
@@ -98,24 +100,25 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   defp kpi(_label, nil, _days), do: {nil, nil, @waiting}
 
   defp kpi("Total Views", stats, _days),
-    do: {Home.compact(stats.views_total), all_time_note(stats.views_total), @muted}
+    do: {Localized.compact(stats.views_total), all_time_note(stats.views_total), @muted}
 
   defp kpi("Views in Period", stats, days),
     do:
-      {Home.compact(stats.views_window), trend(stats.views_window, stats.views_previous, days),
+      {Localized.compact(stats.views_window),
+       trend(stats.views_window, stats.views_previous, days),
        Home.move_tone(stats.views_window, stats.views_previous)}
 
   defp kpi("Unique Readers", stats, _days),
-    do: {Home.compact(stats.visitors), readers_note(stats.visitors), @muted}
+    do: {Localized.compact(stats.visitors), readers_note(stats.visitors), @muted}
 
   defp kpi("Views Today", stats, _days),
     do:
-      {Home.compact(stats.views_today), Home.delta(stats.views_today, stats.views_yesterday),
+      {Localized.compact(stats.views_today), Home.delta(stats.views_today, stats.views_yesterday),
        Home.move_tone(stats.views_today, stats.views_yesterday)}
 
   defp kpi("Engagement", stats, days),
     do:
-      {"#{stats.engagement_rate}%",
+      {Home.percent(stats.engagement_rate),
        engagement_note(stats.engagement_rate, stats.engagement_previous, days),
        Home.move_tone(stats.engagement_rate, stats.engagement_previous)}
 
@@ -150,9 +153,9 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
     )
   end
 
-  @doc "Short month and day, e.g. `\"Jul 20\"` — the chart's axis ends and the peak marker."
+  @doc "Month and day, e.g. `\"Jul 20\"` — the chart's axis ends and the peak marker."
   @spec day_label(Date.t()) :: String.t()
-  def day_label(date), do: Home.strftime(date, "%b %-d")
+  def day_label(date), do: Localized.date(date, :MMMd)
 
   @doc "A referrer as the page shows it: the `Direct` bucket in the reader's language, a host as it is."
   @spec referrer_label(String.t()) :: String.t()
@@ -161,7 +164,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   @doc "When a top-performing post went out, or that it has not."
   @spec published_label(map()) :: String.t()
   def published_label(%{published_at: %DateTime{} = at}),
-    do: gettext("Published %{date}", date: Home.strftime(at, "%b %-d, %Y"))
+    do: gettext("Published %{date}", date: Localized.date(at, :yMMMd))
 
   def published_label(_post), do: gettext("Not published")
 
@@ -172,8 +175,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   brought nobody.
   """
   @spec share(non_neg_integer(), non_neg_integer()) :: String.t()
-  def share(0, _total), do: "0%"
-  def share(_count, 0), do: "0%"
+  def share(0, _total), do: Home.percent(0)
+  def share(_count, 0), do: Home.percent(0)
   def share(count, total), do: percentage(round(count * 100 / total))
 
   @doc "The bar width for a share, floored so a small but real source still draws as a bar."
@@ -241,11 +244,19 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   defp engagement_note(rate, rate, days), do: gettext("Steady vs prev. %{days}d", days: days)
 
   defp engagement_note(rate, previous, days) when rate > previous,
-    do: gettext("+%{points} pts vs prev. %{days}d", points: rate - previous, days: days)
+    do:
+      gettext("+%{points} pts vs prev. %{days}d",
+        points: Localized.number(rate - previous),
+        days: days
+      )
 
   defp engagement_note(rate, previous, days),
-    do: gettext("−%{points} pts vs prev. %{days}d", points: previous - rate, days: days)
+    do:
+      gettext("−%{points} pts vs prev. %{days}d",
+        points: Localized.number(previous - rate),
+        days: days
+      )
 
-  defp percentage(0), do: "<1%"
-  defp percentage(value), do: "#{value}%"
+  defp percentage(0), do: "<" <> Home.percent(1)
+  defp percentage(value), do: Home.percent(value)
 end

@@ -14,6 +14,7 @@ defmodule MishkaBlog.Dashboard.Widgets.TopPosts do
   require Ash.Query
 
   alias MishkaCmsCore.Dashboard.Widget
+  alias MishkaCmsCore.Localized
 
   @count %{
     key: "count",
@@ -112,7 +113,7 @@ defmodule MishkaBlog.Dashboard.Widgets.TopPosts do
       %{
         rank: rank,
         title: post.title,
-        views: format_count(post.view_count),
+        views: Localized.compact(post.view_count),
         pct: pct(post.view_count, max),
         fill: fill(rank),
         chip: chip(rank)
@@ -122,15 +123,6 @@ defmodule MishkaBlog.Dashboard.Widgets.TopPosts do
 
   defp pct(_views, 0), do: 0
   defp pct(views, max), do: round(views / max * 100)
-
-  defp format_count(n) when n >= 1000 do
-    (n / 1000)
-    |> :erlang.float_to_binary(decimals: 1)
-    |> String.trim_trailing(".0")
-    |> Kernel.<>("k")
-  end
-
-  defp format_count(n), do: Integer.to_string(n)
 
   defp fill(1), do: "#d9d6f6"
   defp fill(2), do: "#e4e2f9"

@@ -24,7 +24,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
     * `title`, `description`, `image` — the post's title, excerpt and featured image;
     * `type` — `"article"`;
-    * `tags` — `author` (the authors' names), `article:published_time`, `article:modified_time`,
+    * `tags` — `author` (the authors' names), one `twitter:creator` per author with an X account,
+      in the authors' order, `article:published_time`, `article:modified_time`,
       `article:section` (the first category), one `article:tag` per tag, and a `rel="alternate"`
       link per language the post is published in among the site's languages, with `x-default` at
       the site's primary one, when there are two or more. The post's own `seo_tags` come last and
@@ -55,6 +56,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
   ## A blogger, `"blog:author"`
 
   The blogger the `slug` capture names: their name, their bio as plain text, their avatar, a
+  `twitter:creator` with their X account when they have one, a
   `ProfilePage` whose `mainEntity` is the `Person` — with `sameAs` their social links and
   `knowsAbout` their expertise — and a `BreadcrumbList`, Home → Blog → the blogger. `vars` —
   `author.name`, `author.bio`, `author.image`, `author.url`. Its share card says "Author" above the
@@ -94,6 +96,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
   require Ash.Query
 
   alias MishkaBlog.{BlogPost, Blogger, Collection, Tag, Team}
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCore.PlainText
   alias MishkaCmsCore.Runtime.{Languages, Seo}
   alias MishkaCmsCore.Settings
@@ -127,6 +130,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
   @tag_fields [:id, :name, :slug, :description, :language, :seo_tags, :permissions]
   @blogger_fields [:id, :display_name, :slug, :bio, :avatar_url, :social_links, :expertise_areas]
   @team_fields [:id, :name, :slug, :description, :avatar_url]
+  @x_hosts ~w(x.com twitter.com www.x.com www.twitter.com mobile.twitter.com)
 
   @impl true
   def call(%{record: "blog:post"} = seo), do: {:reply, :halt, post(seo)}
@@ -136,10 +140,10 @@ defmodule MishkaBlog.Plugins.PageSeo do
   def call(%{record: "blog:team"} = seo), do: {:reply, :halt, team(seo)}
   def call(seo), do: {:reply, seo}
 
-  # The photos, names and teams a share card shows of a post's authors, a blogger, a team.
+  # The photos, names and teams a share card shows of a post's authors, and their X accounts.
   defp people_query do
     Blogger
-    |> Ash.Query.select([:display_name, :avatar_url])
+    |> Ash.Query.select([:display_name, :avatar_url, :social_links])
     |> Ash.Query.sort(display_name: :asc)
     |> Ash.Query.load(
       teams:
@@ -302,6 +306,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
     generated =
       List.flatten([
         meta("name", "author", Enum.join(authors, ", ")),
+        Enum.map(post.bloggers, &meta("name", "twitter:creator", x_account(&1.social_links))),
         meta("property", "article:published_time", published),
         meta("property", "article:modified_time", modified),
         meta("property", "article:section", section),
@@ -448,6 +453,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         description: bio,
         image: blogger.avatar_url || seo.image,
         type: "profile",
+        tags: meta("name", "twitter:creator", x_account(blogger.social_links)),
         schema: [profile | breadcrumb(seo, base, 2, blogger.display_name)],
         permissions: [],
         card: %{
@@ -526,11 +532,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
     end
   end
 
-  # The day a post was published: `Mar 3, 2025` in English, `2025-03-03` in any other language.
-  defp day(%DateTime{} = at, language) when language in [nil, "en"],
-    do: Calendar.strftime(at, "%b %-d, %Y")
-
-  defp day(%DateTime{} = at, _language), do: Calendar.strftime(at, "%Y-%m-%d")
+  # The day a post was published, in the post's language: `Mar 3, 2025` in English.
+  defp day(%DateTime{} = at, language), do: Localized.date(at, :yMMMd, locale: language)
   defp day(_never, _language), do: nil
 
   defp minutes(%{reading_time_minutes: minutes}) when is_integer(minutes) and minutes > 0,
@@ -549,6 +552,51 @@ defmodule MishkaBlog.Plugins.PageSeo do
   defp links(links) do
     for link <- List.wrap(links), url = field(link, :url), is_binary(url) and url != "", do: url
   end
+
+  # The first of `links` that is an X account, as `@handle`; `nil` for none. A link is one when its
+  # address is on X, or names no host and its platform is `x` or `twitter`, and its handle is one X
+  # accepts.
+  defp x_account(links), do: links |> List.wrap() |> Enum.find_value(&x_handle/1)
+
+  defp x_handle(link) do
+    with url when is_binary(url) <- field(link, :url),
+         {host, handle} <- x_address(String.trim(url)),
+         true <- x_link?(host, field(link, :platform)),
+         true <- is_binary(handle) and Regex.match?(~r/^[A-Za-z0-9_]{1,15}$/, handle) do
+      "@" <> handle
+    else
+      _not_an_x_account -> nil
+    end
+  end
+
+  # `{host, handle}`, read off the address as `URI.parse/1` parses it: no host for `@handle` or
+  # `handle` alone; else an `http` or `https` address's host, with no user info, and its path's
+  # first segment. An address with no scheme is read as `https`.
+  defp x_address("@" <> handle), do: {nil, handle}
+
+  defp x_address(url) do
+    case URI.parse(url) do
+      %URI{scheme: scheme, userinfo: nil, host: host, path: path}
+      when scheme in ["http", "https"] and is_binary(host) ->
+        {String.downcase(host), first_segment(path)}
+
+      %URI{scheme: nil, host: nil, path: ^url} ->
+        if String.contains?(url, "/"), do: x_address("https://" <> url), else: {nil, url}
+
+      _not_an_address ->
+        nil
+    end
+  end
+
+  defp first_segment(path) when is_binary(path),
+    do: path |> String.split("/", trim: true) |> List.first()
+
+  defp first_segment(_no_path), do: nil
+
+  defp x_link?(nil, platform) when is_binary(platform),
+    do: String.downcase(String.trim(platform)) in ["x", "twitter"]
+
+  defp x_link?(host, _platform), do: host in @x_hosts
 
   # The readers' average to one decimal, and how many rated; nothing before the first rating.
   defp rating(%{rating_count: count, rating_average: average})

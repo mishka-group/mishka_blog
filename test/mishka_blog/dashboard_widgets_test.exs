@@ -162,7 +162,7 @@ defmodule MishkaBlog.Dashboard.WidgetsTest do
     end
 
     test "blog-drafts-scheduled splits drafts from scheduled with their times", %{master: master} do
-      publish_at = DateTime.utc_now() |> DateTime.add(3600, :second) |> DateTime.truncate(:second)
+      publish_at = ~U[2099-07-03 18:04:00Z]
       site = create_site!()
       create_blog_post!(site_id: site.id, title: "Draft Widget Post", status: :draft)
 
@@ -177,7 +177,7 @@ defmodule MishkaBlog.Dashboard.WidgetsTest do
 
       assert html =~ "Draft Widget Post"
       assert html =~ "Scheduled Widget Post"
-      assert html =~ Calendar.strftime(publish_at, "%b %d, %H:%M")
+      assert html =~ "Jul 3, 18:04"
     end
 
     # The card is a top-N podium ranked by post count, so a brand-new profile will not appear on it

@@ -262,11 +262,7 @@ defmodule MishkaBlog.Tag do
 
             assigns = %{
               site_name: site_name,
-              date:
-                MishkaBlogWeb.Live.Admin.Dashboard.Home.Index.strftime(
-                  record.inserted_at,
-                  "%b %d, %Y"
-                ),
+              date: MishkaCmsCore.Localized.date(record.inserted_at, :yMMMd),
               master_user?: state.master_user? and not is_nil(site_name)
             }
 
