@@ -29,8 +29,8 @@ defmodule MishkaBlogWeb.Templates.CommentCard do
 
   import MishkaGervaz.Helpers, only: [dynamic_component: 1]
 
-  alias MishkaBlogWeb.Live.Admin.Dashboard.Home.Index, as: Home
   alias MishkaCmsCore.Accounts.Helper
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCoreWeb.Templates.CardChrome, as: Shared
   alias MishkaGervaz.Table.Templates.Shared, as: Gervaz
 
@@ -155,7 +155,7 @@ defmodule MishkaBlogWeb.Templates.CommentCard do
       |> assign(:initials, initials(record))
       |> assign(:author, author(record))
       |> assign(:post_title, post_title(record))
-      |> assign(:date, Home.strftime(record.inserted_at, "%b %d, %Y"))
+      |> assign(:date, Localized.date(record.inserted_at, :yMMMd))
       |> assign(
         :visible_row_actions,
         Enum.filter(assigns.static.row_actions, &Gervaz.action_visible?(&1, record, state))

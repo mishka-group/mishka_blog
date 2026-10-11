@@ -31,6 +31,9 @@ mishka_cms_core_resources-*.tar
 /priv/repo/migrations/
 /priv/resource_snapshots/
 
+# CLDR data for languages other than English, downloaded by `MishkaCmsCore.Localized` in tests.
+/priv/localize/
+
 # MishkaInstaller keeps its plugin registry in Mnesia, on disk. It survives between runs, so a stale
 # row can name a module that no longer exists and every hook for that event then refuses to run
 # ("This event has plugins that are not loaded"). Local state, never source.

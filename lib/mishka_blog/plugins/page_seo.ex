@@ -96,6 +96,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
   require Ash.Query
 
   alias MishkaBlog.{BlogPost, Blogger, Collection, Tag, Team}
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCore.PlainText
   alias MishkaCmsCore.Runtime.{Languages, Seo}
   alias MishkaCmsCore.Settings
@@ -531,11 +532,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
     end
   end
 
-  # The day a post was published: `Mar 3, 2025` in English, `2025-03-03` in any other language.
-  defp day(%DateTime{} = at, language) when language in [nil, "en"],
-    do: Calendar.strftime(at, "%b %-d, %Y")
-
-  defp day(%DateTime{} = at, _language), do: Calendar.strftime(at, "%Y-%m-%d")
+  # The day a post was published, in the post's language: `Mar 3, 2025` in English.
+  defp day(%DateTime{} = at, language), do: Localized.date(at, :yMMMd, locale: language)
   defp day(_never, _language), do: nil
 
   defp minutes(%{reading_time_minutes: minutes}) when is_integer(minutes) and minutes > 0,

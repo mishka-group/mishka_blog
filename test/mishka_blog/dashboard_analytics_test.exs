@@ -11,6 +11,7 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
   import MishkaBlog.Test.Factory
 
   alias MishkaBlog.Dashboard.Analytics
+  alias MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index
 
   test "a master counts every site's comments, a site's admin only its own" do
     site_a = create_site!()
@@ -69,6 +70,23 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
         )
 
       assert stats.engagement_rate == 100
+    end
+  end
+
+  describe "the page's labels" do
+    test "write the chart's days, a post's publishing day and a source's share" do
+      assert Index.day_label(~D[2026-07-20]) == "Jul 20"
+      assert Index.day_label(~D[2026-01-03]) == "Jan 3"
+
+      assert Index.published_label(%{published_at: ~U[2026-07-03 10:00:00Z]}) ==
+               "Published Jul 3, 2026"
+
+      assert Index.published_label(%{published_at: nil}) == "Not published"
+
+      assert Index.share(0, 10) == "0%"
+      assert Index.share(5, 0) == "0%"
+      assert Index.share(1, 1_000) == "<1%"
+      assert Index.share(1, 3) == "33%"
     end
   end
 end

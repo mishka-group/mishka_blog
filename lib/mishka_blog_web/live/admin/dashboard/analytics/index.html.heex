@@ -90,7 +90,7 @@
 
       <div :if={@stats && @stats.peak.count > 0} class="text-end">
         <div class="font-['Space_Grotesk'] text-[15px] font-bold text-[#17161a]">
-          {Home.compact(@stats.peak.count)}
+          {Localized.compact(@stats.peak.count)}
         </div>
         <div class="mt-px text-[11.5px] font-medium text-[#a8a5a0]">
           {gettext("Busiest day · %{day}", day: day_label(@stats.peak.date))}
@@ -157,7 +157,7 @@
       <div class="mt-2.5 flex items-center justify-between text-[11px] font-medium text-[#a8a5a0]">
         <span>{day_label(@stats.from)}</span>
         <span>
-          {gettext("%{views} views in this period", views: Home.compact(@stats.views_window))}
+          {gettext("%{views} views in this period", views: Localized.compact(@stats.views_window))}
         </span>
         <span>{day_label(@stats.to)}</span>
       </div>
@@ -213,7 +213,7 @@
 
           <div class="flex-none text-end">
             <div class="font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
-              {Home.compact(post.views)}
+              {Localized.compact(post.views)}
             </div>
             <div class="text-[10.5px] font-medium text-[#a8a5a0]">{gettext("views")}</div>
           </div>
@@ -314,7 +314,7 @@
             <div class="mb-1.5 flex items-center justify-between gap-2">
               <span class="truncate text-[12.5px] font-medium text-[#6d6a63]">{label}</span>
               <span class="flex-none font-['Space_Grotesk'] text-[12.5px] font-bold text-[#17161a]">
-                {Home.compact(count)} · {share(count, @stats.views_window)}
+                {Localized.compact(count)} · {share(count, @stats.views_window)}
               </span>
             </div>
             <div class="h-1.5 w-full overflow-hidden rounded-full bg-[#f2f1ec]">

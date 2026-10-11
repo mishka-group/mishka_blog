@@ -951,6 +951,15 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       assert card.picture == "/media/cover.png"
     end
 
+    test "a post's day is written in the post's own language", %{site: site} do
+      post = published!(site, language: "fa")
+
+      given = %{given(site, :post, %{"lang" => "fa", "slug" => post.slug}) | language: "fa"}
+      card = answer(given).card
+
+      assert ["۱ سپتامبر ۲۰۲۶" | _reading] = card.meta
+    end
+
     test "a blogger's names them as the author, with their photo and teams, and no backdrop", %{
       site: site
     } do

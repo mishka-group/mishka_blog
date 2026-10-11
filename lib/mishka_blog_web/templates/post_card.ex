@@ -37,9 +37,9 @@ defmodule MishkaBlogWeb.Templates.PostCard do
 
   import MishkaGervaz.Helpers, only: [dynamic_component: 1]
 
-  alias MishkaBlogWeb.Live.Admin.Dashboard.Home.Index, as: Home
   alias MishkaBlogWeb.Templates.EditionChips
   alias MishkaCmsCore.LanguageAccent
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCoreWeb.Templates.CardChrome, as: Shared
   alias MishkaGervaz.Table.Templates.Shared, as: Gervaz
 
@@ -360,10 +360,10 @@ defmodule MishkaBlogWeb.Templates.PostCard do
   """
   @spec date_label(map()) :: String.t()
   def date_label(%{status: :scheduled, scheduled_publish_at: %DateTime{} = at}),
-    do: Home.strftime(at, "%b %d, %Y")
+    do: Localized.date(at, :yMMMd)
 
-  def date_label(%{published_at: %DateTime{} = at}), do: Home.strftime(at, "%b %d, %Y")
-  def date_label(%{inserted_at: %DateTime{} = at}), do: Home.strftime(at, "%b %d, %Y")
+  def date_label(%{published_at: %DateTime{} = at}), do: Localized.date(at, :yMMMd)
+  def date_label(%{inserted_at: %DateTime{} = at}), do: Localized.date(at, :yMMMd)
   def date_label(_record), do: "—"
 
   # A tenant admin only ever sees their own site, so naming it on every row is noise; a master is

@@ -14,8 +14,9 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
   arity and tuple shape as their loaded counterparts.
 
   The bad paths are deliberate. An empty database must divide no counts by zero, an absent calendar
-  must yield no posts, and every boundary of `compact/1`, `growth/2` and `ago/1` is checked from
-  both sides.
+  must yield no posts, `growth/2` is checked on both sides of zero and `ago/2` at each unit it steps
+  to. Numbers, dates and times are `MishkaCmsCore.Localized`'s, so they are asserted as English writes
+  them, and once in Persian to show the reader's language is the admin's Gettext locale.
   """
   use MishkaBlog.DataCase, async: false
 
@@ -373,32 +374,26 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
     end
   end
 
-  describe "compact/1" do
-    test "writes counts below a thousand in full" do
-      assert Index.compact(0) == "0"
-      assert Index.compact(7) == "7"
-      assert Index.compact(999) == "999"
-    end
+  describe "the cards' counts" do
+    test "are written in full below a thousand and shortened above it" do
+      stats = %{
+        Overview.load(master())
+        | posts_today: 999,
+          posts_yesterday: 0,
+          views_total: 8_429,
+          collections_total: 1_240_000
+      }
 
-    test "abbreviates thousands, dropping a trailing zero tenth" do
-      assert Index.compact(1_000) == "1K"
-      assert Index.compact(1_049) == "1K"
-      assert Index.compact(1_050) == "1.1K"
-      assert Index.compact(8_429) == "8.4K"
-      assert Index.compact(99_950) == "100K"
-    end
+      assert {_, _, _, "999", "+999 from yesterday", @up} =
+               Enum.find(Index.kpi_cards(stats, @both), &(elem(&1, 0) == "Today's Posts"))
 
-    test "abbreviates millions" do
-      assert Index.compact(1_000_000) == "1M"
-      assert Index.compact(1_240_000) == "1.2M"
-      assert Index.compact(9_950_000) == "10M"
-    end
+      sections = Index.section_cards(stats, @both)
 
-    test "carries into the next tier instead of writing a four-digit abbreviation" do
-      assert Index.compact(999_499) == "999.5K"
-      assert Index.compact(999_500) == "1M"
-      assert Index.compact(999_499_999) == "999.5M"
-      assert Index.compact(999_500_000) == "1B"
+      assert {_, _, _, _, _, [{"Total Views", "8.4K", @body} | _]} =
+               Enum.find(sections, &(elem(&1, 0) == "Analytics"))
+
+      assert {_, _, _, _, _, [{"Total Collections", "1.2M", @body} | _]} =
+               Enum.find(sections, &(elem(&1, 0) == "Collections"))
     end
   end
 
@@ -408,6 +403,19 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       assert Index.delta(3, 3) == "Same as yesterday"
       assert Index.delta(0, 0) == "Same as yesterday"
       assert Index.delta(1, 4) == "−3 from yesterday"
+    end
+
+    test "groups the digits of a large move" do
+      assert Index.delta(1_500, 200) == "+1,300 from yesterday"
+      assert Index.delta(200, 1_500) == "−1,300 from yesterday"
+    end
+  end
+
+  describe "percent/2" do
+    test "writes points per hundred as a percentage" do
+      assert Index.percent(0) == "0%"
+      assert Index.percent(12) == "12%"
+      assert Index.percent(1_250) == "1,250%"
     end
   end
 
@@ -434,15 +442,30 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
     end
   end
 
-  describe "month_label/1 and day_label/1" do
+  describe "month_label/1, day_label/1 and weekday_labels/0" do
     test "spell the month out and abbreviate it in the sidebar" do
       assert Index.month_label(~D[2026-07-20]) == "July 2026"
       assert Index.month_label(~D[2026-01-01]) == "January 2026"
       assert Index.month_label(~D[2026-12-31]) == "December 2026"
 
-      assert Index.day_label(~D[2026-07-20]) == "Monday, Jul 20"
-      assert Index.day_label(~D[2026-07-19]) == "Sunday, Jul 19"
-      assert Index.day_label(~D[2026-01-03]) == "Saturday, Jan 3"
+      assert Index.day_label(~D[2026-07-20]) == "Mon, Jul 20"
+      assert Index.day_label(~D[2026-07-19]) == "Sun, Jul 19"
+      assert Index.day_label(~D[2026-01-03]) == "Sat, Jan 3"
+    end
+
+    test "head the calendar's columns from Sunday" do
+      assert Index.weekday_labels() == ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    end
+  end
+
+  describe "in the admin's language" do
+    test "dates, times and percentages are written as Persian writes them" do
+      Gettext.put_locale(MishkaCmsCore.Gettext, "fa")
+
+      assert Index.day_label(~D[2026-07-20]) == "دوشنبه ۲۰ ژوئیه"
+      assert hd(Index.weekday_labels()) == "یکشنبه"
+      assert Index.post_time(%{published_at: ~U[2026-07-20 14:05:00Z]}) == "۱۴:۰۵"
+      assert Index.percent(12) == "۱۲٪"
     end
   end
 
@@ -546,30 +569,35 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
     end
   end
 
-  describe "ago/1" do
+  describe "ago/2" do
+    @now ~U[2026-07-20 14:05:00Z]
+
     test "steps up a unit at each boundary" do
-      now = DateTime.utc_now()
-      back = &DateTime.add(now, -&1, :second)
+      back = &Index.ago(DateTime.add(@now, -&1, :second), @now)
 
-      assert Index.ago(back.(0)) == "just now"
-      assert Index.ago(back.(59)) == "just now"
-      assert Index.ago(back.(60)) == "1 minute ago"
-      assert Index.ago(back.(120)) == "2 minutes ago"
-      assert Index.ago(back.(3_599)) == "59 minutes ago"
-      assert Index.ago(back.(3_600)) == "1 hour ago"
-      assert Index.ago(back.(86_399)) == "23 hours ago"
-      assert Index.ago(back.(86_400)) == "1 day ago"
-      assert Index.ago(back.(2_591_999)) == "29 days ago"
+      assert back.(0) == "now"
+      assert back.(20) == "20 seconds ago"
+      assert back.(59) == "59 seconds ago"
+      assert back.(60) == "1 minute ago"
+      assert back.(150) == "3 minutes ago"
+      assert back.(3_600) == "1 hour ago"
+      assert back.(5 * 3_600) == "5 hours ago"
+      assert back.(86_400) == "yesterday"
+      assert back.(3 * 86_400) == "3 days ago"
     end
 
-    test "falls back to a date once it is over a month old" do
-      at = DateTime.add(DateTime.utc_now(), -2_592_000, :second)
-
-      assert Index.ago(at) == Calendar.strftime(at, "%b %d, %Y")
+    test "names the month or the year once it is over four weeks old" do
+      assert Index.ago(~U[2026-06-10 14:05:00Z], @now) == "last month"
+      assert Index.ago(~U[2026-03-10 14:05:00Z], @now) == "4 months ago"
+      assert Index.ago(~U[2025-06-10 14:05:00Z], @now) == "last year"
     end
 
-    test "reads a future timestamp as just now rather than a negative age" do
-      assert Index.ago(DateTime.add(DateTime.utc_now(), 3_600, :second)) == "just now"
+    test "reads a future timestamp as now rather than a negative age" do
+      assert Index.ago(DateTime.add(@now, 3_600, :second), @now) == "now"
+    end
+
+    test "measures from the present by default" do
+      assert Index.ago(DateTime.add(DateTime.utc_now(), -3, :day)) == "3 days ago"
     end
   end
 

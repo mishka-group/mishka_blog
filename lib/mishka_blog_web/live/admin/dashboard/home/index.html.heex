@@ -182,17 +182,7 @@
         <div class="overflow-hidden rounded-[14px] border border-[#f0efea]">
           <div class="grid grid-cols-7 border-b border-[#f0efea] bg-[#faf9f6]">
             <div
-              :for={
-                day <- [
-                  gettext("Sun"),
-                  gettext("Mon"),
-                  gettext("Tue"),
-                  gettext("Wed"),
-                  gettext("Thu"),
-                  gettext("Fri"),
-                  gettext("Sat")
-                ]
-              }
+              :for={day <- weekday_labels()}
               class="py-2.5 text-center text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#a8a5a0]"
             >
               {day}
