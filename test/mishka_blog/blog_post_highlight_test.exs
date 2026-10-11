@@ -92,6 +92,32 @@ defmodule MishkaBlog.Test.BlogPostHighlightTest do
       assert code_text(post.content, "erlang") == "f(X) -> X + 1."
     end
 
+    test "JavaScript, TypeScript and CSS too", ctx do
+      js = "const total = items.map((item) =&gt; item.price);"
+      ts = "let name: string = &quot;Mishka&quot;;"
+      css = ".card &gt; a:hover { color: #c2a9ff; margin: 0 4px; }"
+
+      post =
+        create!(
+          ctx.site,
+          ctx.editor,
+          block("js", js) <> block("typescript", ts) <> block("css", css)
+        )
+
+      assert count(post.content, "pre.highlight > code.language-js > span.kd") == 1
+      assert count(post.content, "pre.highlight > code.language-js > span.nf") == 1
+      assert code_text(post.content, "js") == "const total = items.map((item) => item.price);"
+
+      assert count(post.content, "pre.highlight > code.language-typescript > span.s") == 1
+      assert code_text(post.content, "typescript") == ~s(let name: string = "Mishka";)
+
+      assert count(post.content, "pre.highlight > code.language-css > span.nc") == 1
+      assert count(post.content, "pre.highlight > code.language-css > span.mi") == 1
+
+      assert code_text(post.content, "css") ==
+               ".card > a:hover { color: #c2a9ff; margin: 0 4px; }"
+    end
+
     test "and under the names a lexer is known by, and its file extensions", ctx do
       samples = [
         {"ex", "def a, do: 1"},
@@ -99,7 +125,9 @@ defmodule MishkaBlog.Test.BlogPostHighlightTest do
         {"iex", "def a, do: 1"},
         {"Elixir", "def a, do: 1"},
         {"eex", "&lt;%= @name %&gt;"},
-        {"erl", "f(X) -&gt; X."}
+        {"erl", "f(X) -&gt; X."},
+        {"javascript", "let a = 1;"},
+        {"ts", "let a = 1;"}
       ]
 
       post =
@@ -165,6 +193,20 @@ defmodule MishkaBlog.Test.BlogPostHighlightTest do
       assert count(post.content, "script") == 0
       refute post.content =~ "<script"
       assert code_text(post.content, "elixir") == ~s|html = "<script>alert(1)</script>" && :ok|
+    end
+
+    test "a block showing a code block shows it as text, and holds no block of its own", ctx do
+      shown =
+        "&lt;pre&gt;&lt;code class=&quot;language-elixir&quot;&gt;IO.puts(1)&lt;/code&gt;&lt;/pre&gt;"
+
+      post = create!(ctx.site, ctx.editor, block("html", shown))
+
+      assert count(post.content, "pre.highlight > code.language-html > span.nt") > 1
+      assert count(post.content, "pre") == 1
+      assert count(post.content, "code") == 1
+
+      assert code_text(post.content, "html") ==
+               ~s|<pre><code class="language-elixir">IO.puts(1)</code></pre>|
     end
 
     test "a tag written into a block is gone before anything is highlighted", ctx do

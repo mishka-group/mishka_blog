@@ -4,8 +4,8 @@ defmodule MishkaBlog.Resources.Changes.HighlightCode do
 
   A block is a `<pre>` holding one `<code class="language-x">` whose code is still plain text, and
   whose language names a lexer Makeup has registered — by name (`elixir`, `iex`, `heex`, `eex`,
-  `erlang`, `erl`, `html`, `json`, `diff`, `sql`) or by file extension (`ex`, `exs`, `hrl`, `htm`,
-  `patch`). It is stored in the shape posts imported from the old site already hold:
+  `erlang`, `erl`, `html`, `json`, `diff`, `sql`, `js`, `javascript`, `ts`, `typescript`, `css`) or
+  by file extension (`ex`, `exs`, `hrl`, `htm`, `patch`). It is stored in the shape posts imported from the old site already hold:
   `<pre class="highlight"><code class="language-x">` with one `<span class="…">` per token, the
   classes the kit's `blog-code-highlight` stylesheet colours. Reading a post highlights nothing.
 
