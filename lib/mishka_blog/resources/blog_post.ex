@@ -2945,6 +2945,14 @@ defmodule MishkaBlog.BlogPost do
       description "The icon classes the content names, nil when it names none"
     end
 
+    # WORKED OUT WITH THE CONTENT, never written by hand nor on a read —
+    # `MishkaBlog.Resources.Changes.ContentFacts`.
+    attribute :content_classes, {:array, :string} do
+      allow_nil? true
+      public? false
+      description "The classes the content writes, nil when it writes none"
+    end
+
     attribute :reading_time_minutes, :integer do
       allow_nil? true
       public? true
