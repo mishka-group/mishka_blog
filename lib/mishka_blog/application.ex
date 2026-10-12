@@ -65,8 +65,8 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.TeamShareCard
   ]
 
-  # Names the components the site's posts draw, so its stylesheet carries them (a
-  # `runtime:compile:content_components` plugin).
+  # Names the components the site's posts draw and the icons they name, so its stylesheet carries
+  # them (a `runtime:compile:content_components` plugin).
   @runtime_plugins [
     MishkaBlog.Plugins.ContentComponents
   ]
