@@ -1513,6 +1513,120 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert body(view) |> LazyHTML.query("p") |> Enum.count() == 1
     end
 
+    # A COMPONENT'S MARKUP AS CHELEKOM WRITES IT: every element carries classes of its own. Each is
+    # marked `data-part="component"` too, so a test can tell it from the post's own HTML.
+    defp marked!(site, template) do
+      name = "post-marked-#{System.unique_integer([:positive])}"
+      known!(site, name)
+      create_component!(name: name, site_id: site.id, active: true, template: template)
+    end
+
+    defp crumbs!(site),
+      do:
+        marked!(
+          site,
+          ~S|<nav data-role="post-crumbs" data-part="component" class="text-sm"><ol data-part="component" class="flex items-center gap-2"><li data-part="component" class="flex items-center"><a data-part="component" href="https://example.com/home" class="text-[#5b57d6]">Home</a></li><li data-part="component" class="flex items-center">Here</li></ol></nav>|
+        )
+
+    defp heading!(site),
+      do:
+        marked!(
+          site,
+          ~S|<h2 data-role="post-heading" data-part="component" class="text-3xl font-black">Drawn heading</h2>|
+        )
+
+    # WHAT EACH CONTENT STYLE ON THE BODY REACHES: every `[selector]:utility` class of
+    # `blog-detail-body`, read as the rule Tailwind writes for it — `&` the body, `_` a space — and
+    # run over the drawn page. One `{utility, elements}` per class.
+    defp styled(view) do
+      page = view |> render_async(@async) |> LazyHTML.from_fragment()
+      body = ~s([data-role="blog-detail-body"])
+      [classes] = page |> LazyHTML.query(body) |> LazyHTML.attribute("class")
+
+      for class <- String.split(classes),
+          [_class, selector, utility] <- [Regex.run(~r/\A\[(.+)\]:([^\]]+)\z/, class)] do
+        rule = selector |> String.replace("_", " ") |> String.replace("&", body)
+        {utility, page |> LazyHTML.query(rule) |> Enum.to_list()}
+      end
+    end
+
+    defp reached(styled, utility),
+      do: for({^utility, elements} <- styled, element <- elements, do: element)
+
+    defp reached_component(styled),
+      do:
+        for(
+          {_utility, elements} <- styled,
+          element <- elements,
+          LazyHTML.attribute(element, "data-part") == ["component"],
+          do: element
+        )
+
+    test "the post's own list and link take its styles, and a component's list and link do not",
+         %{site: site} do
+      crumbs = crumbs!(site)
+
+      post =
+        written!(
+          site,
+          "Styled",
+          ~s(<p>Read <a href="https://example.com/guide">the guide</a> first.</p><ul><li><p>Own item</p></li></ul><ol><li><p>First step</p></li></ol><p>[[component #{crumbs.name} /]]</p>)
+        )
+
+      {:ok, view, _html} = mount_page(site, "blog-post-detail", %{slug: post.slug})
+
+      assert [_nav] =
+               body(view) |> LazyHTML.query(~s([data-role="post-crumbs"])) |> Enum.to_list()
+
+      styles = styled(view)
+
+      assert styles |> reached("list-disc") |> Enum.map(&LazyHTML.text/1) == ["Own item"]
+      assert styles |> reached("list-decimal") |> Enum.map(&LazyHTML.text/1) == ["First step"]
+
+      assert styles |> reached("ml-5") |> Enum.map(&LazyHTML.text/1) == [
+               "Own item",
+               "First step"
+             ]
+
+      assert styles |> reached("underline") |> Enum.flat_map(&LazyHTML.attribute(&1, "href")) ==
+               ["https://example.com/guide"]
+
+      assert reached_component(styles) == []
+    end
+
+    # A COMPONENT IS NOT TEXT WHEREVER IT IS DRAWN: one whose own root is a heading, and one placed
+    # inside a list item, keep the classes they were drawn with.
+    test "a component drawn as a heading, or inside a list item, is left to its own classes",
+         %{site: site} do
+      heading = heading!(site)
+      crumbs = crumbs!(site)
+
+      post =
+        written!(
+          site,
+          "Nested",
+          ~s(<h2>Own heading</h2><p>[[component #{heading.name} /]]</p><ul><li><p>Own item</p><p>[[component #{crumbs.name} /]]</p></li></ul><blockquote><p>Quoted <a href="https://example.com/source">source</a></p></blockquote>)
+        )
+
+      {:ok, view, _html} = mount_page(site, "blog-post-detail", %{slug: post.slug})
+
+      assert [_heading] =
+               body(view) |> LazyHTML.query(~s([data-role="post-heading"])) |> Enum.to_list()
+
+      assert [_crumbs] =
+               body(view) |> LazyHTML.query(~s(li > [data-role="post-crumbs"])) |> Enum.to_list()
+
+      styles = styled(view)
+
+      assert styles |> reached("text-lg") |> Enum.map(&LazyHTML.text/1) == ["Own heading"]
+      assert styles |> reached("list-disc") |> Enum.count() == 1
+
+      assert styles |> reached("underline") |> Enum.flat_map(&LazyHTML.attribute(&1, "href")) ==
+               ["https://example.com/source"]
+
+      assert reached_component(styles) == []
+    end
+
     test "a stateful block in a post is a live component of its own", %{site: site} do
       known!(site, "blog-featured-posts")
       create_blog_post!(site_id: site.id, title: "Starred", status: :published, featured: true)

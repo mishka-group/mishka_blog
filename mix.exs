@@ -49,7 +49,7 @@ defmodule MishkaBlog.MixProject do
       {:makeup_ts, "~> 0.2"},
       {:makeup_css, "~> 0.2"},
       {:oban, "~> 2.24"},
-      {:mishka_installer, "~> 0.1"},
+      {:mishka_installer, "~> 0.1.13"},
       {:guarded_struct, "~> 0.1"},
       {:mishka_cms_core, path: "../mishka_cms_core"},
       {:mishka_gervaz, path: "../mishka_gervaz"}
