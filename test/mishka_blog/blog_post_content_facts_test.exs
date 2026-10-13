@@ -1,8 +1,8 @@
 defmodule MishkaBlog.Test.BlogPostContentFactsTest do
   @moduledoc """
   What a post's content says about it, stored when the content is written —
-  `MishkaBlog.Resources.Changes.ContentFacts`: how long it takes to read, and the components and
-  the icons it names, which `MishkaBlog.Plugins.ContentComponents` hands a site's stylesheet.
+  `MishkaBlog.Resources.Changes.ContentFacts`: how long it takes to read, and the components, the
+  icons and the classes it names, which `MishkaBlog.Plugins.ContentComponents` hands a site's stylesheet.
   Reading a post works out none of them.
   """
   use MishkaBlog.DataCase, async: false
@@ -177,6 +177,62 @@ defmodule MishkaBlog.Test.BlogPostContentFactsTest do
     end
   end
 
+  # A COMPONENT THAT TAKES A CLASS STRING in an attribute declares `examples` for it and no `values`.
+  @open_attrs [
+    %{
+      "name" => "size",
+      "type" => "string",
+      "opts" => %{"default" => "small", "examples" => ["small", "large"]}
+    },
+    %{
+      "name" => "color",
+      "type" => "string",
+      "opts" => %{"default" => "base", "values" => ["base", "dark"]}
+    }
+  ]
+
+  describe "content_classes" do
+    test "are the classes the content's HTML, its markers' *_class and its components' open attributes write",
+         %{site: site} do
+      create_component!(
+        name: "open-badge",
+        attrs: @open_attrs,
+        active: true,
+        precompile: false,
+        site_id: site.id
+      )
+
+      post =
+        create_blog_post!(
+          site_id: site.id,
+          content:
+            ~s(<div class="bg-[#282828] text-white">x</div>) <>
+              ~s([[component slider track_class="h-1 bg-neutral-200" /]]) <>
+              ~s([[component open-badge size="leading-5 py-2" color="bg-red-500" /]])
+        )
+
+      assert stored(post).content_classes == [
+               "bg-[#282828]",
+               "text-white",
+               "h-1",
+               "bg-neutral-200",
+               "leading-5",
+               "py-2"
+             ]
+    end
+
+    test "are nothing for content that writes none, and left alone by a write that leaves it alone",
+         %{site: site} = context do
+      post = create_blog_post!(site_id: site.id, content: ~s(<p class="bg-[#282828]">x</p>))
+
+      assert stored(write!(post, :update, %{title: "Renamed"}, context)).content_classes ==
+               ["bg-[#282828]"]
+
+      assert stored(write!(post, :update, %{content: "<p>plain</p>"}, context)).content_classes ==
+               nil
+    end
+  end
+
   # A SITE'S STYLESHEET IS BUILT FROM WHAT IT REACHES, and a post's components are in no template.
   describe "the names a site's stylesheet hears" do
     test "are those its published posts name, each once", %{site: site} do
@@ -249,6 +305,68 @@ defmodule MishkaBlog.Test.BlogPostContentFactsTest do
     end
   end
 
+  # A CLASS A POST WRITES IS IN NO TEMPLATE EITHER: a marker's `track_class="h-1"` reaches its
+  # component as an expression, and a post's body is never scanned.
+  describe "the classes a site's stylesheet hears" do
+    test "are those its published posts write, each once", %{site: site} do
+      create_blog_post!(
+        site_id: site.id,
+        status: :published,
+        content: ~s(<p class="bg-[#282828] p-2">[[component callout thumb_class="size-4" /]]</p>)
+      )
+
+      create_blog_post!(site_id: site.id, status: :published, content: ~s(<p class="p-2">x</p>))
+      create_blog_post!(site_id: site.id, status: :draft, content: ~s(<p class="draft">x</p>))
+
+      assert {:reply, %{components: ["callout"], classes: classes}} =
+               ContentComponents.call(%{
+                 site: site.name,
+                 site_id: site.id,
+                 components: [],
+                 icons: [],
+                 classes: ["kept"]
+               })
+
+      assert Enum.sort(classes) == ["bg-[#282828]", "kept", "p-2", "size-4"]
+    end
+
+    test "are not asked of a build that asks for none, which still hears the names", %{site: site} do
+      create_blog_post!(
+        site_id: site.id,
+        status: :published,
+        content: ~s(<p class="p-2">[[component callout /]]</p>)
+      )
+
+      assert {:reply, answer} =
+               ContentComponents.call(%{
+                 site: site.name,
+                 site_id: site.id,
+                 components: [],
+                 icons: []
+               })
+
+      assert answer.components == ["callout"]
+      refute Map.has_key?(answer, :classes)
+    end
+  end
+
+  describe "a write that changes the classes a published post writes" do
+    setup :open_site
+
+    test "rebuilds the site's stylesheet when it writes one no published post did", ctx do
+      write!(ctx.post, :update, %{content: ~s(<p class="hero-cloud bg-[#282828]">x</p>)}, ctx)
+
+      assert [_job] = css_jobs(ctx.site)
+    end
+
+    test "rebuilds nothing for classes other published posts already write", ctx do
+      write!(ctx.post, :update, %{content: ~s(<p class="hero-cloud hero-star m-4">x</p>)}, ctx)
+
+      assert stored(ctx.post).content_classes == ["hero-cloud", "hero-star", "m-4"]
+      assert css_jobs(ctx.site) == []
+    end
+  end
+
   # A WRITE THAT MAKES AN ICON LIVE asks for the site's stylesheet again, as one that makes a
   # component name live does. `TailwindCompiler.schedule/1` enqueues nothing under the `:env_test?`
   # flag, so it is switched off once the posts a test starts from exist.
@@ -295,6 +413,8 @@ defmodule MishkaBlog.Test.BlogPostContentFactsTest do
       content: ~s(<span class="hero-star"></span>)
     )
 
+    create_blog_post!(site_id: site.id, status: :published, content: ~s(<p class="m-4">x</p>))
+
     Application.put_env(:mishka_cms_core, :env_test?, false)
     on_exit(fn -> Application.put_env(:mishka_cms_core, :env_test?, true) end)
 
@@ -325,6 +445,14 @@ defmodule MishkaBlog.Test.BlogPostContentFactsTest do
       assert ContentFacts.newly_live(draft, %{draft | status: :published}) == ["a"]
       assert ContentFacts.newly_live(%{draft | status: :published}, draft) == []
       assert ContentFacts.newly_live(%BlogPost{}, draft) == []
+    end
+
+    test "is the same question of the classes a post writes" do
+      was = %{status: :published, content_classes: ["p-2"]}
+      now = %{was | content_classes: ["p-2", "bg-[#282828]"]}
+
+      assert ContentFacts.newly_live(was, now, :content_classes) == ["bg-[#282828]"]
+      assert ContentFacts.newly_live(now, was, :content_classes) == []
     end
 
     test "is the same question of the icons a post names" do

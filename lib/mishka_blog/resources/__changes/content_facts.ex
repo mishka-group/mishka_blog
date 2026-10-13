@@ -9,9 +9,13 @@ defmodule MishkaBlog.Resources.Changes.ContentFacts do
     * `content_icons` — the icon classes it names, in a marker's attribute or in its HTML
       (`MishkaCmsCore.Runtime.ContentComponents.icons/1`), `nil` when it names none. The site's
       stylesheet carries a rule for each — see `MishkaBlog.Plugins.ContentComponents`.
+    * `content_classes` — the classes it writes: its HTML's class lists, a marker's `class` and
+      `*_class` attributes, and the attributes its component takes a class string in
+      (`MishkaCmsCore.Runtime.ContentComponents.site_classes/2`), `nil` when it writes none. The
+      site's stylesheet is built with each — see `MishkaBlog.Plugins.ContentComponents`.
     * `reading_time_minutes` — its words at 200 a minute, rounded up, never under 1.
 
-  All three are worked out in a `before_action` hook, which runs after every change an action lists
+  All four are worked out in a `before_action` hook, which runs after every change an action lists
   — the `guardedstruct` sanitizer and `MishkaBlog.Resources.Changes.HighlightCode` included — so
   they are read off the content that is stored. A write that leaves `content` alone leaves them
   alone, unless the post has no reading time yet — a row this change never saw — which any save
@@ -19,11 +23,11 @@ defmodule MishkaBlog.Resources.Changes.ContentFacts do
 
   ## The stylesheet
 
-  A write that makes a name or an icon live on its site — a published post names it now and did
-  not before, and no other published post of the site names it — rebuilds the site's stylesheet,
-  through `MishkaCmsCore.Runtime.Compilers.TailwindCompiler.schedule/1`. The job is enqueued in the
-  write's own transaction, so a write rolled back asks for nothing. A name or an icon dropped, or a
-  post unpublished, rebuilds nothing.
+  A write that makes a name, an icon or a class live on its site — a published post names it now and
+  did not before, and no other published post of the site names it — rebuilds the site's
+  stylesheet, through `MishkaCmsCore.Runtime.Compilers.TailwindCompiler.schedule/1`. The job is
+  enqueued in the write's own transaction, so a write rolled back asks for nothing. A name, an icon
+  or a class dropped, or a post unpublished, rebuilds nothing.
 
   ## Usage
 
@@ -38,13 +42,13 @@ defmodule MishkaBlog.Resources.Changes.ContentFacts do
 
   require Ash.Query
 
-  alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
+  alias MishkaCmsCore.Runtime.Compilers.{SitemapCompiler, TailwindCompiler}
   alias MishkaCmsCore.Runtime.ContentComponents
 
   @words_a_minute 200
 
   # What a site's stylesheet is built from, each a list a published post makes live.
-  @styled [:content_components, :content_icons]
+  @styled [:content_components, :content_icons, :content_classes]
 
   @impl true
   def change(changeset, _opts, _context) do
@@ -65,6 +69,10 @@ defmodule MishkaBlog.Resources.Changes.ContentFacts do
           :content_icons,
           stored(ContentComponents.icons(content))
         )
+        |> Ash.Changeset.force_change_attribute(
+          :content_classes,
+          stored(ContentComponents.site_classes(content, site_of(changeset)))
+        )
         |> Ash.Changeset.force_change_attribute(:reading_time_minutes, reading_time(content))
 
       _unchanged ->
@@ -83,6 +91,9 @@ defmodule MishkaBlog.Resources.Changes.ContentFacts do
     do: Ash.Changeset.get_attribute(changeset, :content)
 
   defp missing_facts(_changeset), do: nil
+
+  defp site_of(changeset),
+    do: Ash.Changeset.get_attribute(changeset, :site_id) || changeset.tenant
 
   defp stored([]), do: nil
   defp stored(found), do: found
@@ -107,15 +118,21 @@ defmodule MishkaBlog.Resources.Changes.ContentFacts do
     {:ok, post}
   end
 
-  defp unstyled?(was, post, fact),
-    do: was |> newly_live(post, fact) |> Enum.any?(&(not named_elsewhere?(post, fact, &1)))
+  defp unstyled?(was, post, fact) do
+    case newly_live(was, post, fact) do
+      [] -> false
+      live -> not named_elsewhere?(post, fact, live)
+    end
+  end
 
   @doc """
   What `post` makes live of `fact` that `was` did not — its component names
-  (`:content_components`, the default) or its icons (`:content_icons`): what a published post
-  lists, less what the post published before the write already listed.
+  (`:content_components`, the default), its icons (`:content_icons`) or its classes
+  (`:content_classes`): what a published post lists, less what the post published before the write
+  already listed.
   """
-  @spec newly_live(map(), map(), :content_components | :content_icons) :: [String.t()]
+  @spec newly_live(map(), map(), :content_components | :content_icons | :content_classes) ::
+          [String.t()]
   def newly_live(was, post, fact \\ :content_components), do: live(post, fact) -- live(was, fact)
 
   defp live(%{status: :published} = post, fact) do
@@ -127,12 +144,25 @@ defmodule MishkaBlog.Resources.Changes.ContentFacts do
 
   defp live(_post, _fact), do: []
 
+  # Whether every one of `values` is named by another published post: the posts naming any of them,
+  # read until each is found.
+  #
   # READ AS THE SYSTEM, as the site's stylesheet is built: a post locked to some readers draws its
-  # components and icons for them, so it is styled whoever reads it.
-  defp named_elsewhere?(post, fact, value) do
+  # components, icons and classes for them, so it is styled whoever reads it.
+  defp named_elsewhere?(post, fact, values) do
     MishkaBlog.BlogPost
     |> Ash.Query.for_read(:public_list, %{}, tenant: post.site_id, authorize?: false)
-    |> Ash.Query.filter(id != ^post.id and has(^ref(fact), ^value))
-    |> Ash.exists?(tenant: post.site_id, authorize?: false)
+    |> Ash.Query.filter(id != ^post.id and intersects(^ref(fact), ^values))
+    |> Ash.Query.select([fact])
+    |> SitemapCompiler.stream_rows(tenant: post.site_id, authorize?: false)
+    |> Enum.reduce_while(MapSet.new(values), fn other, unnamed ->
+      left = MapSet.difference(unnamed, MapSet.new(Map.get(other, fact) || []))
+
+      case MapSet.size(left) do
+        0 -> {:halt, left}
+        _some -> {:cont, left}
+      end
+    end)
+    |> Enum.empty?()
   end
 end
