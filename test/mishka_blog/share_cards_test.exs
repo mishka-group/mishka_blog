@@ -2,8 +2,8 @@ defmodule MishkaBlog.ShareCardsTest do
   @moduledoc """
   The blog's share cards (`MishkaCmsCore.Runtime.ShareCard`): which card each record shows
   (`MishkaBlog.ShareCards.target/1`), the plugins that look at it again after each record is saved
-  — each on its own resource's `after_save` event, so a save of another resource never reaches it —
-  and the Share image field each record's edit modal draws it in.
+  — each on its own resource's `after_save` event, so a save of another resource never reaches it,
+  and on the `:share_cards` queue — and the Share image field each record's edit modal draws it in.
   """
   use MishkaBlog.DataCase, async: false
   use Oban.Testing, repo: MishkaBlog.Repo
@@ -92,6 +92,13 @@ defmodule MishkaBlog.ShareCardsTest do
                  "force" => false
                }
              ]
+    end
+
+    test "its look waits on the share-card queue, never on :assets", %{site: site} do
+      create_blog_post!(site_id: site.id, status: :published, slug: "queued", language: "en")
+
+      assert [%{queue: "share_cards"}] = all_enqueued(worker: ShareCardRefreshWorker)
+      assert all_enqueued(queue: :assets) == []
     end
 
     test "an update is looked at too", %{site: site} do

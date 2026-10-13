@@ -12,17 +12,22 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
   bundle's own version staying where it is.
   """
   use MishkaBlog.ConnCase
+  use Oban.Testing, repo: MishkaBlog.Repo
 
   import Phoenix.LiveViewTest
   import MishkaBlog.Test.Factory
 
+  alias MishkaBlog.Plugins.ShareCardTargets
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.{Component, ExtensionProvision}
   alias MishkaCmsCore.Runtime.Handlers.UiKitUpgrade
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.PageDraft
+  alias MishkaCmsCore.Runtime.ShareCard
   alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Runtime.Workers.{ShareCardPlanWorker, ShareCardRefreshWorker}
+  alias MishkaInstaller.Event.{Event, EventHandler}
   alias MishkaBlog.Test.VersionHelpers
 
   require Ash.Query
@@ -274,6 +279,41 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
 
       assert html =~ "That is not a site this page can update."
       refute has_element?(view, "#blog-kit-upgrade-report")
+
+      close(view)
+    end
+
+    test "redraws the blog's own share cards on the site it is about", %{conn: conn, site: site} do
+      MishkaCmsCore.PluginRegistrations.reconcile(false)
+      {:ok, _} = ShareCardTargets.register()
+      on_exit(fn -> Event.unregister(:name, ShareCardTargets, false) end)
+      :ok = EventHandler.do_compile(ShareCard.targets_event(), :start, false)
+
+      create_blog_post!(site_id: site.id, status: :published, slug: "shared", language: "en")
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/blog")
+      view |> form("#blog-kit-upgrade-form", %{"site_id" => site.id}) |> render_submit()
+
+      assert has_element?(view, "#blog-kit-upgrade-share-cards")
+      view |> element("#blog-kit-upgrade-share-cards-redraw-button") |> render_click()
+
+      planner = %{site_id: site.id, force: true, producer: "mishka_blog"}
+      assert_enqueued([worker: ShareCardPlanWorker, args: planner], 1_000)
+      assert :ok = perform_job(ShareCardPlanWorker, planner)
+
+      looks = Enum.filter(all_enqueued(worker: ShareCardRefreshWorker), & &1.args["force"])
+
+      assert Enum.map(looks, & &1.args["target"]) == [
+               %{"record" => "blog:post", "params" => %{"slug" => "shared", "lang" => "en"}}
+             ]
+
+      render_async(view, 5_000)
+
+      assert has_element?(
+               view,
+               "#blog-kit-upgrade-share-cards-redraw-status",
+               "Queued #{length(looks)} share card"
+             )
 
       close(view)
     end
