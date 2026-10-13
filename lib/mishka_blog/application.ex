@@ -56,13 +56,15 @@ defmodule MishkaBlog.Application do
   ]
 
   # Each record's share card looked at again after the record is saved, on its own
-  # `blog:<resource>:after_save` event (`MishkaCmsCore.Runtime.ShareCard`).
+  # `blog:<resource>:after_save` event, and every card of a site named for a redraw of them all, on
+  # `runtime:share_card:targets` (`MishkaCmsCore.Runtime.ShareCard`).
   @share_card_plugins [
     MishkaBlog.Plugins.PostShareCard,
     MishkaBlog.Plugins.CollectionShareCard,
     MishkaBlog.Plugins.TagShareCard,
     MishkaBlog.Plugins.BloggerShareCard,
-    MishkaBlog.Plugins.TeamShareCard
+    MishkaBlog.Plugins.TeamShareCard,
+    MishkaBlog.Plugins.ShareCardTargets
   ]
 
   # Names the components the site's posts draw, the icons they name and the classes they write, so
