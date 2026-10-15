@@ -26,14 +26,17 @@ defmodule MishkaBlog.Plugins.PageSeo do
     * `type` — `"article"`;
     * `tags` — `author` (the authors' names), a `twitter:creator` with the X account of the first
       author, in the authors' order, who has one, `article:published_time`, `article:modified_time`,
-      `article:section` (the first category), one `article:tag` per tag, and a `rel="alternate"`
-      link per language the post is published in among the site's languages, with `x-default` at
-      the site's primary one, when there are two or more. The post's own `seo_tags` come last and
-      replace any of these they name;
+      `article:section` (the first category), one `article:tag` per tag, the pairs Slack and
+      Discord show under a link — `twitter:label1`/`twitter:data1`, then `twitter:label2`/
+      `twitter:data2`: "Written by" the authors' names, "Reading time" the post's, each only when
+      known and numbered from 1 — and a `rel="alternate"` link per language the post is published
+      in among the site's languages, with `x-default` at the site's primary one, when there are two
+      or more. The post's own `seo_tags` come last and replace any of these they name;
     * `schema` — the post's own `schema` when it holds one, else a `BlogPosting` whose `author` is
       a `Person` per author — their name, their address on the site's `"blog:author"` page and
-      `sameAs` their social links — and whose `publisher` is the site's Organization by its `@id`,
-      `<site address>/#organization`; then a `BreadcrumbList`, Home → Blog → the post;
+      `sameAs` their social links — whose `articleSection` is the first category, and whose
+      `publisher` is the site's Organization by its `@id`, `<site address>/#organization`; then a
+      `BreadcrumbList`, Home → Blog → the post;
     * `vars` — `post.title`, `post.excerpt`, `post.image`, `post.author`, `post.published_at`,
       `post.modified_at`, `post.url`, `post.collection`, `post.tags`, and `post.rating` (the
       readers' average, one decimal) with `post.rating_count` once a reader has rated it.
@@ -303,6 +306,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         "publisher" => publisher(base),
         "mainEntityOfPage" => seo.url,
         "inLanguage" => post.language,
+        "articleSection" => section,
         "keywords" => Enum.join(tag_names, ", ")
       })
 
@@ -318,6 +322,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         meta("property", "article:modified_time", modified),
         meta("property", "article:section", section),
         Enum.map(tag_names, &meta("property", "article:tag", &1)),
+        preview_pairs(authors, post),
         alternates(post, seo, base)
       ])
 
@@ -549,6 +554,22 @@ defmodule MishkaBlog.Plugins.PageSeo do
   defp minutes(_unknown), do: nil
 
   defp members(count), do: ngettext("%{count} member", "%{count} members", count)
+
+  # The label and value pairs Slack and Discord show under a link's description, as
+  # `twitter:label<n>` and `twitter:data<n>`: who wrote the post and how long it takes to read. A
+  # pair is shown only when both halves are there, so the ones known are numbered from 1.
+  defp preview_pairs(authors, post) do
+    [
+      {gettext("Written by"), Enum.join(authors, ", ")},
+      {gettext("Reading time"), minutes(post)}
+    ]
+    |> Enum.filter(fn {_label, value} -> is_binary(value) and value != "" end)
+    |> Enum.with_index(1)
+    |> Enum.flat_map(fn {{label, value}, number} ->
+      meta("name", "twitter:label#{number}", label) ++
+        meta("name", "twitter:data#{number}", value)
+    end)
+  end
 
   # The text the bio's HTML shows, on one line: escaped once, where the head writes it out.
   defp plain(html) when is_binary(html),

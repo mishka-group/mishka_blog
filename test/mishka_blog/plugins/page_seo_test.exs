@@ -364,6 +364,21 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       refute Map.has_key?(schema_of(answered, "BlogPosting"), "author")
     end
 
+    test "names its section in the JSON-LD as well as in the tags, and none without a category",
+         %{site: site} do
+      filed = published!(site)
+      category = create_collection!(site_id: site.id, status: :active, name: "Engineering")
+      create_post_collection!(post_id: filed.id, collection_id: category.id)
+      unfiled = published!(site)
+
+      filed = answer(given(site, :post, %{"lang" => "en", "slug" => filed.slug}))
+      unfiled = answer(given(site, :post, %{"lang" => "en", "slug" => unfiled.slug}))
+
+      assert schema_of(filed, "BlogPosting")["articleSection"] == "Engineering"
+      assert contents(filed.tags, "property", "article:section") == ["Engineering"]
+      refute Map.has_key?(schema_of(unfiled, "BlogPosting"), "articleSection")
+    end
+
     test "the post's own tags replace the ones built for it, and its own schema the posting", %{
       site: site
     } do
@@ -383,7 +398,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       answered = answer(given(site, :post, %{"lang" => "en", "slug" => post.slug}))
 
       assert contents(answered.tags, "property", "article:section") == ["Own"]
-      assert [_published, _modified, own_section, creator] = answered.tags
+      assert [_published, _modified, _label, _time, own_section, creator] = answered.tags
       assert own_section.content == "Own"
       assert creator.content == "@{{post.title}}"
 
@@ -480,6 +495,82 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
 
       assert answered == %{given | var_docs: answered.var_docs}
       assert "post.title" in keys(answered.var_docs)
+    end
+  end
+
+  describe "the link preview pairs of a post" do
+    defp preview(answered) do
+      for number <- 1..2,
+          [label] <- [contents(answered.tags, "name", "twitter:label#{number}")],
+          [value] <- [contents(answered.tags, "name", "twitter:data#{number}")],
+          do: {label, value}
+    end
+
+    defp words(count), do: "<p>" <> String.duplicate("word ", count) <> "</p>"
+
+    test "name who wrote the post and how long it takes to read, pair 1 and pair 2", %{site: site} do
+      post = published!(site, content: words(450))
+
+      for name <- ["Mona", "Shahryar"] do
+        blogger = create_blogger!(site_id: site.id, display_name: name)
+        create_post_blogger!(post_id: post.id, blogger_id: blogger.id)
+      end
+
+      answered = answer(given(site, :post, %{"lang" => "en", "slug" => post.slug}))
+
+      assert preview(answered) == [
+               {"Written by", "Mona, Shahryar"},
+               {"Reading time", "3 min read"}
+             ]
+    end
+
+    test "number the pairs known from 1: a post with no author leads with its reading time", %{
+      site: site
+    } do
+      post = published!(site, content: words(650))
+      answered = answer(given(site, :post, %{"lang" => "en", "slug" => post.slug}))
+
+      assert preview(answered) == [{"Reading time", "4 min read"}]
+      assert contents(answered.tags, "name", "twitter:label2") == []
+      assert contents(answered.tags, "name", "twitter:data2") == []
+    end
+
+    test "reach the head as meta tags, once", %{site: site} do
+      post = published!(site, content: words(10))
+      blogger = create_blogger!(site_id: site.id, display_name: "Ava")
+      create_post_blogger!(post_id: post.id, blogger_id: blogger.id)
+
+      head = head(given(site, :post, %{"lang" => "en", "slug" => post.slug}))
+
+      assert head_contents(head, "twitter:label1") == ["Written by"]
+      assert head_contents(head, "twitter:data1") == ["Ava"]
+      assert head_contents(head, "twitter:label2") == ["Reading time"]
+      assert head_contents(head, "twitter:data2") == ["1 min read"]
+    end
+
+    test "are replaced by the post's own, tag by tag", %{site: site} do
+      own = %{tag: "meta", attrs: %{"name" => "twitter:data2"}, content: "A coffee"}
+      post = published!(site, content: words(10), seo_tags: [own])
+      blogger = create_blogger!(site_id: site.id, display_name: "Ava")
+      create_post_blogger!(post_id: post.id, blogger_id: blogger.id)
+
+      answered = answer(given(site, :post, %{"lang" => "en", "slug" => post.slug}))
+
+      assert preview(answered) == [{"Written by", "Ava"}, {"Reading time", "A coffee"}]
+    end
+
+    test "are a post's alone: a category and a tag have none", %{site: site} do
+      for kind <- [:category, :tag] do
+        record =
+          case kind do
+            :category -> create_collection!(site_id: site.id, status: :active, name: "Elixir")
+            :tag -> create_blog_tag!(site_id: site.id, name: "elixir")
+          end
+
+        answered = answer(given(site, kind, %{"lang" => "en", "slug" => record.slug}))
+
+        assert preview(answered) == []
+      end
     end
   end
 
