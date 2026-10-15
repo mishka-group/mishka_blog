@@ -93,6 +93,14 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
 
   defp robots(content), do: [%{tag: "meta", attrs: %{"name" => "robots"}, content: content}]
 
+  # The head's JSON-LD without the site's own `WebSite` and `Organization`, which core may add to
+  # every page.
+  defp page_schema(head) do
+    head.schema
+    |> Enum.map(&Jason.decode!/1)
+    |> Enum.reject(&(&1["@type"] in ["WebSite", "Organization"]))
+  end
+
   # The head core builds from the answer, as `MishkaCmsWeb.RuntimeLive` builds it.
   defp head(given), do: given |> answer() |> Seo.accept(given) |> Seo.head(base: base())
 
@@ -411,8 +419,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       assert head.title == "Ash in production | Blog"
       assert head.description == "What a year of Ash taught us. Read on."
 
-      assert [%{"@type" => "Article", "headline" => "Ash in production"}] =
-               Enum.map(head.schema, &Jason.decode!/1)
+      assert [%{"@type" => "Article", "headline" => "Ash in production"}] = page_schema(head)
 
       # `post.slug` is no variable of the post page, so the stored og:image is left out and the
       # post's featured image is the image.
@@ -424,8 +431,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       assert head.title == "Ash in production"
       assert head.description == "What a year of Ash taught us."
 
-      assert [%{"@type" => "BlogPosting"}, %{"@type" => "BreadcrumbList"}] =
-               Enum.map(head.schema, &Jason.decode!/1)
+      assert [%{"@type" => "BlogPosting"}, %{"@type" => "BreadcrumbList"}] = page_schema(head)
     end
 
     test "answers the post's own permissions, and the head keeps a locked one out of an index", %{
@@ -592,66 +598,44 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
     end
   end
 
-  # A CATEGORY OR A TAG WHOSE PAGE LISTS FEWER THAN THREE POSTS is kept out of an index, its links
-  # still followed: its published posts in its own language that a guest may open are counted.
-  describe "a category or a tag with few posts" do
-    defp filed_under!(site, kind, term, overrides) do
-      post = published!(site, overrides)
+  # A TAG PAGE IS KEPT OUT OF AN INDEX, its links still followed, however many posts it lists; a
+  # category is indexed.
+  describe "a tag kept out of an index" do
+    test "a public tag says noindex, follow, whatever it holds", %{site: site} do
+      tag = create_blog_tag!(site_id: site.id, language: "en")
 
-      case kind do
-        :category -> create_post_collection!(post_id: post.id, collection_id: term.id)
-        :tag -> create_post_tag!(post_id: post.id, tag_id: term.id)
+      for _ <- 1..3 do
+        post = published!(site)
+        create_post_tag!(post_id: post.id, tag_id: tag.id)
       end
+
+      given = given(site, :tag, %{"lang" => "en", "slug" => tag.slug})
+
+      assert answer(given).tags == robots("noindex, follow")
+      assert head_contents(head(given), "robots") == ["noindex, follow"]
     end
 
-    defp term!(site, :category, overrides),
-      do: create_collection!([site_id: site.id, status: :active, language: "en"] ++ overrides)
+    test "its own robots wins, and a locked one stays noindex, nofollow", %{site: site} do
+      own = create_blog_tag!(site_id: site.id, language: "en", seo_tags: robots("index, follow"))
+      locked = create_blog_tag!(site_id: site.id, language: "en", permissions: ["members:read"])
 
-    defp term!(site, :tag, overrides),
-      do: create_blog_tag!([site_id: site.id, language: "en"] ++ overrides)
+      own_given = given(site, :tag, %{"lang" => "en", "slug" => own.slug})
+      assert head_contents(head(own_given), "robots") == ["index, follow"]
 
-    for kind <- [:category, :tag] do
-      test "a #{kind} listing fewer than three says noindex, follow, and one listing three nothing",
-           %{site: site} do
-        term = term!(site, unquote(kind), [])
-        given = given(site, unquote(kind), %{"lang" => "en", "slug" => term.slug})
-
-        filed_under!(site, unquote(kind), term, [])
-        filed_under!(site, unquote(kind), term, [])
-        filed_under!(site, unquote(kind), term, language: "fa")
-        filed_under!(site, unquote(kind), term, permissions: ["members:read"])
-        filed_under!(site, unquote(kind), term, status: :draft, published_at: nil)
-
-        assert answer(given).tags == robots("noindex, follow")
-        assert head_contents(head(given), "robots") == ["noindex, follow"]
-
-        filed_under!(site, unquote(kind), term, [])
-
-        assert contents(answer(given).tags, "name", "robots") == []
-        assert head_contents(head(given), "robots") == ["index, follow, max-image-preview:large"]
-      end
-
-      test "a thin #{kind}'s own robots wins, and a locked one stays noindex, nofollow", %{
-        site: site
-      } do
-        own = term!(site, unquote(kind), seo_tags: robots("index, follow"))
-        locked = term!(site, unquote(kind), permissions: ["members:read"])
-
-        assert head_contents(
-                 head(given(site, unquote(kind), %{"lang" => "en", "slug" => own.slug})),
-                 "robots"
-               ) ==
-                 ["index, follow"]
-
-        locked_given = given(site, unquote(kind), %{"lang" => "en", "slug" => locked.slug})
-
-        assert contents(answer(locked_given).tags, "name", "robots") == []
-        assert head_contents(head(locked_given), "robots") == ["noindex, nofollow"]
-      end
+      locked_given = given(site, :tag, %{"lang" => "en", "slug" => locked.slug})
+      assert contents(answer(locked_given).tags, "name", "robots") == []
+      assert head_contents(head(locked_given), "robots") == ["noindex, nofollow"]
     end
 
-    test "is fewer than three" do
-      assert Enum.map(0..4, &PageSeo.thin?/1) == [true, true, true, false, false]
+    test "a category is indexed", %{site: site} do
+      category = create_collection!(site_id: site.id, status: :active, language: "en")
+      post = published!(site)
+      create_post_collection!(post_id: post.id, collection_id: category.id)
+
+      given = given(site, :category, %{"lang" => "en", "slug" => category.slug})
+
+      assert contents(answer(given).tags, "name", "robots") == []
+      assert head_contents(head(given), "robots") == ["index, follow, max-image-preview:large"]
     end
   end
 

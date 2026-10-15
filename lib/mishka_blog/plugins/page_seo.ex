@@ -46,16 +46,14 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   The active category the `slug` capture names in the page's language: its name and description,
   its own `seo_tags`, its own `schema` (else a `CollectionPage`) and a
-  `BreadcrumbList`, Home → Blog → the category. A public category whose page lists fewer posts than
-  `thin?/1` asks for says `robots` `noindex, follow`, unless its own `seo_tags` hold a `robots`.
-  `vars` — `collection.name`,
+  `BreadcrumbList`, Home → Blog → the category. `vars` — `collection.name`,
   `collection.description`, `collection.url`. Its share card says "Category" above the name.
 
   ## A tag, `"blog:tag"`
 
   The tag the `slug` capture names in the page's language: its name and description, its own
-  `seo_tags`, a `CollectionPage` and a `BreadcrumbList`, Home → Blog → the tag. A thin public tag
-  says `robots` `noindex, follow` as a category does. `vars` —
+  `seo_tags`, a `CollectionPage` and a `BreadcrumbList`, Home → Blog → the tag. A public tag says
+  `robots` `noindex, follow`, unless its own `seo_tags` hold a `robots`. `vars` —
   `tag.name`, `tag.description`, `tag.url`. Its share card says "Tag" above the name.
 
   ## A blogger, `"blog:author"`
@@ -135,14 +133,6 @@ defmodule MishkaBlog.Plugins.PageSeo do
   @blogger_fields [:id, :display_name, :slug, :bio, :avatar_url, :social_links, :expertise_areas]
   @team_fields [:id, :name, :slug, :description, :avatar_url]
   @x_hosts ~w(x.com twitter.com www.x.com www.twitter.com mobile.twitter.com)
-  @indexed_from 3
-
-  @doc """
-  Whether a category or a tag whose page lists `count` posts is too thin to index: fewer than
-  #{@indexed_from}. Its head says `noindex, follow`, and `MishkaBlog.Plugins.SitemapUrls` leaves it out.
-  """
-  @spec thin?(non_neg_integer()) :: boolean()
-  def thin?(count), do: count < @indexed_from
 
   @impl true
   def call(%{record: "blog:post"} = seo), do: {:reply, :halt, post(seo)}
@@ -152,7 +142,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
   def call(%{record: "blog:team"} = seo), do: {:reply, :halt, team(seo)}
   def call(seo), do: {:reply, seo}
 
-  # The photos, names and teams a share card shows of a post's authors, and their X accounts.
+  # The photos, names and teams a share card shows of a post's authors, their X accounts, and the
+  # slugs and links their `Person` is written from.
   defp people_query do
     Blogger
     |> Ash.Query.select([:display_name, :slug, :avatar_url, :social_links])
@@ -387,11 +378,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
       | title: collection.name,
         description: collection.description,
         language: collection.language,
-        tags:
-          with_own(
-            thin(Collection, collection, collection.effective_permissions, seo),
-            collection.seo_tags
-          ),
+        tags: List.wrap(collection.seo_tags),
         schema:
           own_schema(collection.schema, page) ++
             breadcrumb(seo, base, 2, collection.name),
@@ -427,7 +414,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
       | title: tag.name,
         description: tag.description,
         language: tag.language,
-        tags: with_own(thin(Tag, tag, tag.permissions, seo), tag.seo_tags),
+        tags: with_own(tag_robots(tag.permissions), tag.seo_tags),
         schema: [page | breadcrumb(seo, base, 2, tag.name)],
         permissions: List.wrap(tag.permissions),
         card: %{eyebrow: gettext("Tag")},
@@ -772,26 +759,10 @@ defmodule MishkaBlog.Plugins.PageSeo do
       |> Languages.url(%{Languages.capture() => language, "slug" => slug}, site_id)
       |> Seo.absolute(base)
 
-  # `robots` "noindex, follow" for a public category or tag whose page lists fewer posts a guest may
-  # open than `thin?/1` asks for, and for one that cannot be counted; nothing for one that names a
-  # permission, which the head keeps out of an index already.
-  defp thin(_resource, _row, [_ | _] = _permissions, _seo), do: []
-
-  defp thin(resource, %{id: id}, _no_permissions, %{site_id: site_id}) do
-    resource
-    |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site_id)
-    |> Ash.Query.filter(id == ^id)
-    |> Ash.Query.select([:id])
-    |> Ash.Query.load(:listed_post_count)
-    |> Ash.read(actor: nil, tenant: site_id, page: [limit: 1])
-    |> case do
-      {:ok, %{results: [%{listed_post_count: count}]}} when is_integer(count) ->
-        if thin?(count), do: meta("name", "robots", "noindex, follow"), else: []
-
-      _uncounted ->
-        meta("name", "robots", "noindex, follow")
-    end
-  end
+  # `robots` "noindex, follow" for a public tag; nothing for one that names a permission, which the
+  # head keeps out of an index already.
+  defp tag_robots([_ | _] = _permissions), do: []
+  defp tag_robots(_no_permissions), do: meta("name", "robots", "noindex, follow")
 
   # The address of the site the canonical address is on, as `Seo.base/1` writes it.
   defp base(%{url: url}) when is_binary(url),

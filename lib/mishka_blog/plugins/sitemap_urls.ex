@@ -1,6 +1,6 @@
 defmodule MishkaBlog.Plugins.SitemapUrls do
   @moduledoc """
-  Adds the blog's posts, categories, tags, bloggers and teams to a site's `/sitemap.xml`, through
+  Adds the blog's posts, categories, bloggers and teams to a site's `/sitemap.xml`, through
   the
   `seo:sitemap:urls` mishka_installer hook `MishkaCmsCore.Runtime.Compilers.SitemapCompiler` fires
   when it builds a site's sitemap. A post, category or tag written rebuilds its site's sitemap,
@@ -12,14 +12,15 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
     * a published post, at the post page, with `lastmod` its `updated_at` and `images` its
       `featured_image_url`, or none when it has no such image;
-    * a category or a tag holding enough published posts in its own language to be indexed
-      (`MishkaBlog.Plugins.PageSeo.thin?/1`), at its page, with no `lastmod`;
+    * a category holding a published post in its own language, at its page, with no `lastmod`;
     * a blogger with a published post, and a team one of whose members has one, at its page in
       each language the page answers, with no `lastmod`.
 
+  A tag is never listed: its page says `noindex` (`MishkaBlog.Plugins.PageSeo`).
+
   Each row at its own language and slug, at the address the site's URL mode gives it
   (`MishkaCmsCore.Runtime.Languages.url/3`). A kind is listed only while `pages` holds its page —
-  the page whose `extra` says it shows that kind (`"blog:post"`, `"blog:category"`, `"blog:tag"`,
+  the page whose `extra` says it shows that kind (`"blog:post"`, `"blog:category"`,
   `"blog:author"`, `"blog:team"`), which every page `MishkaBlog.Provision` writes says — so a page
   switched off, closed to visitors or marked noindex lists nothing — and a row only in a
   language that page answers (`PageEditions.served_languages/2`), so no address here 404s. A row
@@ -40,8 +41,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
   require Ash.Query
 
-  alias MishkaBlog.{BlogPost, Blogger, Collection, Tag, Team}
-  alias MishkaBlog.Plugins.PageSeo
+  alias MishkaBlog.{BlogPost, Blogger, Collection, Team}
   alias MishkaCmsCore.Runtime.{Languages, PageEditions, Seo}
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
 
@@ -52,8 +52,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
      [:slug, :language, :updated_at, :featured_image_url, :permissions, :seo_tags],
      [:effective_permissions]},
     {"blog:category", Collection, [:slug, :language, :permissions, :seo_tags],
-     [:effective_permissions, :listed_post_count]},
-    {"blog:tag", Tag, [:slug, :language, :permissions, :seo_tags], [:listed_post_count]}
+     [:effective_permissions]}
   ]
 
   # A blogger or a team is one row in every language, and opens with no permission of its own.
@@ -81,7 +80,6 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
             resource
             |> rows(fields, loads, PageEditions.served_languages(page, site_id), site_id)
             |> Stream.filter(&PageEditions.listed?(%{&1 | permissions: opens_with(&1)}))
-            |> Stream.reject(&thin?/1)
             |> Stream.map(&entry(page, &1, site_id))
         end
       end)
@@ -139,17 +137,13 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
     |> SitemapCompiler.stream_rows(actor: nil, tenant: site_id)
   end
 
-  # A category or a tag whose page lists too few posts to be indexed (`PageSeo.thin?/1`).
-  defp thin?(%{listed_post_count: count}) when is_integer(count), do: PageSeo.thin?(count)
-  defp thin?(_post), do: false
-
   defp opens_with(%{effective_permissions: permissions}) when is_list(permissions),
     do: permissions
 
   defp opens_with(row), do: row.permissions
 
-  # `:public_list` already holds a post to the published ones; a category or a tag is listed while a
-  # published post in its own language is filed under it — its page lists that language's alone, so
+  # `:public_list` already holds a post to the published ones; a category is listed while a published
+  # post in its own language is filed under it — its page lists that language's alone, so
   # `published_post_count`, which counts every language, would list a page that opens empty.
   defp published(query, BlogPost), do: query
 

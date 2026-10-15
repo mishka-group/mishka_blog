@@ -80,24 +80,6 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
 
   defp robots(content), do: [%{tag: "meta", attrs: %{"name" => "robots"}, content: content}]
 
-  # `count` published posts filed under a category or a tag — three is the fewest whose page is
-  # indexed (`MishkaBlog.Plugins.PageSeo.thin?/1`).
-  defp filed!(site, term, count \\ 3, overrides \\ []) do
-    for _ <- 1..count//1 do
-      post = post!(site, :published, overrides)
-
-      case term do
-        %MishkaBlog.Collection{} ->
-          create_post_collection!(post_id: post.id, collection_id: term.id)
-
-        %MishkaBlog.Tag{} ->
-          create_post_tag!(post_id: post.id, tag_id: term.id)
-      end
-
-      post
-    end
-  end
-
   # A page at a path of the site's own choosing, with no language in it, saying the kind it shows.
   defp record_page!(site, path, record) do
     create_page!(
@@ -112,12 +94,12 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   describe "a blog at the site's root" do
     test "is found by the kind each page shows, not by the provision's path", %{site: site} do
       record_page!(site, "/blog/:slug", "blog:post")
-      record_page!(site, "/blog/tag/:slug", "blog:tag")
-      tag = create_blog_tag!(site_id: site.id, name: "elixir", language: "en")
-      posts = filed!(site, tag)
+      record_page!(site, "/blog/category/:slug", "blog:category")
+      post = post!(site, :published)
+      category = create_collection!(site_id: site.id, status: :active, language: "en")
+      create_post_collection!(post_id: post.id, collection_id: category.id)
 
-      assert paths(site) ==
-               Enum.sort(["/blog/tag/#{tag.slug}" | Enum.map(posts, &"/blog/#{&1.slug}")])
+      assert paths(site) == Enum.sort(["/blog/#{post.slug}", "/blog/category/#{category.slug}"])
     end
   end
 
@@ -253,13 +235,17 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
 
       open = create_collection!(site_id: site.id, status: :active, language: "en")
 
-      listed = filed!(site, open)
-      for category <- [members, guides], do: filed!(site, category)
+      [listed | _locked] =
+        for category <- [open, members, guides] do
+          post = post!(site, :published)
+          create_post_collection!(post_id: post.id, collection_id: category.id)
+          post
+        end
 
       assert paths(site) ==
                Enum.sort([
+                 english(mode, "/blog/#{listed.slug}"),
                  english(mode, "/blog/category/#{open.slug}")
-                 | Enum.map(listed, &english(mode, "/blog/#{&1.slug}"))
                ])
     end
 
@@ -307,22 +293,24 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   end
 
   describe "categories and tags" do
-    test "each holding three published posts is listed, with no lastmod", %{
+    test "a category holding a published post is listed, with no lastmod; a tag is not", %{
       site: site,
       mode: mode
     } do
       item_page!(site, :category)
       item_page!(site, :tag)
 
+      english = post!(site, :published)
+      persian = post!(site, :published, language: "fa")
+
       category = create_collection!(site_id: site.id, status: :active, language: "en")
-      filed!(site, category)
+      create_post_collection!(post_id: english.id, collection_id: category.id)
 
       tag = create_blog_tag!(site_id: site.id, language: "fa")
-      filed!(site, tag, 3, language: "fa")
+      create_post_tag!(post_id: persian.id, tag_id: tag.id)
 
-      assert Enum.sort_by(urls(site), & &1.path) == [
-               %{path: english(mode, "/blog/category/#{category.slug}"), lastmod: nil},
-               %{path: "/fa/blog/tag/#{tag.slug}", lastmod: nil}
+      assert urls(site) == [
+               %{path: english(mode, "/blog/category/#{category.slug}"), lastmod: nil}
              ]
     end
 
@@ -340,41 +328,33 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
           category =
             create_collection!([site_id: site.id, status: :active, language: "en"] ++ overrides)
 
-          filed!(site, category)
+          create_post_collection!(post_id: post!(site, :published).id, collection_id: category.id)
           category
         end
 
-      posts = for _ <- 1..3, do: post!(site, :published)
-
-      [tag | _hidden] =
-        for overrides <- [[], [permissions: ["members:read"]], [seo_tags: robots("none")]] do
-          tag = create_blog_tag!([site_id: site.id, language: "en"] ++ overrides)
-          for post <- posts, do: create_post_tag!(post_id: post.id, tag_id: tag.id)
-          tag
-        end
-
-      assert paths(site) == [
-               english(mode, "/blog/category/#{category.slug}"),
-               english(mode, "/blog/tag/#{tag.slug}")
-             ]
+      assert paths(site) == [english(mode, "/blog/category/#{category.slug}")]
     end
 
     # ITS PAGE LISTS ITS OWN LANGUAGE'S POSTS ALONE, so one whose published posts are all in another
     # language opens on "nothing is published" — the rule the blog kit's `with_public_post` keeps.
-    # THE SITEMAP IS READ AS A GUEST, as a crawler reads the site: a category or a tag whose
-    # published posts are all locked opens on "nothing is published" for them, so it is not listed.
-    test "one whose published posts are all locked is not", %{site: site, mode: mode} do
+    # THE SITEMAP IS READ AS A GUEST, as a crawler reads the site: a category or a tag whose only
+    # published post is locked opens on "nothing is published" for them, so it is not listed.
+    test "one whose only published post is locked is not", %{site: site, mode: mode} do
       item_page!(site, :category)
       item_page!(site, :tag)
 
-      [listed, hidden] =
-        for _ <- 1..2, do: create_collection!(site_id: site.id, status: :active, language: "en")
+      locked = post!(site, :published, permissions: ["members:read"])
+      open = post!(site, :published)
 
-      filed!(site, listed)
-      filed!(site, hidden, 3, permissions: ["members:read"])
+      [listed, _hidden] =
+        for post <- [open, locked] do
+          category = create_collection!(site_id: site.id, status: :active, language: "en")
+          create_post_collection!(post_id: post.id, collection_id: category.id)
+          category
+        end
 
       tag = create_blog_tag!(site_id: site.id, language: "en")
-      filed!(site, tag, 3, permissions: ["members:read"])
+      create_post_tag!(post_id: locked.id, tag_id: tag.id)
 
       assert paths(site) == [english(mode, "/blog/category/#{listed.slug}")]
     end
@@ -392,42 +372,6 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       create_post_tag!(post_id: persian.id, tag_id: tag.id)
 
       assert urls(site) == []
-    end
-
-    test "one listing fewer than three published posts a guest may open in its language is not",
-         %{
-           site: site,
-           mode: mode
-         } do
-      item_page!(site, :category)
-      item_page!(site, :tag)
-
-      [listed, thin] =
-        for _ <- 1..2, do: create_collection!(site_id: site.id, status: :active, language: "en")
-
-      [tag, thin_tag] = for _ <- 1..2, do: create_blog_tag!(site_id: site.id, language: "en")
-
-      for term <- [listed, tag], do: filed!(site, term)
-
-      for term <- [thin, thin_tag] do
-        filed!(site, term, 2)
-        filed!(site, term, 1, language: "fa")
-        filed!(site, term, 1, permissions: ["members:read"])
-        draft = post!(site, :draft)
-
-        case term do
-          %MishkaBlog.Collection{} ->
-            create_post_collection!(post_id: draft.id, collection_id: term.id)
-
-          %MishkaBlog.Tag{} ->
-            create_post_tag!(post_id: draft.id, tag_id: term.id)
-        end
-      end
-
-      assert paths(site) == [
-               english(mode, "/blog/category/#{listed.slug}"),
-               english(mode, "/blog/tag/#{tag.slug}")
-             ]
     end
 
     test "an empty one, one holding only a draft, a draft category and an unlisted language are not",
