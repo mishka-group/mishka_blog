@@ -91,6 +91,16 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
 
   defp schema_of(answered, type), do: Enum.find(answered.schema, &(&1["@type"] == type))
 
+  defp robots(content), do: [%{tag: "meta", attrs: %{"name" => "robots"}, content: content}]
+
+  # The head's JSON-LD without the site's own `WebSite` and `Organization`, which core may add to
+  # every page.
+  defp page_schema(head) do
+    head.schema
+    |> Enum.map(&Jason.decode!/1)
+    |> Enum.reject(&(&1["@type"] in ["WebSite", "Organization"]))
+  end
+
   # The head core builds from the answer, as `MishkaCmsWeb.RuntimeLive` builds it.
   defp head(given), do: given |> answer() |> Seo.accept(given) |> Seo.head(base: base())
 
@@ -163,6 +173,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
         base = base()
         url = base <> english(unquote(mode), "/blog/#{post.slug}")
         image = base <> "/media/cover.png"
+        organization = base <> "/#organization"
         answered = answer(given(site, :post, %{"lang" => "en", "slug" => post.slug}))
 
         assert answered.title == "Ash in production"
@@ -199,11 +210,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
                  "image" => ^image,
                  "datePublished" => "2026-09-01T08:30:00Z",
                  "author" => [%{"@type" => "Person", "name" => "Shahryar"}],
-                 "publisher" => %{
-                   "@type" => "Organization",
-                   "name" => "The Studio",
-                   "url" => ^base
-                 },
+                 "publisher" => %{"@id" => ^organization},
                  "mainEntityOfPage" => ^url,
                  "inLanguage" => "en",
                  "keywords" => "ash, elixir"
@@ -264,6 +271,86 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       assert html =~ ~S("headline":"MCP \u0026 AI-Ready")
       assert meta_content(html, ~s(meta[property="og:title"])) == ["MCP & AI-Ready"]
       assert %{"headline" => "MCP & AI-Ready"} = json_ld(html, "BlogPosting")
+    end
+
+    for mode <- ~w(prefix_others prefix_all) do
+      test "names each author's profile on the blogger page and their links, in #{mode}", %{
+        site: site
+      } do
+        url_mode!(site, unquote(mode))
+
+        create_page!(
+          site_id: site.id,
+          path: Provision.item_paths().author,
+          extra: %{"record" => "blog:author"},
+          active: true,
+          permissions: []
+        )
+
+        post = published!(site)
+
+        ada =
+          create_blogger!(
+            site_id: site.id,
+            display_name: "Ada",
+            slug: "ada",
+            social_links: [
+              %{platform: "github", url: "https://github.com/ada"},
+              %{platform: "x", url: "https://x.com/ada_x"}
+            ]
+          )
+
+        bea = create_blogger!(site_id: site.id, display_name: "Bea", slug: "bea")
+
+        for blogger <- [ada, bea],
+            do: create_post_blogger!(post_id: post.id, blogger_id: blogger.id)
+
+        posting =
+          schema_of(
+            answer(given(site, :post, %{"lang" => "en", "slug" => post.slug})),
+            "BlogPosting"
+          )
+
+        assert posting["author"] == [
+                 %{
+                   "@type" => "Person",
+                   "name" => "Ada",
+                   "url" => base() <> english(unquote(mode), "/blog/author/ada"),
+                   "sameAs" => ["https://github.com/ada", "https://x.com/ada_x"]
+                 },
+                 %{
+                   "@type" => "Person",
+                   "name" => "Bea",
+                   "url" => base() <> english(unquote(mode), "/blog/author/bea")
+                 }
+               ]
+
+        assert posting["publisher"] == %{"@id" => base() <> "/#organization"}
+      end
+    end
+
+    test "names no profile address while no open page shows a blogger", %{site: site} do
+      for {active, permissions} <- [{false, []}, {true, ["members:read"]}] do
+        create_page!(
+          site_id: site.id,
+          path: "/:lang/writers/#{active}/:slug",
+          extra: %{"record" => "blog:author"},
+          active: active,
+          permissions: permissions
+        )
+      end
+
+      post = published!(site)
+      blogger = create_blogger!(site_id: site.id, display_name: "Ada", slug: "ada")
+      create_post_blogger!(post_id: post.id, blogger_id: blogger.id)
+
+      posting =
+        schema_of(
+          answer(given(site, :post, %{"lang" => "en", "slug" => post.slug})),
+          "BlogPosting"
+        )
+
+      assert posting["author"] == [%{"@type" => "Person", "name" => "Ada"}]
     end
 
     test "a post in one language offers no alternates, and one with no authors no author", %{
@@ -332,8 +419,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       assert head.title == "Ash in production | Blog"
       assert head.description == "What a year of Ash taught us. Read on."
 
-      assert [%{"@type" => "Article", "headline" => "Ash in production"}] =
-               Enum.map(head.schema, &Jason.decode!/1)
+      assert [%{"@type" => "Article", "headline" => "Ash in production"}] = page_schema(head)
 
       # `post.slug` is no variable of the post page, so the stored og:image is left out and the
       # post's featured image is the image.
@@ -345,8 +431,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       assert head.title == "Ash in production"
       assert head.description == "What a year of Ash taught us."
 
-      assert [%{"@type" => "BlogPosting"}, %{"@type" => "BreadcrumbList"}] =
-               Enum.map(head.schema, &Jason.decode!/1)
+      assert [%{"@type" => "BlogPosting"}, %{"@type" => "BreadcrumbList"}] = page_schema(head)
     end
 
     test "answers the post's own permissions, and the head keeps a locked one out of an index", %{
@@ -479,7 +564,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       assert %{"name" => "Elixir"} = schema_of(answered, "CollectionPage")
       assert %{"itemListElement" => [_home, _blog, _tag]} = schema_of(answered, "BreadcrumbList")
       assert %{"tag.name" => "Elixir", "tag.description" => "Posts about Elixir."} = answered.vars
-      assert answered.tags == []
+      assert answered.tags == robots("noindex, follow")
       assert answered.permissions == []
     end
 
@@ -510,6 +595,47 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
 
       assert answer(given).permissions == ["members:read"]
       assert head_contents(head(given), "robots") == ["noindex, nofollow"]
+    end
+  end
+
+  # A TAG PAGE IS KEPT OUT OF AN INDEX, its links still followed, however many posts it lists; a
+  # category is indexed.
+  describe "a tag kept out of an index" do
+    test "a public tag says noindex, follow, whatever it holds", %{site: site} do
+      tag = create_blog_tag!(site_id: site.id, language: "en")
+
+      for _ <- 1..3 do
+        post = published!(site)
+        create_post_tag!(post_id: post.id, tag_id: tag.id)
+      end
+
+      given = given(site, :tag, %{"lang" => "en", "slug" => tag.slug})
+
+      assert answer(given).tags == robots("noindex, follow")
+      assert head_contents(head(given), "robots") == ["noindex, follow"]
+    end
+
+    test "its own robots wins, and a locked one stays noindex, nofollow", %{site: site} do
+      own = create_blog_tag!(site_id: site.id, language: "en", seo_tags: robots("index, follow"))
+      locked = create_blog_tag!(site_id: site.id, language: "en", permissions: ["members:read"])
+
+      own_given = given(site, :tag, %{"lang" => "en", "slug" => own.slug})
+      assert head_contents(head(own_given), "robots") == ["index, follow"]
+
+      locked_given = given(site, :tag, %{"lang" => "en", "slug" => locked.slug})
+      assert contents(answer(locked_given).tags, "name", "robots") == []
+      assert head_contents(head(locked_given), "robots") == ["noindex, nofollow"]
+    end
+
+    test "a category is indexed", %{site: site} do
+      category = create_collection!(site_id: site.id, status: :active, language: "en")
+      post = published!(site)
+      create_post_collection!(post_id: post.id, collection_id: category.id)
+
+      given = given(site, :category, %{"lang" => "en", "slug" => category.slug})
+
+      assert contents(answer(given).tags, "name", "robots") == []
+      assert head_contents(head(given), "robots") == ["index, follow, max-image-preview:large"]
     end
   end
 
@@ -806,11 +932,13 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       assert creators(answer(post_given(site, post))) == ["@some_one"]
     end
 
-    test "a post names every author's, in its authors' order, and the head keeps them all", %{
-      site: site
-    } do
+    test "a post names one, the first in its authors' order who has one, and the head keeps it",
+         %{
+           site: site
+         } do
       post = published!(site)
       author!(site, post, "Zed", [%{"platform" => "x", "url" => "https://x.com/zed_x/"}])
+      author!(site, post, "Bea", [%{"platform" => "github", "url" => "https://github.com/bea"}])
 
       author!(site, post, "Ava", [
         %{"platform" => "website", "url" => "https://twitter.com/ava_x"}
@@ -818,8 +946,8 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
 
       given = post_given(site, post)
 
-      assert creators(answer(given)) == ["@ava_x", "@zed_x"]
-      assert head_contents(head(given), "twitter:creator") == ["@ava_x", "@zed_x"]
+      assert creators(answer(given)) == ["@ava_x"]
+      assert head_contents(head(given), "twitter:creator") == ["@ava_x"]
     end
 
     test "a post's own twitter:creator replaces every one built for it", %{site: site} do

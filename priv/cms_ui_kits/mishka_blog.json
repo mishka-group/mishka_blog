@@ -1,7 +1,7 @@
 {
   "$schema": "mishka.ui_kit.bundle.v3",
   "name": "mishka_blog",
-  "version": "3.8.0",
+  "version": "3.9.0",
   "components": [
     {
       "name": "blog-post-list",
@@ -167,7 +167,7 @@
           "type": "any",
           "opts": {
             "default": "page",
-            "doc": "The query key this list's page number is written under. Two lists on one page need two keys."
+            "doc": "The query key this list's page number is written under. Two lists on one page need two keys. A page past the last one, named in the address, answers the site's 404."
           }
         },
         {
@@ -400,6 +400,11 @@
           "code": "case result do\n  {:ok, %{results: [found | _rest]}} -> found\n  {:ok, [found | _rest]} -> found\n  _nothing -> nil\nend\n"
         },
         {
+          "name": "missing!",
+          "args": "socket",
+          "code": "# NOTHING ANSWERS AT AN ADDRESS THAT NAMED SOMETHING. On the very first render there is no socket\n# to send anything over, so this raises and Phoenix draws the 404 page with a 404 status, exactly as\n# it does for a controller.\n#\n# ONCE CONNECTED IT ASKS THE PAGE TO ASK AGAIN. Raising into a live render crashes the view, and on\n# a `patch` the client remounts straight back into the same missing subject and crashes again. A\n# LiveComponent has no `handle_params/3` of its own, so it tells the LiveView the way the guides say\n# to — `send/2` — and `MishkaCmsWeb.Live.RuntimeLive` answers with a full load of the same address,\n# which arrives here as the first-render case above.\nif Phoenix.LiveView.connected?(socket) do\n  # THE PAGE KNOWS ITS OWN ADDRESS AND THIS DOES NOT: a LiveComponent's assigns are its own, not\n  # the LiveView's, so the message carries nothing and the answer is given where the path lives.\n  send(self(), :mishka_runtime_not_found)\n  socket\nelse\n  raise MishkaCmsCore.ErrorsExceptions.NotFoundError,\n    message: \"Sorry, the page you are looking for does not exist or has been moved.\"\nend\n"
+        },
+        {
           "name": "paged",
           "args": "result",
           "code": "# A TUPLE RATHER THAN A LIST, and that is what the error state is built on: folding an unreadable\n# answer into an empty one leaves a block telling a reader that nothing is published when the truth\n# is that nothing could be read.\ncase result do\n  {:ok, %{results: found, count: count}} -> {:ok, %{rows: found, total: count || length(found)}}\n  {:ok, found} when is_list(found) -> {:ok, %{rows: found, total: length(found)}}\n  {:error, reason} -> {:error, reason}\n  _unreadable -> {:error, :unreadable}\nend\n"
@@ -418,6 +423,11 @@
           "name": "asked_page",
           "args": "assigns",
           "code": "key = to_string(assigns[:page_param] || \"page\")\n\ncase assigns[:params] do\n  %{^key => asked} -> to_page(asked)\n  _no_params_or_key -> positive(assigns[:page], 1)\nend\n"
+        },
+        {
+          "name": "page_in_url?",
+          "args": "assigns",
+          "code": "# WHETHER THE ADDRESS NAMED THE PAGE — `page_param` in `params` — rather than the pager's buttons.\nkey = to_string(assigns[:page_param] || \"page\")\n\nmatch?(%{^key => _asked}, assigns[:params])\n"
         },
         {
           "name": "post_navigate",
@@ -457,12 +467,12 @@
         {
           "name": "asked",
           "args": "assigns",
-          "code": "# EVERYTHING THE READ DEPENDS ON, AS ONE TERM — AND EVERYTHING A ROW IS DRAWN FROM, which is the\n# same term for a reason. It is the argument the task is handed — a plain map rather than the\n# socket, so nothing of LiveView's is copied into another process — and it is also what says\n# whether anything has to be read at all: `update_many/1` runs on every render of the page holding\n# this block, and a block that re-read on each of them would restart its own load whenever\n# something else on the page moved.\n#\n# A STREAMED ROW IS RENDERED ONCE AND NEVER AGAIN. LiveView prunes `stream.inserts` after each\n# render, so `@streams.posts` is empty on every render that is not a fresh load and the rows\n# already on the page are never rebuilt. An attribute the ROWS read — the variant they are laid out\n# in, the words inside them, the bases their links are built from — therefore cannot reach them by\n# re-rendering, so it goes in here instead: a change to one re-reads and re-streams. Words OUTSIDE\n# the rows (`heading`, `empty_text`, the pager's labels) are free, because those are drawn afresh\n# every render.\n#\n# `params` is the one that stays out, deliberately. The rows take a single key from it — the one\n# naming the open post — and each row overwrites that key with its own slug, so a reader opening a\n# post BESIDE this list changes `params` without changing a single href. In it, every such click\n# would send the whole list back to the database and back to its skeleton.\n%{\n  visitor: assigns[:current_user],\n  language: trimmed(assigns[:language]),\n  featured_only: assigns[:featured_only] == true,\n  collection: trimmed(assigns[:collection]),\n  tag: trimmed(assigns[:tag]),\n  exclude_slug: trimmed(assigns[:exclude_slug]),\n  show_filter_title: assigns[:show_filter_title] == true,\n  sort: trimmed(assigns[:sort]),\n  per_page: positive(assigns[:per_page], 5),\n  page: asked_page(assigns),\n  variant: trimmed(assigns[:variant]),\n  show_excerpt: assigns[:show_excerpt] == true,\n  show_date: assigns[:show_date] == true,\n  read_text: trimmed(assigns[:read_text]),\n  featured_text: trimmed(assigns[:featured_text]),\n  base: trimmed(assigns[:base]),\n  post_base: trimmed(assigns[:post_base]),\n  lang_param: trimmed(assigns[:lang_param]),\n  post_param: trimmed(assigns[:post_param])\n}\n"
+          "code": "# EVERYTHING THE READ DEPENDS ON, AS ONE TERM — AND EVERYTHING A ROW IS DRAWN FROM, which is the\n# same term for a reason. It is the argument the task is handed — a plain map rather than the\n# socket, so nothing of LiveView's is copied into another process — and it is also what says\n# whether anything has to be read at all: `update_many/1` runs on every render of the page holding\n# this block, and a block that re-read on each of them would restart its own load whenever\n# something else on the page moved.\n#\n# A STREAMED ROW IS RENDERED ONCE AND NEVER AGAIN. LiveView prunes `stream.inserts` after each\n# render, so `@streams.posts` is empty on every render that is not a fresh load and the rows\n# already on the page are never rebuilt. An attribute the ROWS read — the variant they are laid out\n# in, the words inside them, the bases their links are built from — therefore cannot reach them by\n# re-rendering, so it goes in here instead: a change to one re-reads and re-streams. Words OUTSIDE\n# the rows (`heading`, `empty_text`, the pager's labels) are free, because those are drawn afresh\n# every render.\n#\n# `params` is the one that stays out, deliberately. The rows take a single key from it — the one\n# naming the open post — and each row overwrites that key with its own slug, so a reader opening a\n# post BESIDE this list changes `params` without changing a single href. In it, every such click\n# would send the whole list back to the database and back to its skeleton.\n%{\n  visitor: assigns[:current_user],\n  language: trimmed(assigns[:language]),\n  featured_only: assigns[:featured_only] == true,\n  collection: trimmed(assigns[:collection]),\n  tag: trimmed(assigns[:tag]),\n  exclude_slug: trimmed(assigns[:exclude_slug]),\n  show_filter_title: assigns[:show_filter_title] == true,\n  sort: trimmed(assigns[:sort]),\n  per_page: positive(assigns[:per_page], 5),\n  page: asked_page(assigns),\n  page_in_url: page_in_url?(assigns),\n  variant: trimmed(assigns[:variant]),\n  show_excerpt: assigns[:show_excerpt] == true,\n  show_date: assigns[:show_date] == true,\n  read_text: trimmed(assigns[:read_text]),\n  featured_text: trimmed(assigns[:featured_text]),\n  base: trimmed(assigns[:base]),\n  post_base: trimmed(assigns[:post_base]),\n  lang_param: trimmed(assigns[:lang_param]),\n  post_param: trimmed(assigns[:post_param])\n}\n"
         },
         {
           "name": "fetch",
           "args": "asked",
-          "code": "# RUN IN THE TASK, so nothing here may touch the socket. A page nobody has is clamped to the last\n# one there is, and the answer carries the term it was read for — `arrived/2` stores that rather\n# than what was asked, so a clamp settles instead of asking again on the next render.\nwith {:ok, %{rows: posts, total: total}} <- posts_page(asked, asked.page, asked.per_page) do\n  pages = max(ceil(total / asked.per_page), 1)\n\n  case asked.page > pages do\n    false ->\n      {:ok,\n       %{\n         asked: asked,\n         page: asked.page,\n         posts: posts,\n         total: total,\n         pages: pages,\n         filter_row: filter_row(asked)\n       }}\n\n    true ->\n      with {:ok, %{rows: clamped}} <- posts_page(asked, pages, asked.per_page) do\n        {:ok,\n         %{\n           asked: %{asked | page: pages},\n           page: pages,\n           posts: clamped,\n           total: total,\n           pages: pages,\n           filter_row: filter_row(asked)\n         }}\n      end\n  end\nend\n"
+          "code": "# RUN IN THE TASK, so nothing here may touch the socket. A page nobody has is a missing page when the\n# address named it, and is clamped to the last one there is when the pager's buttons asked for it. The answer carries the term it was read for — `arrived/2` stores that rather than\n# what was asked, so a clamp settles instead of asking again on the next render.\nwith {:ok, %{rows: posts, total: total}} <- posts_page(asked, asked.page, asked.per_page) do\n  pages = max(ceil(total / asked.per_page), 1)\n\n  cond do\n    asked.page <= pages ->\n      {:ok,\n       %{\n         asked: asked,\n         page: asked.page,\n         posts: posts,\n         total: total,\n         pages: pages,\n         filter_row: filter_row(asked)\n       }}\n\n    asked.page_in_url ->\n      {:missing, asked}\n\n    true ->\n      with {:ok, %{rows: clamped}} <- posts_page(asked, pages, asked.per_page) do\n        {:ok,\n         %{\n           asked: %{asked | page: pages},\n           page: pages,\n           posts: clamped,\n           total: total,\n           pages: pages,\n           filter_row: filter_row(asked)\n         }}\n      end\n  end\nend\n"
         },
         {
           "name": "arrived",
@@ -473,6 +483,11 @@
           "name": "arrived",
           "args": "socket, {:error, _reason}",
           "code": "socket\n|> Phoenix.Component.assign(loading: false, failed: true, total: 0, pages: 1, filter_row: nil)\n|> Phoenix.LiveView.stream(:posts, [], reset: true)\n"
+        },
+        {
+          "name": "arrived",
+          "args": "socket, {:missing, asked}",
+          "code": "socket\n|> Phoenix.Component.assign(asked: asked, loading: false, failed: false)\n|> missing!()\n"
         },
         {
           "name": "rowed",
@@ -2022,7 +2037,7 @@
       "precompile": false,
       "required": false,
       "priority": 0,
-      "template": "<div id={@id} {@rest} data-role=\"blog-post-comments\" class=\"text-[#1b1a18]\">\n  <h2\n    :if={not @loading and @post && trimmed(@heading) != \"\"}\n    data-role=\"blog-comments-heading\"\n    class=\"mb-4 text-lg font-bold leading-tight\"\n  >\n    {@heading}\n  </h2>\n\n  <form\n    :if={@allow_posting && @current_user && @post}\n    id={\"#{@id}-form\"}\n    data-role=\"blog-comments-form\"\n    phx-submit=\"submit\"\n    phx-target={@myself}\n    class=\"flex flex-col gap-2\"\n  >\n    <p :if={@replying != \"\"} data-role=\"blog-comments-replying\" class=\"text-xs text-[#6d6a63]\">\n      {@reply_text}\n      <button\n        type=\"button\"\n        data-role=\"blog-comments-cancel\"\n        phx-click=\"cancel\"\n        phx-target={@myself}\n        class=\"ml-2 font-semibold text-[#5b57d6] hover:underline\"\n      >\n        {@cancel_text}\n      </button>\n    </p>\n\n    <textarea\n      name=\"content\"\n      rows=\"3\"\n      required\n      data-role=\"blog-comments-input\"\n      placeholder={@placeholder}\n      class=\"w-full rounded-[14px] border border-[#ecebe6] bg-white px-4 py-2 text-sm outline-none placeholder:text-[#a8a5a0] focus:border-[#5b57d6]\"\n    ></textarea>\n\n    <button\n      type=\"submit\"\n      data-role=\"blog-comments-submit\"\n      class=\"self-start rounded-full bg-[#5b57d6] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#4f4bcc]\"\n    >\n      {@submit_text}\n    </button>\n  </form>\n\n  <p\n    :if={@post && @allow_posting && is_nil(@current_user)}\n    data-role=\"blog-comments-login\"\n    class=\"text-sm text-[#6d6a63]\"\n  >\n    <.link navigate={@login_href || sign_in_href(@post.language)} class=\"font-semibold text-[#5b57d6] hover:underline\">\n      {@login_text}\n    </.link>\n  </p>\n  <p\n    :if={@notice == \"pending\"}\n    data-role=\"blog-comments-pending\"\n    class=\"mt-4 rounded-[18px] border border-[#ecebe6] bg-[#f6f5f2] px-4 py-3 text-sm text-[#6d6a63]\"\n  >\n    {@pending_text}\n  </p>\n\n  <p\n    :if={@notice == \"error\"}\n    data-role=\"blog-comments-error\"\n    class=\"mt-4 rounded-[18px] border border-[#e8b7b1] bg-[#fdf6f5] px-4 py-3 text-sm text-[#c0473d]\"\n  >\n    {@error_text}\n  </p>\n\n  <div data-role=\"blog-comments-thread\" class=\"mt-6\">\n    <.component\n      :if={@loading and wanted?(@asked)}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"loading\"\n      role=\"blog-comments-loading\"\n      text={@loading_text}\n    />\n\n    <.component\n      :if={@failed}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"error\"\n      role=\"blog-comments-failed\"\n      text={@failed_text}\n      retry_text={@retry_text}\n      target={@myself}\n    />\n\n    <.component\n      :if={not @loading and not @failed and @post && @comments == []}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"empty\"\n      role=\"blog-comments-empty\"\n      text={@empty_text}\n      quiet={true}\n    />\n\n    <ul\n      :if={not @loading and not @failed and @comments != []}\n      data-role=\"blog-comments-list\"\n      class=\"flex flex-col gap-3\"\n    >\n      <li\n        :for={comment <- @comments}\n        data-role=\"blog-comment\"\n        id={\"#{@id}-comment-#{comment.id}\"}\n        class=\"rounded-[18px] border border-[#ecebe6] bg-white p-4\"\n      >\n        <div class=\"mb-1 flex flex-wrap items-baseline gap-2 text-xs text-[#8a877f]\">\n          <span data-role=\"blog-comment-author\" class=\"font-semibold text-[#1b1a18]\">\n            {comment.author}\n          </span>\n          <time data-role=\"blog-comment-date\" datetime={to_string(comment.at)}>\n            {Calendar.strftime(comment.at, \"%d %b %Y\")}\n          </time>\n          <span\n            :if={comment.pinned}\n            data-role=\"blog-comment-pinned\"\n            class=\"rounded-full bg-[#f2f1fc] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#5b57d6]\"\n          >\n            {@pinned_text}\n          </span>\n        </div>\n\n        <div\n          data-role=\"blog-comment-body\"\n          class=\"whitespace-pre-line text-sm leading-relaxed\"\n        >{body_text(comment.body)}</div>\n\n        <button\n          :if={@allow_posting && @current_user}\n          type=\"button\"\n          data-role=\"blog-comment-reply\"\n          phx-click=\"reply\"\n          phx-value-comment={comment.id}\n          phx-target={@myself}\n          class=\"mt-2 text-xs font-semibold text-[#5b57d6] hover:underline\"\n        >\n          {@reply_text}\n        </button>\n\n        <ul\n          :if={comment.replies != []}\n          data-role=\"blog-comment-replies\"\n          class=\"mt-3 flex flex-col gap-3 border-l-2 border-[#ecebe6] pl-4\"\n        >\n          <li\n            :for={reply <- comment.replies}\n            data-role=\"blog-comment\"\n            id={\"#{@id}-comment-#{reply.id}\"}\n          >\n            <div class=\"mb-1 flex flex-wrap items-baseline gap-2 text-xs text-[#8a877f]\">\n              <span data-role=\"blog-comment-author\" class=\"font-semibold text-[#1b1a18]\">\n                {reply.author}\n              </span>\n              <time data-role=\"blog-comment-date\" datetime={to_string(reply.at)}>\n                {Calendar.strftime(reply.at, \"%d %b %Y\")}\n              </time>\n            </div>\n\n            <div\n              data-role=\"blog-comment-body\"\n              class=\"whitespace-pre-line text-sm leading-relaxed\"\n            >{body_text(reply.body)}</div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n\n    <div :if={@has_more} class=\"mt-4 flex justify-center\">\n      <button\n        type=\"button\"\n        data-role=\"blog-comments-more\"\n        phx-click=\"more\"\n        phx-target={@myself}\n        class=\"rounded-full border border-[#ecebe6] bg-white px-4 py-1.5 text-xs font-semibold text-[#6d6a63] hover:border-[#5b57d6] hover:text-[#5b57d6]\"\n      >\n        {@more_text}\n      </button>\n    </div>\n  </div>\n\n</div>\n",
+      "template": "<div id={@id} {@rest} data-role=\"blog-post-comments\" class=\"text-[#1b1a18]\">\n  <h2\n    :if={not @loading and @post && trimmed(@heading) != \"\"}\n    data-role=\"blog-comments-heading\"\n    class=\"mb-4 text-lg font-bold leading-tight\"\n  >\n    {@heading}\n  </h2>\n\n  <form\n    :if={@allow_posting && @current_user && @post}\n    id={\"#{@id}-form\"}\n    data-role=\"blog-comments-form\"\n    phx-submit=\"submit\"\n    phx-target={@myself}\n    class=\"flex flex-col gap-2\"\n  >\n    <p :if={@replying != \"\"} data-role=\"blog-comments-replying\" class=\"text-xs text-[#6d6a63]\">\n      {@reply_text}\n      <button\n        type=\"button\"\n        data-role=\"blog-comments-cancel\"\n        phx-click=\"cancel\"\n        phx-target={@myself}\n        class=\"ml-2 font-semibold text-[#5b57d6] hover:underline\"\n      >\n        {@cancel_text}\n      </button>\n    </p>\n\n    <textarea\n      name=\"content\"\n      rows=\"3\"\n      required\n      data-role=\"blog-comments-input\"\n      placeholder={@placeholder}\n      class=\"w-full rounded-[14px] border border-[#ecebe6] bg-white px-4 py-2 text-sm outline-none placeholder:text-[#a8a5a0] focus:border-[#5b57d6]\"\n    ></textarea>\n\n    <button\n      type=\"submit\"\n      data-role=\"blog-comments-submit\"\n      class=\"self-start rounded-full bg-[#5b57d6] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#4f4bcc]\"\n    >\n      {@submit_text}\n    </button>\n  </form>\n\n  <p\n    :if={@post && @allow_posting && is_nil(@current_user)}\n    data-role=\"blog-comments-login\"\n    class=\"text-sm text-[#6d6a63]\"\n  >\n    <.link\n      navigate={@login_href || sign_in_href(@post.language)}\n      rel=\"nofollow\"\n      class=\"font-semibold text-[#5b57d6] hover:underline\"\n    >\n      {@login_text}\n    </.link>\n  </p>\n  <p\n    :if={@notice == \"pending\"}\n    data-role=\"blog-comments-pending\"\n    class=\"mt-4 rounded-[18px] border border-[#ecebe6] bg-[#f6f5f2] px-4 py-3 text-sm text-[#6d6a63]\"\n  >\n    {@pending_text}\n  </p>\n\n  <p\n    :if={@notice == \"error\"}\n    data-role=\"blog-comments-error\"\n    class=\"mt-4 rounded-[18px] border border-[#e8b7b1] bg-[#fdf6f5] px-4 py-3 text-sm text-[#c0473d]\"\n  >\n    {@error_text}\n  </p>\n\n  <div data-role=\"blog-comments-thread\" class=\"mt-6\">\n    <.component\n      :if={@loading and wanted?(@asked)}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"loading\"\n      role=\"blog-comments-loading\"\n      text={@loading_text}\n    />\n\n    <.component\n      :if={@failed}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"error\"\n      role=\"blog-comments-failed\"\n      text={@failed_text}\n      retry_text={@retry_text}\n      target={@myself}\n    />\n\n    <.component\n      :if={not @loading and not @failed and @post && @comments == []}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"empty\"\n      role=\"blog-comments-empty\"\n      text={@empty_text}\n      quiet={true}\n    />\n\n    <ul\n      :if={not @loading and not @failed and @comments != []}\n      data-role=\"blog-comments-list\"\n      class=\"flex flex-col gap-3\"\n    >\n      <li\n        :for={comment <- @comments}\n        data-role=\"blog-comment\"\n        id={\"#{@id}-comment-#{comment.id}\"}\n        class=\"rounded-[18px] border border-[#ecebe6] bg-white p-4\"\n      >\n        <div class=\"mb-1 flex flex-wrap items-baseline gap-2 text-xs text-[#8a877f]\">\n          <span data-role=\"blog-comment-author\" class=\"font-semibold text-[#1b1a18]\">\n            {comment.author}\n          </span>\n          <time data-role=\"blog-comment-date\" datetime={to_string(comment.at)}>\n            {Calendar.strftime(comment.at, \"%d %b %Y\")}\n          </time>\n          <span\n            :if={comment.pinned}\n            data-role=\"blog-comment-pinned\"\n            class=\"rounded-full bg-[#f2f1fc] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#5b57d6]\"\n          >\n            {@pinned_text}\n          </span>\n        </div>\n\n        <div\n          data-role=\"blog-comment-body\"\n          class=\"whitespace-pre-line text-sm leading-relaxed\"\n        >{body_text(comment.body)}</div>\n\n        <button\n          :if={@allow_posting && @current_user}\n          type=\"button\"\n          data-role=\"blog-comment-reply\"\n          phx-click=\"reply\"\n          phx-value-comment={comment.id}\n          phx-target={@myself}\n          class=\"mt-2 text-xs font-semibold text-[#5b57d6] hover:underline\"\n        >\n          {@reply_text}\n        </button>\n\n        <ul\n          :if={comment.replies != []}\n          data-role=\"blog-comment-replies\"\n          class=\"mt-3 flex flex-col gap-3 border-l-2 border-[#ecebe6] pl-4\"\n        >\n          <li\n            :for={reply <- comment.replies}\n            data-role=\"blog-comment\"\n            id={\"#{@id}-comment-#{reply.id}\"}\n          >\n            <div class=\"mb-1 flex flex-wrap items-baseline gap-2 text-xs text-[#8a877f]\">\n              <span data-role=\"blog-comment-author\" class=\"font-semibold text-[#1b1a18]\">\n                {reply.author}\n              </span>\n              <time data-role=\"blog-comment-date\" datetime={to_string(reply.at)}>\n                {Calendar.strftime(reply.at, \"%d %b %Y\")}\n              </time>\n            </div>\n\n            <div\n              data-role=\"blog-comment-body\"\n              class=\"whitespace-pre-line text-sm leading-relaxed\"\n            >{body_text(reply.body)}</div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n\n    <div :if={@has_more} class=\"mt-4 flex justify-center\">\n      <button\n        type=\"button\"\n        data-role=\"blog-comments-more\"\n        phx-click=\"more\"\n        phx-target={@myself}\n        class=\"rounded-full border border-[#ecebe6] bg-white px-4 py-1.5 text-xs font-semibold text-[#6d6a63] hover:border-[#5b57d6] hover:text-[#5b57d6]\"\n      >\n        {@more_text}\n      </button>\n    </div>\n  </div>\n\n</div>\n",
       "body": null,
       "attrs": [
         {
@@ -2467,7 +2482,7 @@
           "type": "any",
           "opts": {
             "default": "page",
-            "doc": "The query key the page of their posts is written under."
+            "doc": "The query key the page of their posts is written under. A page past the last one, named in the address, answers the site's 404."
           }
         },
         {
@@ -2766,6 +2781,11 @@
           "code": "# A TUPLE RATHER THAN A LIST, and that is what the error state is built on: folding an unreadable\n# answer into an empty one leaves a block telling a reader that nothing is published when the truth\n# is that nothing could be read.\ncase result do\n  {:ok, %{results: found, count: count}} -> {:ok, %{rows: found, total: count || length(found)}}\n  {:ok, found} when is_list(found) -> {:ok, %{rows: found, total: length(found)}}\n  {:error, reason} -> {:error, reason}\n  _unreadable -> {:error, :unreadable}\nend\n"
         },
         {
+          "name": "missing!",
+          "args": "socket",
+          "code": "# NOTHING ANSWERS AT AN ADDRESS THAT NAMED SOMETHING. On the very first render there is no socket\n# to send anything over, so this raises and Phoenix draws the 404 page with a 404 status, exactly as\n# it does for a controller.\n#\n# ONCE CONNECTED IT ASKS THE PAGE TO ASK AGAIN. Raising into a live render crashes the view, and on\n# a `patch` the client remounts straight back into the same missing subject and crashes again. A\n# LiveComponent has no `handle_params/3` of its own, so it tells the LiveView the way the guides say\n# to — `send/2` — and `MishkaCmsWeb.Live.RuntimeLive` answers with a full load of the same address,\n# which arrives here as the first-render case above.\nif Phoenix.LiveView.connected?(socket) do\n  # THE PAGE KNOWS ITS OWN ADDRESS AND THIS DOES NOT: a LiveComponent's assigns are its own, not\n  # the LiveView's, so the message carries nothing and the answer is given where the path lives.\n  send(self(), :mishka_runtime_not_found)\n  socket\nelse\n  raise MishkaCmsCore.ErrorsExceptions.NotFoundError,\n    message: \"Sorry, the page you are looking for does not exist or has been moved.\"\nend\n"
+        },
+        {
           "name": "slug_href",
           "args": "base, slug, lang_param, language",
           "code": "# THE ADDRESS OF A ROW, built by `site_path/2`: a `:lang` in the base is filled with the language of\n# the row being linked to, not the one the page is read in, and the address is the one the site's\n# URL mode gives that language — `/blog/<slug>` in a first language the site leaves unprefixed,\n# `/fa/blog/<slug>` in Persian. A base without the segment is filled as written, and a query-mode\n# page carries the language in `lang_param` instead. A row whose language this site does not\n# publish, or cannot be read, gets no link rather than a link to a 404.\ncase site_path(to_string(base) <> \"/:slug\", %{\"lang\" => trimmed(language), \"slug\" => to_string(slug)}) do\n  nil ->\n    nil\n\n  path ->\n    case {trimmed(lang_param), trimmed(language)} do\n      {\"\", _no_key} -> path\n      {_key, \"\"} -> path\n      {key, code} -> path <> \"?\" <> URI.encode_query(%{key => code})\n    end\nend\n"
@@ -2794,6 +2814,11 @@
           "name": "asked_page",
           "args": "assigns",
           "code": "key = to_string(assigns[:page_param] || \"page\")\n\ncase assigns[:params] do\n  %{^key => asked} -> to_page(asked)\n  _no_params_or_key -> positive(assigns[:page], 1)\nend\n"
+        },
+        {
+          "name": "page_in_url?",
+          "args": "assigns",
+          "code": "# WHETHER THE ADDRESS NAMED THE PAGE — `page_param` in `params` — rather than the pager's buttons.\nkey = to_string(assigns[:page_param] || \"page\")\n\nmatch?(%{^key => _asked}, assigns[:params])\n"
         },
         {
           "name": "field",
@@ -2828,7 +2853,7 @@
         {
           "name": "listed",
           "args": "assigns",
-          "code": "# WHAT THE POSTS' READ DEPENDS ON, AS ONE TERM OF ITS OWN, so turning a page reads the posts and\n# leaves the profile above them where it is.\n%{\n  visitor: assigns[:current_user],\n  slug: trimmed(assigns[:slug]),\n  wanted: assigns[:show_posts] == true,\n  language: trimmed(assigns[:language]),\n  per_page: positive(assigns[:per_page], 9),\n  page: asked_page(assigns)\n}\n"
+          "code": "# WHAT THE POSTS' READ DEPENDS ON, AS ONE TERM OF ITS OWN, so turning a page reads the posts and\n# leaves the profile above them where it is.\n%{\n  visitor: assigns[:current_user],\n  slug: trimmed(assigns[:slug]),\n  wanted: assigns[:show_posts] == true,\n  language: trimmed(assigns[:language]),\n  per_page: positive(assigns[:per_page], 9),\n  page: asked_page(assigns),\n  page_in_url: page_in_url?(assigns)\n}\n"
         },
         {
           "name": "fetch",
@@ -2843,7 +2868,7 @@
         {
           "name": "fetch_posts",
           "args": "listed",
-          "code": "# A PAGE NOBODY HAS IS CLAMPED TO THE LAST ONE THERE IS, and the answer carries the term it was read\n# for, as the list's does, so a clamp settles instead of asking again on the next render.\ncase listed.wanted and listed.slug != \"\" do\n  false ->\n    {:ok, %{listed: listed, posts: [], page: 1, pages: 1}}\n\n  true ->\n    with {:ok, %{rows: posts, total: total}} <- posts_page(listed, listed.page) do\n      pages = max(ceil(total / listed.per_page), 1)\n\n      case listed.page > pages do\n        false ->\n          {:ok, %{listed: listed, posts: posts, page: listed.page, pages: pages}}\n\n        true ->\n          with {:ok, %{rows: clamped}} <- posts_page(listed, pages) do\n            {:ok, %{listed: %{listed | page: pages}, posts: clamped, page: pages, pages: pages}}\n          end\n      end\n    end\nend\n"
+          "code": "# A PAGE NOBODY HAS IS A MISSING PAGE when the address named it, and is clamped to the last one there\n# is when the pager's buttons asked for it. The answer carries the term it was read\n# for, as the list's does, so a clamp settles instead of asking again on the next render.\ncase listed.wanted and listed.slug != \"\" do\n  false ->\n    {:ok, %{listed: listed, posts: [], page: 1, pages: 1}}\n\n  true ->\n    with {:ok, %{rows: posts, total: total}} <- posts_page(listed, listed.page) do\n      pages = max(ceil(total / listed.per_page), 1)\n\n      cond do\n        listed.page <= pages ->\n          {:ok, %{listed: listed, posts: posts, page: listed.page, pages: pages}}\n\n        listed.page_in_url ->\n          {:missing, listed}\n\n        true ->\n          with {:ok, %{rows: clamped}} <- posts_page(listed, pages) do\n            {:ok, %{listed: %{listed | page: pages}, posts: clamped, page: pages, pages: pages}}\n          end\n      end\n    end\nend\n"
         },
         {
           "name": "arrived",
@@ -2864,6 +2889,11 @@
           "name": "posts_arrived",
           "args": "socket, {:error, _reason}",
           "code": "Phoenix.Component.assign(socket, posts_loading: false, posts_failed: true, posts: [], pages: 1)\n"
+        },
+        {
+          "name": "posts_arrived",
+          "args": "socket, {:missing, listed}",
+          "code": "socket\n|> Phoenix.Component.assign(listed: listed, posts_loading: false, posts_failed: false)\n|> missing!()\n"
         },
         {
           "name": "cold?",
@@ -2966,7 +2996,7 @@
           "type": "any",
           "opts": {
             "default": "page",
-            "doc": "The query key the page of the team's posts is written under."
+            "doc": "The query key the page of the team's posts is written under. A page past the last one, named in the address, answers the site's 404."
           }
         },
         {
@@ -3281,6 +3311,11 @@
           "code": "# A TUPLE RATHER THAN A LIST, and that is what the error state is built on: folding an unreadable\n# answer into an empty one leaves a block telling a reader that nothing is published when the truth\n# is that nothing could be read.\ncase result do\n  {:ok, %{results: found, count: count}} -> {:ok, %{rows: found, total: count || length(found)}}\n  {:ok, found} when is_list(found) -> {:ok, %{rows: found, total: length(found)}}\n  {:error, reason} -> {:error, reason}\n  _unreadable -> {:error, :unreadable}\nend\n"
         },
         {
+          "name": "missing!",
+          "args": "socket",
+          "code": "# NOTHING ANSWERS AT AN ADDRESS THAT NAMED SOMETHING. On the very first render there is no socket\n# to send anything over, so this raises and Phoenix draws the 404 page with a 404 status, exactly as\n# it does for a controller.\n#\n# ONCE CONNECTED IT ASKS THE PAGE TO ASK AGAIN. Raising into a live render crashes the view, and on\n# a `patch` the client remounts straight back into the same missing subject and crashes again. A\n# LiveComponent has no `handle_params/3` of its own, so it tells the LiveView the way the guides say\n# to — `send/2` — and `MishkaCmsWeb.Live.RuntimeLive` answers with a full load of the same address,\n# which arrives here as the first-render case above.\nif Phoenix.LiveView.connected?(socket) do\n  # THE PAGE KNOWS ITS OWN ADDRESS AND THIS DOES NOT: a LiveComponent's assigns are its own, not\n  # the LiveView's, so the message carries nothing and the answer is given where the path lives.\n  send(self(), :mishka_runtime_not_found)\n  socket\nelse\n  raise MishkaCmsCore.ErrorsExceptions.NotFoundError,\n    message: \"Sorry, the page you are looking for does not exist or has been moved.\"\nend\n"
+        },
+        {
           "name": "slug_href",
           "args": "base, slug, lang_param, language",
           "code": "# THE ADDRESS OF A ROW, built by `site_path/2`: a `:lang` in the base is filled with the language of\n# the row being linked to, not the one the page is read in, and the address is the one the site's\n# URL mode gives that language — `/blog/<slug>` in a first language the site leaves unprefixed,\n# `/fa/blog/<slug>` in Persian. A base without the segment is filled as written, and a query-mode\n# page carries the language in `lang_param` instead. A row whose language this site does not\n# publish, or cannot be read, gets no link rather than a link to a 404.\ncase site_path(to_string(base) <> \"/:slug\", %{\"lang\" => trimmed(language), \"slug\" => to_string(slug)}) do\n  nil ->\n    nil\n\n  path ->\n    case {trimmed(lang_param), trimmed(language)} do\n      {\"\", _no_key} -> path\n      {_key, \"\"} -> path\n      {key, code} -> path <> \"?\" <> URI.encode_query(%{key => code})\n    end\nend\n"
@@ -3311,6 +3346,11 @@
           "code": "key = to_string(assigns[:page_param] || \"page\")\n\ncase assigns[:params] do\n  %{^key => asked} -> to_page(asked)\n  _no_params_or_key -> positive(assigns[:page], 1)\nend\n"
         },
         {
+          "name": "page_in_url?",
+          "args": "assigns",
+          "code": "# WHETHER THE ADDRESS NAMED THE PAGE — `page_param` in `params` — rather than the pager's buttons.\nkey = to_string(assigns[:page_param] || \"page\")\n\nmatch?(%{^key => _asked}, assigns[:params])\n"
+        },
+        {
           "name": "team_row",
           "args": "slug, visitor",
           "code": "# THE PUBLIC READ OF ONE TEAM, AS THE VISITOR: a team that is a draft, switched off or archived is\n# not here, and its page says so rather than drawing it.\ncase slug do\n  \"\" ->\n    {:ok, nil}\n\n  wanted ->\n    MishkaBlog.Team\n    |> Ash.Query.for_read(:public_by_slug, %{slug: wanted}, read_as(visitor))\n    |> Ash.Query.select([:id, :name, :slug, :description, :avatar_url, :cover_image_url])\n    |> Ash.read_one(tenant: site_id())\nend\n"
@@ -3328,7 +3368,7 @@
         {
           "name": "listed",
           "args": "assigns",
-          "code": "# WHAT THE POSTS' READ DEPENDS ON, AS ONE TERM OF ITS OWN, so turning a page reads the posts and\n# leaves the profile above them where it is.\n%{\n  visitor: assigns[:current_user],\n  slug: trimmed(assigns[:slug]),\n  wanted: assigns[:show_posts] == true,\n  language: trimmed(assigns[:language]),\n  per_page: positive(assigns[:per_page], 9),\n  page: asked_page(assigns)\n}\n"
+          "code": "# WHAT THE POSTS' READ DEPENDS ON, AS ONE TERM OF ITS OWN, so turning a page reads the posts and\n# leaves the profile above them where it is.\n%{\n  visitor: assigns[:current_user],\n  slug: trimmed(assigns[:slug]),\n  wanted: assigns[:show_posts] == true,\n  language: trimmed(assigns[:language]),\n  per_page: positive(assigns[:per_page], 9),\n  page: asked_page(assigns),\n  page_in_url: page_in_url?(assigns)\n}\n"
         },
         {
           "name": "fetch",
@@ -3343,7 +3383,7 @@
         {
           "name": "fetch_posts",
           "args": "listed",
-          "code": "# A PAGE NOBODY HAS IS CLAMPED TO THE LAST ONE THERE IS, and the answer carries the term it was read\n# for, as the list's does, so a clamp settles instead of asking again on the next render.\ncase listed.wanted and listed.slug != \"\" do\n  false ->\n    {:ok, %{listed: listed, posts: [], page: 1, pages: 1}}\n\n  true ->\n    with {:ok, %{rows: posts, total: total}} <- posts_page(listed, listed.page) do\n      pages = max(ceil(total / listed.per_page), 1)\n\n      case listed.page > pages do\n        false ->\n          {:ok, %{listed: listed, posts: posts, page: listed.page, pages: pages}}\n\n        true ->\n          with {:ok, %{rows: clamped}} <- posts_page(listed, pages) do\n            {:ok, %{listed: %{listed | page: pages}, posts: clamped, page: pages, pages: pages}}\n          end\n      end\n    end\nend\n"
+          "code": "# A PAGE NOBODY HAS IS A MISSING PAGE when the address named it, and is clamped to the last one there\n# is when the pager's buttons asked for it. The answer carries the term it was read\n# for, as the list's does, so a clamp settles instead of asking again on the next render.\ncase listed.wanted and listed.slug != \"\" do\n  false ->\n    {:ok, %{listed: listed, posts: [], page: 1, pages: 1}}\n\n  true ->\n    with {:ok, %{rows: posts, total: total}} <- posts_page(listed, listed.page) do\n      pages = max(ceil(total / listed.per_page), 1)\n\n      cond do\n        listed.page <= pages ->\n          {:ok, %{listed: listed, posts: posts, page: listed.page, pages: pages}}\n\n        listed.page_in_url ->\n          {:missing, listed}\n\n        true ->\n          with {:ok, %{rows: clamped}} <- posts_page(listed, pages) do\n            {:ok, %{listed: %{listed | page: pages}, posts: clamped, page: pages, pages: pages}}\n          end\n      end\n    end\nend\n"
         },
         {
           "name": "arrived",
@@ -3364,6 +3404,11 @@
           "name": "posts_arrived",
           "args": "socket, {:error, _reason}",
           "code": "Phoenix.Component.assign(socket, posts_loading: false, posts_failed: true, posts: [], pages: 1)\n"
+        },
+        {
+          "name": "posts_arrived",
+          "args": "socket, {:missing, listed}",
+          "code": "socket\n|> Phoenix.Component.assign(listed: listed, posts_loading: false, posts_failed: false)\n|> missing!()\n"
         },
         {
           "name": "cold?",

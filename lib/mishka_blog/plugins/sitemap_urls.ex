@@ -1,9 +1,9 @@
 defmodule MishkaBlog.Plugins.SitemapUrls do
   @moduledoc """
-  Adds the blog's posts, categories, tags, bloggers and teams to a site's `/sitemap.xml`, through
+  Adds the blog's posts, categories, bloggers and teams to a site's `/sitemap.xml`, through
   the
   `seo:sitemap:urls` mishka_installer hook `MishkaCmsCore.Runtime.Compilers.SitemapCompiler` fires
-  when it builds a site's sitemap. A post, category or tag written rebuilds its site's sitemap,
+  when it builds a site's sitemap. A post or a category written rebuilds its site's sitemap,
   because those resources list `MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh`.
 
   Core lists the blog's pages whose only capture is the language. `/:lang/blog/:slug` also holds a
@@ -12,14 +12,16 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
     * a published post, at the post page, with `lastmod` its `updated_at` and `images` its
       `featured_image_url`, or none when it has no such image;
-    * a category or a tag holding a published post in its own language, at its page, with no
-      `lastmod`;
+    * a category holding a published post in its own language, at its page, with `lastmod` its
+      `updated_at`;
     * a blogger with a published post, and a team one of whose members has one, at its page in
-      each language the page answers, with no `lastmod`.
+      each language the page answers, with `lastmod` its `updated_at`.
+
+  A tag is never listed: its page says `noindex` (`MishkaBlog.Plugins.PageSeo`).
 
   Each row at its own language and slug, at the address the site's URL mode gives it
   (`MishkaCmsCore.Runtime.Languages.url/3`). A kind is listed only while `pages` holds its page —
-  the page whose `extra` says it shows that kind (`"blog:post"`, `"blog:category"`, `"blog:tag"`,
+  the page whose `extra` says it shows that kind (`"blog:post"`, `"blog:category"`,
   `"blog:author"`, `"blog:team"`), which every page `MishkaBlog.Provision` writes says — so a page
   switched off, closed to visitors or marked noindex lists nothing — and a row only in a
   language that page answers (`PageEditions.served_languages/2`), so no address here 404s. A row
@@ -40,7 +42,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
   require Ash.Query
 
-  alias MishkaBlog.{BlogPost, Blogger, Collection, Tag, Team}
+  alias MishkaBlog.{BlogPost, Blogger, Collection, Team}
   alias MishkaCmsCore.Runtime.{Languages, PageEditions, Seo}
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
 
@@ -50,9 +52,8 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
     {"blog:post", BlogPost,
      [:slug, :language, :updated_at, :featured_image_url, :permissions, :seo_tags],
      [:effective_permissions]},
-    {"blog:category", Collection, [:slug, :language, :permissions, :seo_tags],
-     [:effective_permissions]},
-    {"blog:tag", Tag, [:slug, :language, :permissions, :seo_tags], []}
+    {"blog:category", Collection, [:slug, :language, :updated_at, :permissions, :seo_tags],
+     [:effective_permissions]}
   ]
 
   # A blogger or a team is one row in every language, and opens with no permission of its own.
@@ -104,14 +105,14 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
     resource
     |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site_id)
     |> with_published_post(resource)
-    |> Ash.Query.select([:slug])
+    |> Ash.Query.select([:slug, :updated_at])
     |> SitemapCompiler.stream_rows(actor: nil, tenant: site_id)
     |> Stream.flat_map(fn row ->
       languages
       |> Enum.map(&address(page, &1, row.slug, site_id))
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
-      |> Enum.map(&%{path: &1, lastmod: nil})
+      |> Enum.map(&%{path: &1, lastmod: row.updated_at})
     end)
   end
 
@@ -142,8 +143,8 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
   defp opens_with(row), do: row.permissions
 
-  # `:public_list` already holds a post to the published ones; a category or a tag is listed while a
-  # published post in its own language is filed under it — its page lists that language's alone, so
+  # `:public_list` already holds a post to the published ones; a category is listed while a published
+  # post in its own language is filed under it — its page lists that language's alone, so
   # `published_post_count`, which counts every language, would list a page that opens empty.
   defp published(query, BlogPost), do: query
 
@@ -163,7 +164,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
   end
 
   defp entry(page, row, site_id),
-    do: %{path: address(page, row.language, row.slug, site_id), lastmod: nil}
+    do: %{path: address(page, row.language, row.slug, site_id), lastmod: row.updated_at}
 
   defp address(page, language, slug, site_id),
     do: Languages.url(page.path, %{Languages.capture() => language, "slug" => slug}, site_id)

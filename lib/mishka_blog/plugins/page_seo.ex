@@ -24,14 +24,16 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
     * `title`, `description`, `image` — the post's title, excerpt and featured image;
     * `type` — `"article"`;
-    * `tags` — `author` (the authors' names), one `twitter:creator` per author with an X account,
-      in the authors' order, `article:published_time`, `article:modified_time`,
+    * `tags` — `author` (the authors' names), a `twitter:creator` with the X account of the first
+      author, in the authors' order, who has one, `article:published_time`, `article:modified_time`,
       `article:section` (the first category), one `article:tag` per tag, and a `rel="alternate"`
       link per language the post is published in among the site's languages, with `x-default` at
       the site's primary one, when there are two or more. The post's own `seo_tags` come last and
       replace any of these they name;
-    * `schema` — the post's own `schema` when it holds one, else a `BlogPosting`; then a
-      `BreadcrumbList`, Home → Blog → the post;
+    * `schema` — the post's own `schema` when it holds one, else a `BlogPosting` whose `author` is
+      a `Person` per author — their name, their address on the site's `"blog:author"` page and
+      `sameAs` their social links — and whose `publisher` is the site's Organization by its `@id`,
+      `<site address>/#organization`; then a `BreadcrumbList`, Home → Blog → the post;
     * `vars` — `post.title`, `post.excerpt`, `post.image`, `post.author`, `post.published_at`,
       `post.modified_at`, `post.url`, `post.collection`, `post.tags`, and `post.rating` (the
       readers' average, one decimal) with `post.rating_count` once a reader has rated it.
@@ -50,7 +52,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
   ## A tag, `"blog:tag"`
 
   The tag the `slug` capture names in the page's language: its name and description, its own
-  `seo_tags`, a `CollectionPage` and a `BreadcrumbList`, Home → Blog → the tag. `vars` —
+  `seo_tags`, a `CollectionPage` and a `BreadcrumbList`, Home → Blog → the tag. A public tag says
+  `robots` `noindex, follow`, unless its own `seo_tags` hold a `robots`. `vars` —
   `tag.name`, `tag.description`, `tag.url`. Its share card says "Tag" above the name.
 
   ## A blogger, `"blog:author"`
@@ -98,8 +101,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
   alias MishkaBlog.{BlogPost, Blogger, Collection, Tag, Team}
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.PlainText
-  alias MishkaCmsCore.Runtime.{Languages, Seo}
-  alias MishkaCmsCore.Settings
+  alias MishkaCmsCore.Runtime.{Languages, Page, Seo}
 
   @post_fields [
     :id,
@@ -140,10 +142,11 @@ defmodule MishkaBlog.Plugins.PageSeo do
   def call(%{record: "blog:team"} = seo), do: {:reply, :halt, team(seo)}
   def call(seo), do: {:reply, seo}
 
-  # The photos, names and teams a share card shows of a post's authors, and their X accounts.
+  # The photos, names and teams a share card shows of a post's authors, their X accounts, and the
+  # slugs and links their `Person` is written from.
   defp people_query do
     Blogger
-    |> Ash.Query.select([:display_name, :avatar_url, :social_links])
+    |> Ash.Query.select([:display_name, :slug, :avatar_url, :social_links])
     |> Ash.Query.sort(display_name: :asc)
     |> Ash.Query.load(
       teams:
@@ -296,8 +299,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
         "image" => image,
         "datePublished" => published,
         "dateModified" => modified,
-        "author" => Enum.map(authors, &%{"@type" => "Person", "name" => &1}),
-        "publisher" => publisher(seo.site_id, base),
+        "author" => authors(post, seo.site_id, base),
+        "publisher" => publisher(base),
         "mainEntityOfPage" => seo.url,
         "inLanguage" => post.language,
         "keywords" => Enum.join(tag_names, ", ")
@@ -306,7 +309,11 @@ defmodule MishkaBlog.Plugins.PageSeo do
     generated =
       List.flatten([
         meta("name", "author", Enum.join(authors, ", ")),
-        Enum.map(post.bloggers, &meta("name", "twitter:creator", x_account(&1.social_links))),
+        meta(
+          "name",
+          "twitter:creator",
+          Enum.find_value(post.bloggers, &x_account(&1.social_links))
+        ),
         meta("property", "article:published_time", published),
         meta("property", "article:modified_time", modified),
         meta("property", "article:section", section),
@@ -407,7 +414,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
       | title: tag.name,
         description: tag.description,
         language: tag.language,
-        tags: List.wrap(tag.seo_tags),
+        tags: with_own(tag_robots(tag.permissions), tag.seo_tags),
         schema: [page | breadcrumb(seo, base, 2, tag.name)],
         permissions: List.wrap(tag.permissions),
         card: %{eyebrow: gettext("Tag")},
@@ -709,15 +716,53 @@ defmodule MishkaBlog.Plugins.PageSeo do
   defp drop_segments(path, 0), do: path
   defp drop_segments(path, depth), do: path |> Path.dirname() |> drop_segments(depth - 1)
 
-  defp publisher(site_id, base) do
-    case Settings.get("site.title", nil, site_id) do
-      name when is_binary(name) and name != "" ->
-        compact(%{"@type" => "Organization", "name" => name, "url" => base})
+  # The site's own Organization, by the `@id` core gives it.
+  defp publisher(base) when is_binary(base), do: %{"@id" => base <> "/#organization"}
+  defp publisher(_no_base), do: nil
 
-      _no_title ->
-        nil
+  # Each author as a `Person`: their name, their profile at the site's blogger page in the post's
+  # language, and their social links.
+  defp authors(%{bloggers: []}, _site_id, _base), do: []
+
+  defp authors(post, site_id, base) do
+    profiles = profiles_path(site_id)
+
+    Enum.map(post.bloggers, fn blogger ->
+      compact(%{
+        "@type" => "Person",
+        "name" => blogger.display_name,
+        "url" => profile_url(profiles, blogger.slug, post.language, site_id, base),
+        "sameAs" => links(blogger.social_links)
+      })
+    end)
+  end
+
+  # The path of the site's page that shows a blogger (`"blog:author"`), active and open to every
+  # visitor, the first by path; `nil` for none. Read as the system, as `read/4` reads.
+  defp profiles_path(site_id) do
+    Page
+    |> Ash.Query.filter(active == true and extra["record"] == "blog:author")
+    |> Ash.Query.select([:path, :permissions])
+    |> Ash.Query.sort(path: :asc)
+    |> Ash.read(tenant: site_id, authorize?: false, page: false)
+    |> case do
+      {:ok, pages} -> Enum.find_value(pages, &(&1.permissions in [nil, []] && &1.path))
+      _unreadable -> nil
     end
   end
+
+  defp profile_url(nil, _slug, _language, _site_id, _base), do: nil
+
+  defp profile_url(path, slug, language, site_id, base),
+    do:
+      path
+      |> Languages.url(%{Languages.capture() => language, "slug" => slug}, site_id)
+      |> Seo.absolute(base)
+
+  # `robots` "noindex, follow" for a public tag; nothing for one that names a permission, which the
+  # head keeps out of an index already.
+  defp tag_robots([_ | _] = _permissions), do: []
+  defp tag_robots(_no_permissions), do: meta("name", "robots", "noindex, follow")
 
   # The address of the site the canonical address is on, as `Seo.base/1` writes it.
   defp base(%{url: url}) when is_binary(url),

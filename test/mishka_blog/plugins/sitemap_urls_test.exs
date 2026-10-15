@@ -94,12 +94,12 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   describe "a blog at the site's root" do
     test "is found by the kind each page shows, not by the provision's path", %{site: site} do
       record_page!(site, "/blog/:slug", "blog:post")
-      record_page!(site, "/blog/tag/:slug", "blog:tag")
+      record_page!(site, "/blog/category/:slug", "blog:category")
       post = post!(site, :published)
-      tag = create_blog_tag!(site_id: site.id, name: "elixir", language: "en")
-      create_post_tag!(post_id: post.id, tag_id: tag.id)
+      category = create_collection!(site_id: site.id, status: :active, language: "en")
+      create_post_collection!(post_id: post.id, collection_id: category.id)
 
-      assert paths(site) == Enum.sort(["/blog/#{post.slug}", "/blog/tag/#{tag.slug}"])
+      assert paths(site) == Enum.sort(["/blog/#{post.slug}", "/blog/category/#{category.slug}"])
     end
   end
 
@@ -120,6 +120,11 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       create_post_blogger!(post_id: post.id, blogger_id: writer.id)
 
       assert paths(site) == ["/blog/author/shahryar", "/blog/team/core"]
+
+      assert site |> urls() |> Map.new(&{&1.path, &1.lastmod}) == %{
+               "/blog/author/shahryar" => writer.updated_at,
+               "/blog/team/core" => team.updated_at
+             }
     end
 
     test "nothing is listed without their pages", %{site: site} do
@@ -293,7 +298,10 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   end
 
   describe "categories and tags" do
-    test "each holding a published post is listed, with no lastmod", %{site: site, mode: mode} do
+    test "a category holding a published post is listed, with its updated_at; a tag is not", %{
+      site: site,
+      mode: mode
+    } do
       item_page!(site, :category)
       item_page!(site, :tag)
 
@@ -306,9 +314,11 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       tag = create_blog_tag!(site_id: site.id, language: "fa")
       create_post_tag!(post_id: persian.id, tag_id: tag.id)
 
-      assert Enum.sort_by(urls(site), & &1.path) == [
-               %{path: english(mode, "/blog/category/#{category.slug}"), lastmod: nil},
-               %{path: "/fa/blog/tag/#{tag.slug}", lastmod: nil}
+      assert urls(site) == [
+               %{
+                 path: english(mode, "/blog/category/#{category.slug}"),
+                 lastmod: category.updated_at
+               }
              ]
     end
 
@@ -330,19 +340,7 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
           category
         end
 
-      post = post!(site, :published)
-
-      [tag | _hidden] =
-        for overrides <- [[], [permissions: ["members:read"]], [seo_tags: robots("none")]] do
-          tag = create_blog_tag!([site_id: site.id, language: "en"] ++ overrides)
-          create_post_tag!(post_id: post.id, tag_id: tag.id)
-          tag
-        end
-
-      assert paths(site) == [
-               english(mode, "/blog/category/#{category.slug}"),
-               english(mode, "/blog/tag/#{tag.slug}")
-             ]
+      assert paths(site) == [english(mode, "/blog/category/#{category.slug}")]
     end
 
     # ITS PAGE LISTS ITS OWN LANGUAGE'S POSTS ALONE, so one whose published posts are all in another
