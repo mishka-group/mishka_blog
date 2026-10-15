@@ -128,8 +128,19 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
 
     def mount(_params, session, socket) do
       :ok = Translations.put_site(session["site_id"])
-      {:ok, Phoenix.Component.assign(socket, blocks: session["blocks"], site: session["site"])}
+
+      {:ok,
+       Phoenix.Component.assign(socket,
+         blocks: session["blocks"],
+         site: session["site"],
+         missing: false
+       )}
     end
+
+    # WHAT `MishkaCmsWeb.RuntimeLive` IS TOLD when a block finds nothing at the address it was
+    # handed, once the socket is connected; it answers with the site's 404.
+    def handle_info(:mishka_runtime_not_found, socket),
+      do: {:noreply, Phoenix.Component.assign(socket, :missing, true)}
 
     # THE PAGE CHANGING WHAT IT HANDS ONE BLOCK, which is what an author does in the builder and
     # what a patch to another URL does to `params`. It is the only re-render that reaches a
@@ -146,6 +157,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     def render(assigns) do
       ~H"""
       <div id="host">
+        <span :if={@missing} data-role="not-found"></span>
         <div :for={block <- @blocks} id={"holder-#{block["id"]}"}>
           {LiveViewHelpers.component(
             Map.merge(block["attrs"], %{
@@ -783,17 +795,71 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert titles(view) == ["B", "A"], "page three of six newest-first"
     end
 
-    test "and clamps a page nobody has", %{site: site} do
+    # A PAGE THE ADDRESS NAMES PAST THE LAST ONE IS NOT THERE: the response is the site's 404, as for
+    # an address nothing is stored at, never the last page under a title and a canonical of its own.
+    test "answers a page nobody has with the site's 404", %{site: site} do
       publish!(site, ["A", "B"])
 
-      {:ok, view, _html} =
-        mount_page(site, "blog-post-list", %{
-          per_page: 1,
-          base: "/here",
-          params: %{"page" => "999"}
-        })
+      for page <- ["3", "999"] do
+        assert_raise MishkaCmsCore.ErrorsExceptions.NotFoundError, fn ->
+          mount_page(site, "blog-post-list", %{
+            per_page: 1,
+            base: "/here",
+            params: %{"page" => page}
+          })
+        end
+      end
+    end
 
-      assert positions(view) == ["2/2"], "999 / 2 would be a lie with an empty list under it"
+    test "and so does a second page of a list that holds nothing", %{site: site} do
+      assert_raise MishkaCmsCore.ErrorsExceptions.NotFoundError, fn ->
+        mount_page(site, "blog-post-list", %{base: "/here", params: %{"page" => "2"}})
+      end
+    end
+
+    test "and serves the first and the last page there is", %{site: site} do
+      publish!(site, ["A", "B"])
+
+      for {page, position, title} <- [{"1", "1/2", "B"}, {"2", "2/2", "A"}] do
+        {:ok, view, _html} =
+          mount_page(site, "blog-post-list", %{
+            per_page: 1,
+            base: "/here",
+            params: %{"page" => page}
+          })
+
+        assert positions(view) == [position]
+        assert titles(view) == [title]
+      end
+    end
+
+    # ONCE CONNECTED, a patch to a page nobody has asks the page to answer it: a LiveComponent has
+    # no response of its own to make a 404 of.
+    test "and a patch to a page nobody has asks the page for its 404", %{site: site} do
+      publish!(site, ["A", "B"])
+      attrs = %{per_page: 1, base: "/here", params: %{"page" => "2"}}
+
+      {view, _first_paint} =
+        mount_blocks(site, [%{"name" => "blog-post-list", "id" => "one", "attrs" => attrs}])
+
+      refute has_element?(view, ~s([data-role="not-found"]))
+
+      send(view.pid, {:attrs, "one", %{attrs | params: %{"page" => "9"}}})
+      render_async(view, @async)
+
+      assert has_element?(view, ~s([data-role="not-found"]))
+    end
+
+    test "and clamps a page nobody has when the click pager asked for it", %{site: site} do
+      publish!(site, ["A", "B", "C"])
+
+      {:ok, view, _html} = mount_page(site, "blog-post-list", %{per_page: 1})
+
+      view
+      |> element(~s(#one button[data-role="blog-list-next"]))
+      |> render_click(%{"to" => "999"})
+
+      assert positions(view) == ["3/3"], "999 / 3 would be a lie with an empty list under it"
       assert titles(view) == ["A"], "and the last page's post is what it should show"
     end
 
@@ -3048,6 +3114,15 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert has_element?(view, ~s([data-role="blog-comments-login"]))
     end
 
+    # THE SIGN-IN PAGE IS KEPT OUT OF AN INDEX, so a crawler is not sent there from every post.
+    test "and the way in is a link a crawler does not follow", %{site: site} do
+      [post] = publish!(site, ["Ours"])
+
+      {:ok, view, _html} = mount_page(site, "blog-post-comments", %{slug: post.slug})
+
+      assert has_element?(view, ~s([data-role="blog-comments-login"] a[rel="nofollow"]))
+    end
+
     # THE WAY IN IS THE SIGN-IN PAGE IN THE POST'S LANGUAGE, at the address the site's URL mode
     # gives it: English, the first, unprefixed while the site leaves it so.
     for mode <- ~w(prefix_others prefix_all) do
@@ -3408,6 +3483,29 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
              "turning a page read the profile again"
     end
 
+    test "answers a page of their posts nobody has with the site's 404", %{site: site} do
+      for {page, position} <- [{"1", "1/2"}, {"2", "2/2"}] do
+        {:ok, view, _html} =
+          mount_page(site, "blog-author-profile", %{
+            slug: "mona",
+            per_page: 1,
+            base: "/blog/author/mona",
+            params: %{"page" => page}
+          })
+
+        assert positions(view) == [position]
+      end
+
+      assert_raise MishkaCmsCore.ErrorsExceptions.NotFoundError, fn ->
+        mount_page(site, "blog-author-profile", %{
+          slug: "mona",
+          per_page: 1,
+          base: "/blog/author/mona",
+          params: %{"page" => "3"}
+        })
+      end
+    end
+
     test "draws the blogger in its first paint, with no skeleton", %{site: site} do
       {_view, first_paint} =
         mount_blocks(site, [
@@ -3500,6 +3598,19 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
 
       {:ok, idle, _html} = mount_page(site, "blog-team-profile")
       assert has_element?(idle, ~s([data-role="blog-team-idle"]))
+    end
+
+    test "answers a page of its posts nobody has with the site's 404", %{site: site} do
+      attrs = %{slug: "core", per_page: 1, base: "/blog/team/core"}
+
+      {:ok, view, _html} =
+        mount_page(site, "blog-team-profile", Map.put(attrs, :params, %{"page" => "1"}))
+
+      assert titles(view) == ["By the team"]
+
+      assert_raise MishkaCmsCore.ErrorsExceptions.NotFoundError, fn ->
+        mount_page(site, "blog-team-profile", Map.put(attrs, :params, %{"page" => "2"}))
+      end
     end
 
     test "says so when nobody is in it and nothing is published", %{site: site} do
