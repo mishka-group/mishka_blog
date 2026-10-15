@@ -1,8 +1,9 @@
 defmodule MishkaBlog.SitemapRefreshTest do
   @moduledoc """
-  A write of a blog post, category or tag schedules its site's sitemap job, tenant and master alike:
-  the three list `MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh`. What the job builds is
-  pinned in core, and what the blog adds to it in `MishkaBlog.Plugins.SitemapUrlsTest`.
+  A write of a blog post or category schedules its site's sitemap job, tenant and master alike: the
+  two list `MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh`. A tag is in no sitemap, and
+  its write schedules nothing. What the job builds is pinned in core, and what the blog adds to it
+  in `MishkaBlog.Plugins.SitemapUrlsTest`.
 
   `MishkaCmsCore.Runtime.Compilers.SitemapCompiler.schedule/1` enqueues nothing under the
   `:env_test?` flag, so setup switches it off once every row a test writes exists. `async: false` —
@@ -127,10 +128,12 @@ defmodule MishkaBlog.SitemapRefreshTest do
       assert [_job] = sitemap_jobs(site)
     end
 
-    test "a tag archived gives its site's job", %{site: site, tag: tag} do
-      archive!(tag, site)
+    test "a tag updated or archived gives no job", %{site: site, tag: tag} do
+      tag
+      |> update!(:update, %{name: "Renamed tag"}, tenant: site.id)
+      |> archive!(site)
 
-      assert [_job] = sitemap_jobs(site)
+      assert sitemap_jobs(site) == []
     end
   end
 end

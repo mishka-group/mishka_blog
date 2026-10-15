@@ -3,7 +3,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
   Adds the blog's posts, categories, bloggers and teams to a site's `/sitemap.xml`, through
   the
   `seo:sitemap:urls` mishka_installer hook `MishkaCmsCore.Runtime.Compilers.SitemapCompiler` fires
-  when it builds a site's sitemap. A post, category or tag written rebuilds its site's sitemap,
+  when it builds a site's sitemap. A post or a category written rebuilds its site's sitemap,
   because those resources list `MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh`.
 
   Core lists the blog's pages whose only capture is the language. `/:lang/blog/:slug` also holds a
