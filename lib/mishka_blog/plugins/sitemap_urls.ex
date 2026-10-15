@@ -12,8 +12,8 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
     * a published post, at the post page, with `lastmod` its `updated_at` and `images` its
       `featured_image_url`, or none when it has no such image;
-    * a category or a tag holding a published post in its own language, at its page, with no
-      `lastmod`;
+    * a category or a tag holding enough published posts in its own language to be indexed
+      (`MishkaBlog.Plugins.PageSeo.thin?/1`), at its page, with no `lastmod`;
     * a blogger with a published post, and a team one of whose members has one, at its page in
       each language the page answers, with no `lastmod`.
 
@@ -41,6 +41,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
   require Ash.Query
 
   alias MishkaBlog.{BlogPost, Blogger, Collection, Tag, Team}
+  alias MishkaBlog.Plugins.PageSeo
   alias MishkaCmsCore.Runtime.{Languages, PageEditions, Seo}
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
 
@@ -51,8 +52,8 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
      [:slug, :language, :updated_at, :featured_image_url, :permissions, :seo_tags],
      [:effective_permissions]},
     {"blog:category", Collection, [:slug, :language, :permissions, :seo_tags],
-     [:effective_permissions]},
-    {"blog:tag", Tag, [:slug, :language, :permissions, :seo_tags], []}
+     [:effective_permissions, :listed_post_count]},
+    {"blog:tag", Tag, [:slug, :language, :permissions, :seo_tags], [:listed_post_count]}
   ]
 
   # A blogger or a team is one row in every language, and opens with no permission of its own.
@@ -80,6 +81,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
             resource
             |> rows(fields, loads, PageEditions.served_languages(page, site_id), site_id)
             |> Stream.filter(&PageEditions.listed?(%{&1 | permissions: opens_with(&1)}))
+            |> Stream.reject(&thin?/1)
             |> Stream.map(&entry(page, &1, site_id))
         end
       end)
@@ -136,6 +138,10 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
     |> Ash.Query.load(loads)
     |> SitemapCompiler.stream_rows(actor: nil, tenant: site_id)
   end
+
+  # A category or a tag whose page lists too few posts to be indexed (`PageSeo.thin?/1`).
+  defp thin?(%{listed_post_count: count}) when is_integer(count), do: PageSeo.thin?(count)
+  defp thin?(_post), do: false
 
   defp opens_with(%{effective_permissions: permissions}) when is_list(permissions),
     do: permissions

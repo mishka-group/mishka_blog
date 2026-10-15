@@ -1926,6 +1926,16 @@ defmodule MishkaBlog.Tag do
       filter expr(status == :published)
       description "Number of published posts tagged with this tag"
     end
+
+    # WHAT ITS PAGE LISTS: its published posts in its own language, counted as
+    # `published_post_count` is, of the posts its reader may open.
+    count :listed_post_count, :tenant_posts do
+      multitenancy :bypass
+      read_action :public_list
+      filterable? false
+      filter expr(status == :published and language == parent(language))
+      description "Number of published posts in this tag's own language, the ones its page lists"
+    end
   end
 
   identities do
