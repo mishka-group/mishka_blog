@@ -12,9 +12,10 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
     * a published post, at the post page, with `lastmod` its `updated_at` and `images` its
       `featured_image_url`, or none when it has no such image;
-    * a category holding a published post in its own language, at its page, with no `lastmod`;
+    * a category holding a published post in its own language, at its page, with `lastmod` its
+      `updated_at`;
     * a blogger with a published post, and a team one of whose members has one, at its page in
-      each language the page answers, with no `lastmod`.
+      each language the page answers, with `lastmod` its `updated_at`.
 
   A tag is never listed: its page says `noindex` (`MishkaBlog.Plugins.PageSeo`).
 
@@ -51,7 +52,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
     {"blog:post", BlogPost,
      [:slug, :language, :updated_at, :featured_image_url, :permissions, :seo_tags],
      [:effective_permissions]},
-    {"blog:category", Collection, [:slug, :language, :permissions, :seo_tags],
+    {"blog:category", Collection, [:slug, :language, :updated_at, :permissions, :seo_tags],
      [:effective_permissions]}
   ]
 
@@ -104,14 +105,14 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
     resource
     |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site_id)
     |> with_published_post(resource)
-    |> Ash.Query.select([:slug])
+    |> Ash.Query.select([:slug, :updated_at])
     |> SitemapCompiler.stream_rows(actor: nil, tenant: site_id)
     |> Stream.flat_map(fn row ->
       languages
       |> Enum.map(&address(page, &1, row.slug, site_id))
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
-      |> Enum.map(&%{path: &1, lastmod: nil})
+      |> Enum.map(&%{path: &1, lastmod: row.updated_at})
     end)
   end
 
@@ -163,7 +164,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
   end
 
   defp entry(page, row, site_id),
-    do: %{path: address(page, row.language, row.slug, site_id), lastmod: nil}
+    do: %{path: address(page, row.language, row.slug, site_id), lastmod: row.updated_at}
 
   defp address(page, language, slug, site_id),
     do: Languages.url(page.path, %{Languages.capture() => language, "slug" => slug}, site_id)

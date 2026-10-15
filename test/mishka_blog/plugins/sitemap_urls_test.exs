@@ -120,6 +120,11 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       create_post_blogger!(post_id: post.id, blogger_id: writer.id)
 
       assert paths(site) == ["/blog/author/shahryar", "/blog/team/core"]
+
+      assert site |> urls() |> Map.new(&{&1.path, &1.lastmod}) == %{
+               "/blog/author/shahryar" => writer.updated_at,
+               "/blog/team/core" => team.updated_at
+             }
     end
 
     test "nothing is listed without their pages", %{site: site} do
@@ -293,7 +298,7 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   end
 
   describe "categories and tags" do
-    test "a category holding a published post is listed, with no lastmod; a tag is not", %{
+    test "a category holding a published post is listed, with its updated_at; a tag is not", %{
       site: site,
       mode: mode
     } do
@@ -310,7 +315,10 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       create_post_tag!(post_id: persian.id, tag_id: tag.id)
 
       assert urls(site) == [
-               %{path: english(mode, "/blog/category/#{category.slug}"), lastmod: nil}
+               %{
+                 path: english(mode, "/blog/category/#{category.slug}"),
+                 lastmod: category.updated_at
+               }
              ]
     end
 
