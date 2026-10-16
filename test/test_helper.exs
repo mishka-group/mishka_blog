@@ -75,5 +75,11 @@ children = [
 # a longer timeout only delays FAILURES, never successes.
 ExUnit.configure(assert_receive_timeout: 1_000)
 
+# The run starts once the core's plugins and this extension's own are live — the sidebar entry every
+# blog admin page reads its permission from among them. See `MishkaBlog.Test.PluginReadiness`.
+MishkaBlog.Test.PluginReadiness.await(
+  MishkaCmsCore.Application.plugins() ++ MishkaBlog.Application.plugins()
+)
+
 ExUnit.start()
 Ecto.Adapters.SQL.Sandbox.mode(MishkaBlog.Repo, :manual)
