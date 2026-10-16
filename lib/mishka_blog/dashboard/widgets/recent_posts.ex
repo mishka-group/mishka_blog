@@ -114,7 +114,11 @@ defmodule MishkaBlog.Dashboard.Widgets.RecentPosts do
               {gettext("%{minutes} min", minutes: @featured.reading_time_minutes)}
             </span>
             <span class="flex-1"></span>
-            <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-[#8a877f]">
+            <span
+              data-role="roadmap-hint"
+              title={views_hint()}
+              class="inline-flex items-center gap-1 text-[11px] font-semibold text-[#8a877f]"
+            >
               <span class="hero-eye size-3 text-[#a8a5a0]" />{fmt_count(@featured.view_count)}
             </span>
             <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-[#8a877f]">
@@ -129,7 +133,11 @@ defmodule MishkaBlog.Dashboard.Widgets.RecentPosts do
       >
         <Widget.badge label={status_label(p.status)} tone={status_tone(p.status)} />
         <span class="min-w-0 flex-1 truncate text-xs font-semibold text-[#1b1a18]">{p.title}</span>
-        <span class="inline-flex shrink-0 items-center gap-1 text-[10.5px] font-semibold text-[#a8a5a0]">
+        <span
+          data-role="roadmap-hint"
+          title={views_hint()}
+          class="inline-flex shrink-0 items-center gap-1 text-[10.5px] font-semibold text-[#a8a5a0]"
+        >
           <span class="hero-eye size-[11px] text-[#bcb9b2]" />{fmt_count(p.view_count)}
         </span>
       </div>
@@ -139,6 +147,9 @@ defmodule MishkaBlog.Dashboard.Widgets.RecentPosts do
     <% end %>
     """
   end
+
+  defp views_hint,
+    do: gettext("Page views are not recorded yet. Counting them is on our roadmap.")
 
   defp scope_filter(query, nil), do: query
   defp scope_filter(query, site_id), do: Ash.Query.filter(query, site_id == ^site_id)

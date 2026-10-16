@@ -777,6 +777,13 @@ defmodule MishkaBlog.Blogger do
         field :can_publish_directly, :toggle do
           ui do
             label fn -> dgettext("mishka_gervaz", "Can Publish Directly") end
+
+            description fn ->
+              dgettext(
+                "mishka_gervaz",
+                "Enforcing this when a post is published is on our roadmap."
+              )
+            end
           end
         end
 

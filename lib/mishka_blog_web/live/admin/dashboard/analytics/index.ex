@@ -27,6 +27,9 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   same figures identically rather than drifting apart; counts, dates and percentages are written in
   the reader's language by `MishkaCmsCore.Localized`.
 
+  The page opens on a notice (`#analytics-roadmap`) that Analytics is on the roadmap: nothing records
+  a view yet, so every figure here is empty or sample data.
+
   The page is a holder's of the blog's `admin:dashboard:blog:post` (`MishkaBlogWeb.SidebarMenu`).
   The Engagement tile divides comments by views, so it is drawn only for a viewer who also holds
   `admin:dashboard:blog:comment`.

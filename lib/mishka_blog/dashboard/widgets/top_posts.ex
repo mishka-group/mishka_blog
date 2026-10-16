@@ -80,7 +80,16 @@ defmodule MishkaBlog.Dashboard.Widgets.TopPosts do
       tone={:violet}
       title={gettext("Top posts")}
       subtitle={gettext("Most viewed this month")}
-    />
+    >
+      <:right>
+        <span
+          data-role="roadmap-badge"
+          title={gettext("Page views are not recorded yet. Counting them is on our roadmap.")}
+        >
+          <Widget.pill label={gettext("Not tracked yet")} tone={:amber} />
+        </span>
+      </:right>
+    </Widget.card_header>
     <div :if={@rows != []}>
       <div
         :for={r <- @rows}

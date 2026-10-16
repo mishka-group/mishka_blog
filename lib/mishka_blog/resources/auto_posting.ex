@@ -60,6 +60,9 @@ defmodule MishkaBlog.AutoPosting do
   @square_pause @square <> " border-[#f0e4c8] bg-[#fbf6ea] text-[#a5691a] hover:bg-[#fbf1df]"
   @square_danger @square <> " border-[#f0dcd8] bg-[#fdf3f1] text-[#c0473d] hover:bg-[#fbe9e7]"
 
+  @square_roadmap @square <>
+                    " pointer-events-none border-[#ecebe6] bg-[#faf9f6] text-[#bcb9b2] opacity-60"
+
   @admin_fields [
     :name,
     :plugin,
@@ -364,6 +367,14 @@ defmodule MishkaBlog.AutoPosting do
           event "edit_auto_posting"
           visible :active
 
+          render fn record ->
+            roadmap_square(%{
+              id: "auto-posting-edit-roadmap-#{record.id}",
+              icon: "hero-pencil-square",
+              hint: dgettext("mishka_gervaz", "Editing is on our roadmap.")
+            })
+          end
+
           ui do
             label fn -> dgettext("mishka_gervaz", "Edit") end
             icon "hero-pencil-square"
@@ -375,6 +386,14 @@ defmodule MishkaBlog.AutoPosting do
           type :event
           event "show_versions"
           visible :active
+
+          render fn record ->
+            roadmap_square(%{
+              id: "auto-posting-versions-roadmap-#{record.id}",
+              icon: "hero-clock",
+              hint: dgettext("mishka_gervaz", "Version history is on our roadmap.")
+            })
+          end
 
           ui do
             label fn -> dgettext("mishka_gervaz", "Versions") end
@@ -449,6 +468,14 @@ defmodule MishkaBlog.AutoPosting do
           type :event
           event "show_versions"
           visible :archived
+
+          render fn record ->
+            roadmap_square(%{
+              id: "auto-posting-versions-archived-roadmap-#{record.id}",
+              icon: "hero-clock",
+              hint: dgettext("mishka_gervaz", "Version history is on our roadmap.")
+            })
+          end
 
           ui do
             label fn -> dgettext("mishka_gervaz", "Versions Archived") end
@@ -1422,4 +1449,16 @@ defmodule MishkaBlog.AutoPosting do
   # %Ash.ForbiddenField{}/%Ash.NotLoaded{} rather than a number, which `|| 0` would let through.
   defp counted(value) when is_integer(value) and value >= 0, do: value
   defp counted(_value), do: 0
+
+  defp roadmap_square(assigns) do
+    assigns = Map.put(assigns, :class, @square_roadmap)
+
+    ~H"""
+    <span class="inline-flex cursor-not-allowed" title={@hint} data-role="roadmap-action">
+      <button type="button" id={@id} class={@class} aria-label={@hint} aria-disabled="true" disabled>
+        <span class={@icon}></span>
+      </button>
+    </span>
+    """
+  end
 end

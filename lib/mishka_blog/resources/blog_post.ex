@@ -1046,6 +1046,10 @@ defmodule MishkaBlog.BlogPost do
 
           ui do
             label fn -> dgettext("mishka_gervaz", "Status") end
+
+            description fn ->
+              dgettext("mishka_gervaz", "Publishing at the scheduled time is on our roadmap.")
+            end
           end
         end
 
