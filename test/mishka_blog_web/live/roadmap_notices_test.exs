@@ -23,6 +23,7 @@ defmodule MishkaBlogWeb.Test.RoadmapNoticesTest do
 
   @await 5_000
   @badge "[data-role=roadmap-badge]"
+  @notice "[role=note][data-role=roadmap-notice]"
 
   setup %{conn: conn} do
     SiteState.clear()
@@ -77,11 +78,13 @@ defmodule MishkaBlogWeb.Test.RoadmapNoticesTest do
     test "opens on a notice that the section is on the roadmap", ctx do
       view = open(ctx, "/admin/dashboard/blog/auto-posting")
 
-      assert has_element?(view, "#auto-posting-roadmap", "This section is not available yet")
+      notice = "#auto-posting-roadmap#{@notice}"
+
+      assert has_element?(view, notice, "This section is not available yet")
 
       assert has_element?(
                view,
-               "#auto-posting-roadmap",
+               notice,
                "It is on our roadmap. What you see here shows how it will work."
              )
     end
@@ -117,11 +120,13 @@ defmodule MishkaBlogWeb.Test.RoadmapNoticesTest do
     test "opens on a notice that Analytics is on the roadmap, above its figures", ctx do
       view = open(ctx, "/admin/dashboard/blog/analytics")
 
-      assert has_element?(view, "#analytics-roadmap", "Analytics is not available yet")
+      notice = "#analytics-roadmap#{@notice}"
+
+      assert has_element?(view, notice, "Analytics is not available yet")
 
       assert has_element?(
                view,
-               "#analytics-roadmap",
+               notice,
                "It is on our roadmap. What you see here shows how it will work."
              )
 
