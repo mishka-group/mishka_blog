@@ -93,6 +93,13 @@ defmodule MishkaBlog.Dashboard.Widgets.DraftsScheduled do
         <div class="mt-0.5 text-[11.5px] font-medium text-[#8a877f]">{gettext("Scheduled")}</div>
       </div>
     </div>
+    <p
+      :if={@data.scheduled > 0}
+      data-role="roadmap-hint"
+      class="mb-3.5 text-[11.5px] font-medium text-[#a5691a]"
+    >
+      {gettext("Publishing at the scheduled time is on our roadmap.")}
+    </p>
     <div
       :for={p <- @data.latest}
       class="flex items-center gap-[9px] border-t border-[#f4f3ef] py-2"

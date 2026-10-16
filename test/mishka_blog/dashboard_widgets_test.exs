@@ -372,6 +372,52 @@ defmodule MishkaBlog.Dashboard.WidgetsTest do
     end
   end
 
+  # A WIDGET THAT SHOWS A FIGURE NOTHING RECORDS YET SAYS SO. Page views are read from a log that no
+  # route writes to, and a scheduled post is never published by itself.
+  describe "roadmap labels" do
+    test "blog-top-posts is labelled as not tracked yet", %{tenant: tenant, site: site} do
+      create_blog_post!(site_id: site.id, status: :published)
+
+      html = render_widget(TopPosts, tenant)
+
+      assert html =~ ~s(data-role="roadmap-badge")
+      assert html =~ "Not tracked yet"
+      assert html =~ "Counting them is on our roadmap."
+    end
+
+    test "blog-recent-posts says on each view count that views are not recorded yet", %{
+      tenant: tenant,
+      site: site
+    } do
+      create_blog_post!(site_id: site.id, title: "First Recent Post")
+      create_blog_post!(site_id: site.id, title: "Second Recent Post")
+
+      html = render_widget(RecentPosts, tenant)
+
+      assert length(String.split(html, ~s(data-role="roadmap-hint"))) - 1 == 2
+      assert html =~ "Page views are not recorded yet. Counting them is on our roadmap."
+    end
+
+    test "blog-drafts-scheduled hints at the roadmap once a post is scheduled", %{
+      tenant: tenant,
+      site: site
+    } do
+      create_blog_post!(site_id: site.id, status: :draft)
+      refute render_widget(DraftsScheduled, tenant) =~ "on our roadmap"
+
+      create_blog_post!(
+        site_id: site.id,
+        status: :scheduled,
+        scheduled_publish_at: ~U[2099-07-03 18:04:00Z]
+      )
+
+      html = render_widget(DraftsScheduled, tenant)
+
+      assert html =~ ~s(data-role="roadmap-hint")
+      assert html =~ "Publishing at the scheduled time is on our roadmap."
+    end
+  end
+
   defp render_widget(module, user) do
     render_component(&Widget.card/1,
       widget: module.widget(),

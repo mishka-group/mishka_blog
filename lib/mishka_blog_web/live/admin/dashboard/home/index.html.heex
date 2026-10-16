@@ -98,6 +98,7 @@ SPDX-License-Identifier: Apache-2.0
           </div>
         </div>
         <div class={["mt-[11px] truncate text-[11px] font-semibold", note_tone]}>{note}</div>
+        <div :if={untracked?(label)} class="mt-2"><.roadmap_badge kind={:untracked} /></div>
       </div>
     </div>
 
@@ -317,7 +318,10 @@ SPDX-License-Identifier: Apache-2.0
           ]}>
             <.icon name={icon} class="size-[22px]" />
           </span>
-          <.icon name="hero-chevron-right" class="size-[18px] text-[#c3c0b8] rtl:rotate-180" />
+          <div class="flex items-center gap-2">
+            <.roadmap_badge :if={on_roadmap?(title)} kind={:roadmap} />
+            <.icon name="hero-chevron-right" class="size-[18px] text-[#c3c0b8] rtl:rotate-180" />
+          </div>
         </div>
 
         <div class="mt-4 font-['Space_Grotesk'] text-[17px] font-semibold text-[#17161a]">
@@ -393,7 +397,10 @@ SPDX-License-Identifier: Apache-2.0
             :for={{label, value, tone} <- month_rows(@stats, @blog_areas)}
             class="flex items-center justify-between gap-2 border-b border-[#f4f3ee] py-3 last:border-b-0"
           >
-            <span class="text-[12.5px] font-medium text-[#6d6a63]">{label}</span>
+            <span class="flex flex-wrap items-center gap-2 text-[12.5px] font-medium text-[#6d6a63]">
+              {label}
+              <.roadmap_badge :if={untracked?(label)} kind={:untracked} />
+            </span>
             <span class={["font-['Space_Grotesk'] text-[15px] font-bold", tone]}>{value}</span>
           </div>
         </div>

@@ -30,6 +30,10 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   figures divide comments by views, so they need both. A card, a row or a link whose area the
   viewer does not hold is not drawn, and `MishkaBlog.Dashboard.Overview` does not read its data.
 
+  A figure counted from the view log (`untracked?/1`) carries a "Not tracked yet" label, and the
+  Auto Posting and Analytics cards (`on_roadmap?/1`) an "On our roadmap" one, both drawn by
+  `roadmap_badge/1`: nothing records a view yet, and those two sections are not built.
+
   Setting the blog up, the Doctor and the kit upgrade write pages, components and a snippet, and
   read the site they are for, so they need all three of `admin:dashboard:runtime:page` (the pages
   and the page builder's snippet), `admin:dashboard:runtime:component` and
@@ -43,6 +47,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
 
   alias MishkaBlog.Dashboard.Overview
   alias MishkaBlog.Kit
+  alias MishkaCmsCore.Dashboard.Widget
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.{ExtensionProvision, Site}
   alias MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed
@@ -111,6 +116,11 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
      "/admin/dashboard/blog/analytics", "hero-arrow-trending-up", "bg-[#fbf6e5] text-[#b59321]",
      {gettext_noop("Total Views"), gettext_noop("Growth Rate")}, [:post]}
   ]
+
+  # THE FIGURES COUNTED FROM THE VIEW LOG, which nothing writes to yet, and the sections that are
+  # not built yet — the cards, rows and tiles that carry a roadmap label.
+  @untracked_figures ["Today's Views", "Engagement", "Total Views", "Engagement Rate"]
+  @roadmap_sections ["Auto Posting", "Analytics"]
 
   @month_labels [
     {gettext_noop("Posts Published"), [:post]},
@@ -394,6 +404,43 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
         holds?(areas, needs),
         do: {translate(label), icon, path, primary?}
   end
+
+  @doc """
+  Whether `label`, as a KPI tile or a This Month row shows it, is a figure counted from the view log.
+
+  Nothing records a view yet, so the figure is empty or sample data and is drawn with a
+  `roadmap_badge/1`.
+  """
+  @spec untracked?(String.t()) :: boolean()
+  def untracked?(label), do: label in Enum.map(@untracked_figures, &translate/1)
+
+  @doc "Whether `title`, as a section card shows it, is a section that is on the roadmap."
+  @spec on_roadmap?(String.t()) :: boolean()
+  def on_roadmap?(title), do: title in Enum.map(@roadmap_sections, &translate/1)
+
+  @doc """
+  The label drawn on a figure or a section that is not working yet.
+
+  `kind` is `:untracked` for a figure the view log feeds, `:roadmap` for a section on the roadmap.
+  """
+  attr :kind, :atom, required: true, values: [:untracked, :roadmap]
+
+  def roadmap_badge(assigns) do
+    ~H"""
+    <span data-role="roadmap-badge" data-kind={@kind} title={roadmap_hint(@kind)} class="inline-flex">
+      <Widget.badge label={roadmap_label(@kind)} tone={:amber} />
+    </span>
+    """
+  end
+
+  defp roadmap_label(:untracked), do: gettext("Not tracked yet")
+  defp roadmap_label(:roadmap), do: gettext("On our roadmap")
+
+  defp roadmap_hint(:untracked),
+    do: gettext("Page views are not recorded yet. Counting them is on our roadmap.")
+
+  defp roadmap_hint(:roadmap),
+    do: gettext("This section is not available yet. It is on our roadmap.")
 
   @doc "Whether `areas` holds every blog area in `needs`."
   @spec holds?(Overview.areas(), [:post | :comment]) :: boolean()

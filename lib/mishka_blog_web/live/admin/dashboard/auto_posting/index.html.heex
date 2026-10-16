@@ -19,6 +19,14 @@ SPDX-License-Identifier: Apache-2.0
     <:subtitle>{gettext("Schedule and automate your content publishing.")}</:subtitle>
   </.header>
 
+  <.roadmap_notice
+    id="auto-posting-roadmap"
+    class="mb-5"
+    title={gettext("This section is not available yet")}
+  >
+    {gettext("It is on our roadmap. What you see here shows how it will work.")}
+  </.roadmap_notice>
+
   <.live_component
     :if={@url_state}
     module={MishkaGervaz.Table.Web.Live}
