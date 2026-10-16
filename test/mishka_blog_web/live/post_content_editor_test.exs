@@ -118,7 +118,11 @@ defmodule MishkaBlogWeb.Test.PostContentEditorTest do
     view = open_posts(ctx)
 
     view |> element(@components <> "-toggle") |> render_click()
-    render_async(view, @await)
+
+    # THE PALETTE HAS LOADED once the editor is told which of its components hold content. The same
+    # click starts building the site's preview stylesheet — on a fresh VM three Tailwind runs, seconds
+    # of them — which `render_async/2` would wait for as well, and which nothing here asserts on.
+    assert_push_event(view, "mishka:content_editor", %{id: @editor, holders: _holders}, @await)
 
     assert has_element?(view, "#{@components}-pick-#{ctx.callout.name}")
     assert has_element?(view, "#{@components}-pick-#{ctx.shared.name}")
