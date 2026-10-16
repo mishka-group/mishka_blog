@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Test.EditionChipsTest do
   @moduledoc """
   The sibling editions a translated post, collection or tag lists, and the chips drawn from them.

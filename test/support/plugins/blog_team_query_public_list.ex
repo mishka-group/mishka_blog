@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Test.Plugins.BlogTeamQueryPublicList do
   @moduledoc """
   Test plugin for the query filter `blog:team:query_public_list` — reports to the test process that

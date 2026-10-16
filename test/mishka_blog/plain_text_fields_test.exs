@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Test.PlainTextFieldsTest do
   @moduledoc """
   The blog's plain-text fields — a post's title and subtitle, a category's, a tag's, a team's and an

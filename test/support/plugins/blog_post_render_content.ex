@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Test.Plugins.BlogPostRenderContent do
   @moduledoc """
   Test plugin for the content render filter `blog:blog_post:render_content` — appends a marker to the

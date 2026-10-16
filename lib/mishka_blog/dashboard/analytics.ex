@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Dashboard.Analytics do
   @moduledoc """
   Every number on the blog analytics page (`/admin/dashboard/blog/analytics`), read from the database.

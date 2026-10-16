@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   @moduledoc """
   The blog analytics page: five KPI tiles, a daily views chart, the most-read posts, where their

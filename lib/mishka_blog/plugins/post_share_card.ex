@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Plugins.PostShareCard do
   @moduledoc """
   A plain mishka_installer plugin: after a post is saved (`blog:blog_post:after_save` — created, updated or

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.BloggerMasterProfileTest do
   @moduledoc """
   A master who writes on a site has a blogger profile there, as any of the site's own authors does.

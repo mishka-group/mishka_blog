@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Test.Plugins.BlogPostRenderContentScript do
   @moduledoc """
   Test plugin for `blog:blog_post:render_content` that appends markup a sanitizer must clean — a

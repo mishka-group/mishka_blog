@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Live.Admin.Dashboard.Blogger.Index do
   @moduledoc """
   The bloggers grid: a Gervaz table drawn as `MishkaBlogWeb.Templates.BloggerCard`, its create/edit

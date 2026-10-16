@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Test.Notify.SettingsGateTest do
   @moduledoc """
   Which notification types a site receives is a per-site boolean Setting (default on), checked once

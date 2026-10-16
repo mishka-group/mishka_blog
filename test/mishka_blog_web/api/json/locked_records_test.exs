@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Api.Json.LockedRecordsTest do
   @moduledoc """
   The public JSON API keeps a locked post, category or tag, and the comments of a locked post, to

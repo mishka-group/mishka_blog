@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Live.Admin.Dashboard.Team.Index do
   @moduledoc """
   The teams grid: a Gervaz table drawn as `MishkaBlogWeb.Templates.TeamCard`, its create/edit

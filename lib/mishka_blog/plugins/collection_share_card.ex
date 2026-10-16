@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Plugins.CollectionShareCard do
   @moduledoc """
   A plain mishka_installer plugin: after a category is saved (`blog:collection:after_save` — created, updated or

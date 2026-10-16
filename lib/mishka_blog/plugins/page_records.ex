@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Plugins.PageRecords do
   @moduledoc """
   Names the kinds of record the blog's pages show — a post, a collection, a tag, a blogger, a team —

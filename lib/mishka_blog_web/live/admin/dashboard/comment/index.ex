@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Live.Admin.Dashboard.Comment.Index do
   @moduledoc """
   The comments list: a Gervaz table drawn as `MishkaBlogWeb.Templates.CommentCard`, with a create /

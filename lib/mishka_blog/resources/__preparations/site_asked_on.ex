@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Resources.Preparations.SiteAskedOn do
   @moduledoc """
   Keeps a public list to the site it is asked on: only the rows whose `:through` record belongs to

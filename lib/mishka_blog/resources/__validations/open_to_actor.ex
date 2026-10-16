@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Resources.Validations.OpenToActor do
   @moduledoc """
   Refuses a write onto a record its actor may not open — a comment, a rating or a bookmark on a

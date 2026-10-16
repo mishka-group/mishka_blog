@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Test.PostFormRelationsTest do
   @moduledoc """
   A post opened for editing keeps its collections, bloggers and tags on the form while another

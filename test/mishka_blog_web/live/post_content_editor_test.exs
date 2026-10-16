@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Test.PostContentEditorTest do
   @moduledoc """
   A post's content is written in the content editor (`extra %{content_editor: true}` on the form's

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Api.Json.AreaPermissionsTest do
   @moduledoc """
   The admin JSON:API is its own surface: a blog route asks for `admin:api:blog:post` or

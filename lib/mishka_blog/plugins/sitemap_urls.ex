@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Plugins.SitemapUrls do
   @moduledoc """
   Adds the blog's posts, categories, bloggers and teams to a site's `/sitemap.xml`, through
