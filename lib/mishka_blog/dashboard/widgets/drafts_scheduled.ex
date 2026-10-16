@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Dashboard.Widgets.DraftsScheduled do
   @moduledoc """
   Dashboard widget (a `dashboard:widgets` plugin): draft vs scheduled post counts plus the latest

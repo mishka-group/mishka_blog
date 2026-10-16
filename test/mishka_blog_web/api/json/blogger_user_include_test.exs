@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Api.Json.BloggerUserIncludeTest do
   @moduledoc """
   The public blogger endpoints are anonymous by design — author pages are public — and they used to

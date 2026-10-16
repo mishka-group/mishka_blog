@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   @moduledoc """
   The blog admin overview: five KPI cards, eight section cards, an editorial calendar and three

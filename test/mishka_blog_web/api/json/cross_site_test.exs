@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Api.Json.CrossSiteTest do
   @moduledoc """
   A bookmark, a rating, a vote and a follow made on one site may only name a record of that site.

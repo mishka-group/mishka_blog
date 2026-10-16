@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Plugins.PageSeoTest do
   @moduledoc """
   What the blog answers on `runtime:page:seo`: the head of the post, the category and the tag its

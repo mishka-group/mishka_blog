@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.SiteBoundaryTest do
   @moduledoc """
   A site user acts only on its own site, even one holding `"*"`. A master is a user whose `site_id`

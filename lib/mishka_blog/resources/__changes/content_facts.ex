@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Resources.Changes.ContentFacts do
   @moduledoc """
   What a post's `content` says about it, worked out once, when the content is written — reading a

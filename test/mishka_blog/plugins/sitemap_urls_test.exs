@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   @moduledoc """
   What the blog adds to a site's sitemap: every post, category and tag a visitor can open, at the

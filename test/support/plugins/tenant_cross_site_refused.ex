@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Test.Plugins.TenantCrossSiteRefused do
   @moduledoc """
   Test plugin for `runtime:tenant:cross_site_refused` — reports what a refused write named to the

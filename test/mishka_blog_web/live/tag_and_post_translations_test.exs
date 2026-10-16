@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Test.TagAndPostTranslationsTest do
   @moduledoc """
   The tags page and the posts page, deleting an original edition whose translation is live.

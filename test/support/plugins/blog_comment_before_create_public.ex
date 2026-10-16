@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Test.Plugins.BlogCommentBeforeCreatePublic do
   @moduledoc """
   Test plugin for the before/reject seam `blog:comment:before_create_public` — rejects only comments

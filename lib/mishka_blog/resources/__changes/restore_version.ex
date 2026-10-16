@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Resources.Changes.RestoreVersion do
   @moduledoc """
   Restores a record to one of its own versions, named by the action's `:version_id` argument.

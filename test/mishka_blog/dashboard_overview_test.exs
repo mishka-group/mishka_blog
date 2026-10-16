@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.Dashboard.OverviewTest do
   @moduledoc """
   The blog admin overview page (`/admin/dashboard/blog`) is one read module plus a wall of pure

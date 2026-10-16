@@ -1,0 +1,27 @@
+version = 1
+
+[[annotations]]
+path = [
+  "REUSE.toml",
+  "LICENSE",
+  "LICENSES/**",
+  ".gitignore",
+  ".tool-versions",
+  "README.md",
+  "mix.lock",
+  ".github/workflows/*.yml",
+  "**/*.yml",
+  "**/*.md",
+  "**/*.json",
+  "priv/**",
+  "test/fixtures/**",
+  "**/*.png",
+  "**/*.jpg",
+  "**/*.jpeg",
+  "**/*.gif",
+  "**/*.svg",
+  "**/*.ico",
+  "**/*.webp",
+]
+SPDX-FileCopyrightText = "2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>"
+SPDX-License-Identifier = "Apache-2.0"

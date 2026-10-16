@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Test.PostFormReopenTest do
   @moduledoc """
   The posts page keeps its form mounted in `blog-post-form-modal` and only hides it, so a close that

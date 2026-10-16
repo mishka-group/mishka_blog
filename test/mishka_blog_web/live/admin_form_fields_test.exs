@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlogWeb.Test.AdminFormFieldsTest do
   @moduledoc """
   The blog's admin forms draw each field as the box it holds, and fill a record's slug while the

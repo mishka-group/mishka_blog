@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaBlog.SiteLinksTest do
   @moduledoc """
   Which records a blog record may name by id, whoever writes it: a site user, a master or the system.
