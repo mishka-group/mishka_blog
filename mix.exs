@@ -19,6 +19,10 @@ defmodule MishkaBlog.MixProject do
     ]
   end
 
+  def cli do
+    [preferred_envs: [ci: :test]]
+  end
+
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
@@ -56,7 +60,15 @@ defmodule MishkaBlog.MixProject do
       {:mishka_installer, "~> 0.1.14"},
       {:guarded_struct, "~> 0.1.4"},
       {:mishka_cms_core, path: "../mishka_cms_core"},
-      {:mishka_gervaz, path: "../mishka_gervaz"}
+      {:mishka_gervaz, path: "../mishka_gervaz"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      {:jump_credo_checks, "~> 0.6", only: [:dev, :test], runtime: false},
+      {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
+      {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
+      {:reach, "~> 2.8", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -74,7 +86,22 @@ defmodule MishkaBlog.MixProject do
   end
 
   defp aliases() do
-    [test: ["ash.setup --quiet", "test"], setup: "ash.setup"]
+    [
+      test: ["ash.setup --quiet", "test"],
+      setup: "ash.setup",
+      ci: [
+        "compile --warnings-as-errors",
+        "format --check-formatted",
+        "credo --strict",
+        "sobelow --skip --exit",
+        "deps.audit",
+        "hex.audit",
+        "dialyzer",
+        "ex_dna --max-clones 0",
+        "reach.check --arch --smells",
+        "test"
+      ]
+    ]
   end
 
   defp elixirc_paths(:test),
