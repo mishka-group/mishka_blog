@@ -1023,18 +1023,9 @@ defmodule MishkaBlog.Tag do
         message dgettext_noop("errors", "Cannot edit archived tag. Please unarchive it first.")
       end
 
-      validate fn changeset, _context ->
-        parent_id = Ash.Changeset.get_attribute(changeset, :parent_tag_id)
-        tag_id = changeset.data.id
-
-        if !is_nil(parent_id) and parent_id == tag_id do
-          {:error,
-           field: :parent_tag_id,
-           message: dgettext_noop("errors", "Tag cannot be its own parent.")}
-        else
-          :ok
-        end
-      end
+      validate {MishkaBlog.Resources.Validations.NotItsOwnParent,
+                field: :parent_tag_id,
+                message: dgettext_noop("errors", "Tag cannot be its own parent.")}
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
 
@@ -1054,18 +1045,9 @@ defmodule MishkaBlog.Tag do
         message dgettext_noop("errors", "Cannot edit archived tag. Please unarchive it first.")
       end
 
-      validate fn changeset, _context ->
-        parent_id = Ash.Changeset.get_attribute(changeset, :parent_tag_id)
-        tag_id = changeset.data.id
-
-        if !is_nil(parent_id) and parent_id == tag_id do
-          {:error,
-           field: :parent_tag_id,
-           message: dgettext_noop("errors", "Tag cannot be its own parent.")}
-        else
-          :ok
-        end
-      end
+      validate {MishkaBlog.Resources.Validations.NotItsOwnParent,
+                field: :parent_tag_id,
+                message: dgettext_noop("errors", "Tag cannot be its own parent.")}
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
     end

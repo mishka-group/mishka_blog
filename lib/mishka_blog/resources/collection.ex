@@ -1262,18 +1262,9 @@ defmodule MishkaBlog.Collection do
                 )
       end
 
-      validate fn changeset, _context ->
-        parent_id = Ash.Changeset.get_attribute(changeset, :parent_collection_id)
-        collection_id = changeset.data.id
-
-        if !is_nil(parent_id) and parent_id == collection_id do
-          {:error,
-           field: :parent_collection_id,
-           message: dgettext_noop("errors", "Collection cannot be its own parent.")}
-        else
-          :ok
-        end
-      end
+      validate {MishkaBlog.Resources.Validations.NotItsOwnParent,
+                field: :parent_collection_id,
+                message: dgettext_noop("errors", "Collection cannot be its own parent.")}
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
 
@@ -1296,18 +1287,9 @@ defmodule MishkaBlog.Collection do
                 )
       end
 
-      validate fn changeset, _context ->
-        parent_id = Ash.Changeset.get_attribute(changeset, :parent_collection_id)
-        collection_id = changeset.data.id
-
-        if !is_nil(parent_id) and parent_id == collection_id do
-          {:error,
-           field: :parent_collection_id,
-           message: dgettext_noop("errors", "Collection cannot be its own parent.")}
-        else
-          :ok
-        end
-      end
+      validate {MishkaBlog.Resources.Validations.NotItsOwnParent,
+                field: :parent_collection_id,
+                message: dgettext_noop("errors", "Collection cannot be its own parent.")}
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
     end

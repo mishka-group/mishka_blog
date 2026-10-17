@@ -1197,18 +1197,9 @@ defmodule MishkaBlog.Comment do
                 )
       end
 
-      validate fn changeset, _context ->
-        parent_id = Ash.Changeset.get_attribute(changeset, :parent_comment_id)
-        comment_id = changeset.data.id
-
-        if !is_nil(parent_id) and parent_id == comment_id do
-          {:error,
-           field: :parent_comment_id,
-           message: dgettext_noop("errors", "Comment cannot be its own parent.")}
-        else
-          :ok
-        end
-      end
+      validate {MishkaBlog.Resources.Validations.NotItsOwnParent,
+                field: :parent_comment_id,
+                message: dgettext_noop("errors", "Comment cannot be its own parent.")}
 
       description "Updates an existing comment"
     end
@@ -1406,18 +1397,9 @@ defmodule MishkaBlog.Comment do
                 )
       end
 
-      validate fn changeset, _context ->
-        parent_id = Ash.Changeset.get_attribute(changeset, :parent_comment_id)
-        comment_id = changeset.data.id
-
-        if !is_nil(parent_id) and parent_id == comment_id do
-          {:error,
-           field: :parent_comment_id,
-           message: dgettext_noop("errors", "Comment cannot be its own parent.")}
-        else
-          :ok
-        end
-      end
+      validate {MishkaBlog.Resources.Validations.NotItsOwnParent,
+                field: :parent_comment_id,
+                message: dgettext_noop("errors", "Comment cannot be its own parent.")}
     end
 
     destroy :master_destroy do
