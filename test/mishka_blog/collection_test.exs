@@ -963,6 +963,74 @@ defmodule MishkaBlog.Test.CollectionTest do
       end
     end
 
+    describe "effective permissions up the parent chain" do
+      defp effective_permissions!(collection, site) do
+        collection
+        |> Ash.load!(:effective_permissions, tenant: site.id, authorize?: false)
+        |> Map.fetch!(:effective_permissions)
+      end
+
+      test "a collection with none of its own takes those of the nearest parent that names some" do
+        site = create_site!()
+
+        top = create_collection!(site_id: site.id, permissions: ["members:read"])
+        middle = create_collection!(site_id: site.id, parent_collection_id: top.id)
+        bottom = create_collection!(site_id: site.id, parent_collection_id: middle.id)
+
+        assert effective_permissions!(top, site) == ["members:read"]
+        assert effective_permissions!(middle, site) == ["members:read"]
+        assert effective_permissions!(bottom, site) == ["members:read"]
+      end
+
+      test "a collection that names permissions keeps its own over its parents'" do
+        site = create_site!()
+
+        top = create_collection!(site_id: site.id, permissions: ["members:read"])
+
+        middle =
+          create_collection!(
+            site_id: site.id,
+            parent_collection_id: top.id,
+            permissions: ["staff:read"]
+          )
+
+        bottom = create_collection!(site_id: site.id, parent_collection_id: middle.id)
+
+        assert effective_permissions!(middle, site) == ["staff:read"]
+        assert effective_permissions!(bottom, site) == ["staff:read"]
+      end
+
+      test "a chain without any permissions opens to everyone" do
+        site = create_site!()
+
+        top = create_collection!(site_id: site.id)
+        bottom = create_collection!(site_id: site.id, parent_collection_id: top.id)
+
+        assert effective_permissions!(bottom, site) == []
+      end
+
+      test "a parent cycle with no permissions ends the walk and opens to everyone" do
+        site = create_site!()
+
+        a = create_collection!(site_id: site.id)
+        b = create_collection!(site_id: site.id, parent_collection_id: a.id)
+
+        a =
+          a
+          |> Ash.Changeset.for_update(:update, %{parent_collection_id: b.id},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.update!()
+
+        assert a.parent_collection_id == b.id
+        assert b.parent_collection_id == a.id
+
+        assert effective_permissions!(a, site) == []
+        assert effective_permissions!(b, site) == []
+      end
+    end
+
     describe "relationships" do
       test "belongs_to site" do
         site = create_site!()
