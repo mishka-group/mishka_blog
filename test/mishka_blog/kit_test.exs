@@ -461,8 +461,10 @@ defmodule MishkaBlog.KitTest do
 
       monokai = Makeup.stylesheet(:monokai_style, "highlight")
 
-      for [class] <- Regex.scan(~r/^\.highlight \.([\w-]+) \{/m, monokai, capture: :all_but_first),
-          class != "hll" do
+      monokai_classes =
+        Regex.scan(~r/^\.highlight \.([\w-]+) \{/m, monokai, capture: :all_but_first)
+
+      for [class] <- monokai_classes, class != "hll" do
         assert sheet.content =~ ".highlight .#{class} {", "nothing colours .#{class}"
       end
     end
