@@ -1703,12 +1703,13 @@ defmodule MishkaBlog.Collection do
         id = input.arguments.id
         version_id = input.arguments.version_id
 
-        case Ash.get(MishkaBlog.Collection, id, tenant: context.tenant, authorize?: false) do
+        case Ash.get(MishkaBlog.Collection, id, Ash.Scope.to_opts(context)) do
           {:ok, record} when not is_nil(record) ->
             record
-            |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-              tenant: context.tenant,
-              authorize?: false
+            |> Ash.Changeset.for_update(
+              :restore_version,
+              %{version_id: version_id},
+              Ash.Scope.to_opts(context)
             )
             |> Ash.update()
 
@@ -1746,15 +1747,21 @@ defmodule MishkaBlog.Collection do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
+      run fn input, context ->
         id = input.arguments.id
         version_id = input.arguments.version_id
 
-        case Ash.get(MishkaBlog.Collection, id, action: :master_get, authorize?: false) do
+        case Ash.get(
+               MishkaBlog.Collection,
+               id,
+               Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
+             ) do
           {:ok, record} when not is_nil(record) ->
             record
-            |> Ash.Changeset.for_update(:master_restore_version, %{version_id: version_id},
-              authorize?: false
+            |> Ash.Changeset.for_update(
+              :master_restore_version,
+              %{version_id: version_id},
+              Ash.Scope.to_opts(context, tenant: nil)
             )
             |> Ash.update()
 
@@ -1783,7 +1790,7 @@ defmodule MishkaBlog.Collection do
             Enum.map(results, fn collection ->
               version =
                 MishkaBlog.Collection.Version
-                |> Ash.get!(version_id, action: :get_any, authorize?: false)
+                |> Ash.get!(version_id, Ash.Scope.to_opts(context, action: :get_any))
 
               if version.version_source_id != collection.id do
                 raise Ash.Error.Invalid.exception(
@@ -1832,7 +1839,7 @@ defmodule MishkaBlog.Collection do
             Enum.map(results, fn collection ->
               version =
                 MishkaBlog.Collection.Version
-                |> Ash.get!(version_id, action: :get_any, authorize?: false)
+                |> Ash.get!(version_id, Ash.Scope.to_opts(context, action: :get_any, tenant: nil))
 
               if version.version_source_id != collection.id do
                 raise Ash.Error.Invalid.exception(

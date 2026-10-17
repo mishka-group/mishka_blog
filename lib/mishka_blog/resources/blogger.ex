@@ -1542,11 +1542,7 @@ defmodule MishkaBlog.Blogger do
         blogger_id = input.arguments.id
         version_id = input.arguments.version_id
 
-        Ash.get(MishkaBlog.Blogger, blogger_id,
-          action: :read,
-          tenant: context.tenant,
-          authorize?: false
-        )
+        Ash.get(MishkaBlog.Blogger, blogger_id, Ash.Scope.to_opts(context, action: :read))
         |> case do
           {:ok, blogger} when not is_nil(blogger) ->
             if !is_nil(blogger.archived_at) do
@@ -1567,10 +1563,10 @@ defmodule MishkaBlog.Blogger do
               tenant = blogger.site_id
 
               blogger
-              |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                actor: context.actor,
-                tenant: tenant,
-                authorize?: false
+              |> Ash.Changeset.for_update(
+                :restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: tenant)
               )
               |> Ash.update()
             end
@@ -1617,9 +1613,10 @@ defmodule MishkaBlog.Blogger do
         blogger_id = input.arguments.id
         version_id = input.arguments.version_id
 
-        Ash.get(MishkaBlog.Blogger, blogger_id,
-          action: :master_get,
-          authorize?: false
+        Ash.get(
+          MishkaBlog.Blogger,
+          blogger_id,
+          Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
         )
         |> case do
           {:ok, blogger} when not is_nil(blogger) ->
@@ -1639,9 +1636,10 @@ defmodule MishkaBlog.Blogger do
                )}
             else
               blogger
-              |> Ash.Changeset.for_update(:master_restore_version, %{version_id: version_id},
-                actor: context.actor,
-                authorize?: false
+              |> Ash.Changeset.for_update(
+                :master_restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: nil)
               )
               |> Ash.update()
             end
@@ -1668,14 +1666,12 @@ defmodule MishkaBlog.Blogger do
         version_id = input.arguments.version_id
 
         with {:ok, blogger} when not is_nil(blogger) <-
-               Ash.get(MishkaBlog.Blogger, blogger_id,
-                 tenant: context.tenant,
-                 authorize?: false
-               ),
+               Ash.get(MishkaBlog.Blogger, blogger_id, Ash.Scope.to_opts(context)),
              {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.Blogger.Version, version_id,
-                 action: :get_any,
-                 authorize?: false
+               Ash.get(
+                 MishkaBlog.Blogger.Version,
+                 version_id,
+                 Ash.Scope.to_opts(context, action: :get_any)
                ),
              :valid <- if(version.version_source_id == blogger_id, do: :valid, else: :invalid) do
           restored_attrs =
@@ -1726,19 +1722,21 @@ defmodule MishkaBlog.Blogger do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
+      run fn input, context ->
         blogger_id = input.arguments.blogger_id
         version_id = input.arguments.version_id
 
         with {:ok, blogger} when not is_nil(blogger) <-
-               Ash.get(MishkaBlog.Blogger, blogger_id,
-                 action: :master_get,
-                 authorize?: false
+               Ash.get(
+                 MishkaBlog.Blogger,
+                 blogger_id,
+                 Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
                ),
              {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.Blogger.Version, version_id,
-                 action: :get_any,
-                 authorize?: false
+               Ash.get(
+                 MishkaBlog.Blogger.Version,
+                 version_id,
+                 Ash.Scope.to_opts(context, action: :get_any, tenant: nil)
                ),
              :valid <- if(version.version_source_id == blogger_id, do: :valid, else: :invalid) do
           restored_attrs =

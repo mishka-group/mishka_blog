@@ -2455,10 +2455,7 @@ defmodule MishkaBlog.BlogPost do
       prepare fn query, context ->
         post_id = Ash.Query.get_argument(query, :post_id)
 
-        case Ash.get(MishkaBlog.BlogPost, post_id,
-               tenant: context.tenant,
-               authorize?: false
-             ) do
+        case Ash.get(MishkaBlog.BlogPost, post_id, Ash.Scope.to_opts(context)) do
           {:ok, _post} ->
             query
             |> Ash.Query.filter(id == ^post_id)
@@ -2486,12 +2483,13 @@ defmodule MishkaBlog.BlogPost do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      prepare fn query, _context ->
+      prepare fn query, context ->
         post_id = Ash.Query.get_argument(query, :post_id)
 
-        case Ash.get(MishkaBlog.BlogPost, post_id,
-               action: :master_get,
-               authorize?: false
+        case Ash.get(
+               MishkaBlog.BlogPost,
+               post_id,
+               Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
              ) do
           {:ok, _post} ->
             query
@@ -2552,11 +2550,7 @@ defmodule MishkaBlog.BlogPost do
         post_id = input.arguments.id
         version_id = input.arguments.version_id
 
-        Ash.get(MishkaBlog.BlogPost, post_id,
-          action: :read,
-          tenant: context.tenant,
-          authorize?: false
-        )
+        Ash.get(MishkaBlog.BlogPost, post_id, Ash.Scope.to_opts(context, action: :read))
         |> case do
           {:ok, post} when not is_nil(post) ->
             if !is_nil(post.archived_at) do
@@ -2577,9 +2571,10 @@ defmodule MishkaBlog.BlogPost do
               tenant = post.site_id
 
               post
-              |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                tenant: tenant,
-                authorize?: false
+              |> Ash.Changeset.for_update(
+                :restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: tenant)
               )
               |> Ash.update()
             end
@@ -2627,13 +2622,14 @@ defmodule MishkaBlog.BlogPost do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
+      run fn input, context ->
         post_id = input.arguments.id
         version_id = input.arguments.version_id
 
-        Ash.get(MishkaBlog.BlogPost, post_id,
-          action: :master_get,
-          authorize?: false
+        Ash.get(
+          MishkaBlog.BlogPost,
+          post_id,
+          Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
         )
         |> case do
           {:ok, post} when not is_nil(post) ->
@@ -2653,8 +2649,10 @@ defmodule MishkaBlog.BlogPost do
                )}
             else
               post
-              |> Ash.Changeset.for_update(:master_restore_version, %{version_id: version_id},
-                authorize?: false
+              |> Ash.Changeset.for_update(
+                :master_restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: nil)
               )
               |> Ash.update()
             end
@@ -2680,14 +2678,12 @@ defmodule MishkaBlog.BlogPost do
         version_id = input.arguments.version_id
 
         with {:ok, post} when not is_nil(post) <-
-               Ash.get(MishkaBlog.BlogPost, post_id,
-                 tenant: context.tenant,
-                 authorize?: false
-               ),
+               Ash.get(MishkaBlog.BlogPost, post_id, Ash.Scope.to_opts(context)),
              {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.BlogPost.Version, version_id,
-                 action: :get_any,
-                 authorize?: false
+               Ash.get(
+                 MishkaBlog.BlogPost.Version,
+                 version_id,
+                 Ash.Scope.to_opts(context, action: :get_any)
                ),
              :valid <- if(version.version_source_id == post_id, do: :valid, else: :invalid) do
           restored_attrs =
@@ -2738,19 +2734,21 @@ defmodule MishkaBlog.BlogPost do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
+      run fn input, context ->
         post_id = input.arguments.post_id
         version_id = input.arguments.version_id
 
         with {:ok, post} when not is_nil(post) <-
-               Ash.get(MishkaBlog.BlogPost, post_id,
-                 action: :master_get,
-                 authorize?: false
+               Ash.get(
+                 MishkaBlog.BlogPost,
+                 post_id,
+                 Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
                ),
              {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.BlogPost.Version, version_id,
-                 action: :get_any,
-                 authorize?: false
+               Ash.get(
+                 MishkaBlog.BlogPost.Version,
+                 version_id,
+                 Ash.Scope.to_opts(context, action: :get_any, tenant: nil)
                ),
              :valid <- if(version.version_source_id == post_id, do: :valid, else: :invalid) do
           restored_attrs =

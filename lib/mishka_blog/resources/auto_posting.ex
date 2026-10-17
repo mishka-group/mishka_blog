@@ -935,10 +935,7 @@ defmodule MishkaBlog.AutoPosting do
         auto_posting_id = Ash.Query.get_argument(query, :auto_posting_id)
 
         # Verify the auto-posting belongs to the tenant
-        case Ash.get(MishkaBlog.AutoPosting, auto_posting_id,
-               tenant: context.tenant,
-               authorize?: false
-             ) do
+        case Ash.get(MishkaBlog.AutoPosting, auto_posting_id, Ash.Scope.to_opts(context)) do
           {:ok, _auto_posting} ->
             query
             |> Ash.Query.filter(id == ^auto_posting_id)
@@ -1037,10 +1034,10 @@ defmodule MishkaBlog.AutoPosting do
         auto_posting_id = input.arguments.id
         version_id = input.arguments.version_id
 
-        Ash.get(MishkaBlog.AutoPosting, auto_posting_id,
-          action: :read,
-          tenant: context.tenant,
-          authorize?: false
+        Ash.get(
+          MishkaBlog.AutoPosting,
+          auto_posting_id,
+          Ash.Scope.to_opts(context, action: :read)
         )
         |> case do
           {:ok, auto_posting} when not is_nil(auto_posting) ->
@@ -1062,9 +1059,10 @@ defmodule MishkaBlog.AutoPosting do
               tenant = auto_posting.site_id
 
               auto_posting
-              |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                tenant: tenant,
-                authorize?: false
+              |> Ash.Changeset.for_update(
+                :restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: tenant)
               )
               |> Ash.update()
             end
@@ -1084,13 +1082,14 @@ defmodule MishkaBlog.AutoPosting do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
+      run fn input, context ->
         auto_posting_id = input.arguments.id
         version_id = input.arguments.version_id
 
-        Ash.get(MishkaBlog.AutoPosting, auto_posting_id,
-          action: :master_get,
-          authorize?: false
+        Ash.get(
+          MishkaBlog.AutoPosting,
+          auto_posting_id,
+          Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
         )
         |> case do
           {:ok, auto_posting} when not is_nil(auto_posting) ->
@@ -1112,9 +1111,10 @@ defmodule MishkaBlog.AutoPosting do
               tenant = auto_posting.site_id
 
               auto_posting
-              |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                tenant: tenant,
-                authorize?: false
+              |> Ash.Changeset.for_update(
+                :restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: tenant)
               )
               |> Ash.update()
             end
@@ -1139,14 +1139,12 @@ defmodule MishkaBlog.AutoPosting do
         version_id = input.arguments.version_id
 
         with {:ok, auto_posting} when not is_nil(auto_posting) <-
-               Ash.get(MishkaBlog.AutoPosting, auto_posting_id,
-                 tenant: context.tenant,
-                 authorize?: false
-               ),
+               Ash.get(MishkaBlog.AutoPosting, auto_posting_id, Ash.Scope.to_opts(context)),
              {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.AutoPosting.Version, version_id,
-                 action: :get_any,
-                 authorize?: false
+               Ash.get(
+                 MishkaBlog.AutoPosting.Version,
+                 version_id,
+                 Ash.Scope.to_opts(context, action: :get_any)
                ),
              :valid <-
                if(version.version_source_id == auto_posting_id, do: :valid, else: :invalid) do
@@ -1195,19 +1193,21 @@ defmodule MishkaBlog.AutoPosting do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
+      run fn input, context ->
         auto_posting_id = input.arguments.auto_posting_id
         version_id = input.arguments.version_id
 
         with {:ok, auto_posting} when not is_nil(auto_posting) <-
-               Ash.get(MishkaBlog.AutoPosting, auto_posting_id,
-                 action: :master_get,
-                 authorize?: false
+               Ash.get(
+                 MishkaBlog.AutoPosting,
+                 auto_posting_id,
+                 Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
                ),
              {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.AutoPosting.Version, version_id,
-                 action: :get_any,
-                 authorize?: false
+               Ash.get(
+                 MishkaBlog.AutoPosting.Version,
+                 version_id,
+                 Ash.Scope.to_opts(context, action: :get_any, tenant: nil)
                ),
              :valid <-
                if(version.version_source_id == auto_posting_id, do: :valid, else: :invalid) do

@@ -1436,7 +1436,7 @@ defmodule MishkaBlog.Team do
         team_id = Ash.Query.get_argument(query, :team_id)
 
         # First verify the team belongs to the tenant
-        case Ash.get(MishkaBlog.Team, team_id, tenant: context.tenant, authorize?: false) do
+        case Ash.get(MishkaBlog.Team, team_id, Ash.Scope.to_opts(context)) do
           {:ok, _team} ->
             query
             |> Ash.Query.filter(id == ^team_id)
@@ -1512,11 +1512,7 @@ defmodule MishkaBlog.Team do
         team_id = input.arguments.id
         version_id = input.arguments.version_id
 
-        Ash.get(MishkaBlog.Team, team_id,
-          action: :read,
-          tenant: context.tenant,
-          authorize?: false
-        )
+        Ash.get(MishkaBlog.Team, team_id, Ash.Scope.to_opts(context, action: :read))
         |> case do
           {:ok, team} when not is_nil(team) ->
             if !is_nil(team.archived_at) do
@@ -1537,9 +1533,10 @@ defmodule MishkaBlog.Team do
               tenant = team.site_id
 
               team
-              |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                tenant: tenant,
-                authorize?: false
+              |> Ash.Changeset.for_update(
+                :restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: tenant)
               )
               |> Ash.update()
             end
@@ -1585,15 +1582,21 @@ defmodule MishkaBlog.Team do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
+      run fn input, context ->
         id = input.arguments.id
         version_id = input.arguments.version_id
 
-        case Ash.get(MishkaBlog.Team, id, action: :master_get, authorize?: false) do
+        case Ash.get(
+               MishkaBlog.Team,
+               id,
+               Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
+             ) do
           {:ok, record} when not is_nil(record) ->
             record
-            |> Ash.Changeset.for_update(:master_restore_version, %{version_id: version_id},
-              authorize?: false
+            |> Ash.Changeset.for_update(
+              :master_restore_version,
+              %{version_id: version_id},
+              Ash.Scope.to_opts(context, tenant: nil)
             )
             |> Ash.update()
 
@@ -1617,9 +1620,13 @@ defmodule MishkaBlog.Team do
         version_id = input.arguments.version_id
 
         with {:ok, team} when not is_nil(team) <-
-               Ash.get(MishkaBlog.Team, team_id, tenant: context.tenant, authorize?: false),
+               Ash.get(MishkaBlog.Team, team_id, Ash.Scope.to_opts(context)),
              {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.Team.Version, version_id, action: :get_any, authorize?: false),
+               Ash.get(
+                 MishkaBlog.Team.Version,
+                 version_id,
+                 Ash.Scope.to_opts(context, action: :get_any)
+               ),
              :valid <- if(version.version_source_id == team_id, do: :valid, else: :invalid) do
           restored_attrs =
             case version.changes do
@@ -1670,14 +1677,22 @@ defmodule MishkaBlog.Team do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
+      run fn input, context ->
         team_id = input.arguments.team_id
         version_id = input.arguments.version_id
 
         with {:ok, team} when not is_nil(team) <-
-               Ash.get(MishkaBlog.Team, team_id, action: :master_get, authorize?: false),
+               Ash.get(
+                 MishkaBlog.Team,
+                 team_id,
+                 Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
+               ),
              {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.Team.Version, version_id, action: :get_any, authorize?: false),
+               Ash.get(
+                 MishkaBlog.Team.Version,
+                 version_id,
+                 Ash.Scope.to_opts(context, action: :get_any, tenant: nil)
+               ),
              :valid <- if(version.version_source_id == team_id, do: :valid, else: :invalid) do
           restored_attrs =
             case version.changes do

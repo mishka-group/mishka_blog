@@ -946,6 +946,145 @@ defmodule MishkaBlog.SiteBoundaryTest do
     end
   end
 
+  describe "version actions run as the caller" do
+    for {resource, version, factory, field, preview} <- [
+          {Tag, Tag.Version, :create_blog_tag!, :name, {:read, :tag_id}},
+          {Collection, Collection.Version, :create_collection!, :name, {:read, :collection_id}},
+          {Blogger, Blogger.Version, :create_blogger!, :display_name, {:action, :blogger_id}},
+          {Team, Team.Version, :create_team!, :name, {:action, :team_id}},
+          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :name,
+           {:action, :auto_posting_id}},
+          {BlogPost, BlogPost.Version, :create_blog_post!, :title, {:action, :post_id}}
+        ] do
+      test "#{inspect(resource)}: a site user naming another site cannot preview its version",
+           ctx do
+        theirs = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: ctx.site_b.id]])
+        version = version_of(unquote(version), theirs)
+        {kind, record_argument} = unquote(preview)
+
+        result =
+          preview_as(
+            kind,
+            unquote(resource),
+            :preview_version,
+            %{record_argument => theirs.id, version_id: version.id},
+            actor: ctx.admin_a,
+            tenant: ctx.site_b.id
+          )
+
+        refute match?({:ok, %{id: _}}, result), "a site A user previewed a site B record"
+      end
+
+      test "#{inspect(resource)}: a site user naming another site cannot restore its version",
+           ctx do
+        theirs = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: ctx.site_b.id]])
+        version = version_of(unquote(version), theirs)
+        changed = change_field(theirs, unquote(field))
+
+        result =
+          unquote(resource)
+          |> Ash.ActionInput.for_action(
+            :restore_version_api,
+            %{id: theirs.id, version_id: version.id},
+            actor: ctx.admin_a,
+            tenant: ctx.site_b.id
+          )
+          |> Ash.run_action()
+
+        assert {:error, _} = result
+
+        assert Map.fetch!(reload(unquote(resource), theirs), unquote(field)) ==
+                 Map.fetch!(changed, unquote(field))
+      end
+
+      test "#{inspect(resource)}: a site user previews and restores its own site's version",
+           ctx do
+        own = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: ctx.site_a.id]])
+        version = version_of(unquote(version), own)
+        changed = change_field(own, unquote(field))
+        {kind, record_argument} = unquote(preview)
+
+        assert {:ok, %{} = previewed} =
+                 preview_as(
+                   kind,
+                   unquote(resource),
+                   :preview_version,
+                   %{record_argument => own.id, version_id: version.id},
+                   actor: ctx.admin_a,
+                   tenant: ctx.site_a.id
+                 )
+
+        assert Map.fetch!(previewed, unquote(field)) == Map.fetch!(own, unquote(field))
+
+        assert {:ok, restored} =
+                 unquote(resource)
+                 |> Ash.ActionInput.for_action(
+                   :restore_version_api,
+                   %{id: own.id, version_id: version.id},
+                   actor: ctx.admin_a,
+                   tenant: ctx.site_a.id
+                 )
+                 |> Ash.run_action()
+
+        assert Map.fetch!(restored, unquote(field)) == Map.fetch!(own, unquote(field))
+        refute Map.fetch!(restored, unquote(field)) == Map.fetch!(changed, unquote(field))
+      end
+
+      test "#{inspect(resource)}: a master previews and restores any site's version", ctx do
+        theirs = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: ctx.site_b.id]])
+        version = version_of(unquote(version), theirs)
+        changed = change_field(theirs, unquote(field))
+        {kind, record_argument} = unquote(preview)
+
+        assert {:ok, %{} = previewed} =
+                 preview_as(
+                   kind,
+                   unquote(resource),
+                   :master_preview_version,
+                   %{record_argument => theirs.id, version_id: version.id},
+                   actor: ctx.master
+                 )
+
+        assert Map.fetch!(previewed, unquote(field)) == Map.fetch!(theirs, unquote(field))
+
+        assert {:ok, restored} =
+                 unquote(resource)
+                 |> Ash.ActionInput.for_action(
+                   :master_restore_version_api,
+                   %{id: theirs.id, version_id: version.id},
+                   actor: ctx.master
+                 )
+                 |> Ash.run_action()
+
+        assert Map.fetch!(restored, unquote(field)) == Map.fetch!(theirs, unquote(field))
+        refute Map.fetch!(restored, unquote(field)) == Map.fetch!(changed, unquote(field))
+        assert restored.site_id == ctx.site_b.id
+      end
+    end
+
+    defp change_field(record, field) do
+      record
+      |> Ash.Changeset.for_update(
+        :master_update,
+        %{field => "Changed #{System.unique_integer([:positive])}"},
+        authorize?: false
+      )
+      |> Ash.update!()
+    end
+
+    defp preview_as(:read, resource, action, arguments, opts) do
+      resource
+      |> Ash.Query.for_read(action, arguments, opts)
+      |> Ash.read_one()
+    end
+
+    defp preview_as(:action, resource, action, arguments, opts) do
+      resource
+      |> Ash.ActionInput.for_action(action, arguments, opts)
+      |> Ash.run_action()
+    end
+  end
+
   describe "another record's version, in the admin's language" do
     setup do
       Gettext.put_locale(MishkaCmsCore.Gettext, "fa")
