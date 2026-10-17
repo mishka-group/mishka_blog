@@ -1546,35 +1546,13 @@ defmodule MishkaBlog.Tag do
         version_id = Ash.Query.get_argument(query, :version_id)
 
         Ash.Query.after_action(query, fn _query, results ->
-          results =
-            Enum.map(results, fn tag ->
-              version =
-                MishkaBlog.Tag.Version
-                |> Ash.get!(version_id, Ash.Scope.to_opts(context, action: :get_any))
-
-              if version.version_source_id != tag.id do
-                raise Ash.Error.Invalid.exception(
-                        errors: [
-                          Ash.Error.Query.InvalidArgument.exception(
-                            field: :version_id,
-                            message:
-                              MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                                dgettext_noop("errors", "tag")
-                              )
-                          )
-                        ]
-                      )
-              end
-
-              fields = tag |> Map.from_struct() |> Map.keys()
-
-              struct(
-                tag,
-                MishkaBlog.Resources.Changes.RestoreVersion.known_changes(version.changes, fields)
-              )
-            end)
-
-          {:ok, results}
+          MishkaBlog.Resources.Changes.RestoreVersion.preview(
+            results,
+            MishkaBlog.Tag.Version,
+            version_id,
+            dgettext_noop("errors", "tag"),
+            Ash.Scope.to_opts(context)
+          )
         end)
       end
     end
@@ -1595,35 +1573,13 @@ defmodule MishkaBlog.Tag do
         version_id = Ash.Query.get_argument(query, :version_id)
 
         Ash.Query.after_action(query, fn _query, results ->
-          results =
-            Enum.map(results, fn tag ->
-              version =
-                MishkaBlog.Tag.Version
-                |> Ash.get!(version_id, Ash.Scope.to_opts(context, action: :get_any, tenant: nil))
-
-              if version.version_source_id != tag.id do
-                raise Ash.Error.Invalid.exception(
-                        errors: [
-                          Ash.Error.Query.InvalidArgument.exception(
-                            field: :version_id,
-                            message:
-                              MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                                dgettext_noop("errors", "tag")
-                              )
-                          )
-                        ]
-                      )
-              end
-
-              fields = tag |> Map.from_struct() |> Map.keys()
-
-              struct(
-                tag,
-                MishkaBlog.Resources.Changes.RestoreVersion.known_changes(version.changes, fields)
-              )
-            end)
-
-          {:ok, results}
+          MishkaBlog.Resources.Changes.RestoreVersion.preview(
+            results,
+            MishkaBlog.Tag.Version,
+            version_id,
+            dgettext_noop("errors", "tag"),
+            Ash.Scope.to_opts(context, tenant: nil)
+          )
         end)
       end
     end

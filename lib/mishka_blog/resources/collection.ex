@@ -1786,35 +1786,13 @@ defmodule MishkaBlog.Collection do
         version_id = Ash.Query.get_argument(query, :version_id)
 
         Ash.Query.after_action(query, fn _query, results ->
-          results =
-            Enum.map(results, fn collection ->
-              version =
-                MishkaBlog.Collection.Version
-                |> Ash.get!(version_id, Ash.Scope.to_opts(context, action: :get_any))
-
-              if version.version_source_id != collection.id do
-                raise Ash.Error.Invalid.exception(
-                        errors: [
-                          Ash.Error.Query.InvalidArgument.exception(
-                            field: :version_id,
-                            message:
-                              MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                                dgettext_noop("errors", "collection")
-                              )
-                          )
-                        ]
-                      )
-              end
-
-              fields = collection |> Map.from_struct() |> Map.keys()
-
-              struct(
-                collection,
-                MishkaBlog.Resources.Changes.RestoreVersion.known_changes(version.changes, fields)
-              )
-            end)
-
-          {:ok, results}
+          MishkaBlog.Resources.Changes.RestoreVersion.preview(
+            results,
+            MishkaBlog.Collection.Version,
+            version_id,
+            dgettext_noop("errors", "collection"),
+            Ash.Scope.to_opts(context)
+          )
         end)
       end
     end
@@ -1835,35 +1813,13 @@ defmodule MishkaBlog.Collection do
         version_id = Ash.Query.get_argument(query, :version_id)
 
         Ash.Query.after_action(query, fn _query, results ->
-          results =
-            Enum.map(results, fn collection ->
-              version =
-                MishkaBlog.Collection.Version
-                |> Ash.get!(version_id, Ash.Scope.to_opts(context, action: :get_any, tenant: nil))
-
-              if version.version_source_id != collection.id do
-                raise Ash.Error.Invalid.exception(
-                        errors: [
-                          Ash.Error.Query.InvalidArgument.exception(
-                            field: :version_id,
-                            message:
-                              MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                                dgettext_noop("errors", "collection")
-                              )
-                          )
-                        ]
-                      )
-              end
-
-              fields = collection |> Map.from_struct() |> Map.keys()
-
-              struct(
-                collection,
-                MishkaBlog.Resources.Changes.RestoreVersion.known_changes(version.changes, fields)
-              )
-            end)
-
-          {:ok, results}
+          MishkaBlog.Resources.Changes.RestoreVersion.preview(
+            results,
+            MishkaBlog.Collection.Version,
+            version_id,
+            dgettext_noop("errors", "collection"),
+            Ash.Scope.to_opts(context, tenant: nil)
+          )
         end)
       end
     end

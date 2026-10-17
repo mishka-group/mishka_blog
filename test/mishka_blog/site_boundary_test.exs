@@ -14,6 +14,8 @@ defmodule MishkaBlog.SiteBoundaryTest do
 
   require Ash.Query
 
+  alias MishkaBlog.Resources.Changes.RestoreVersion
+
   alias MishkaBlog.{
     AutoPosting,
     BlogPost,
@@ -1132,6 +1134,73 @@ defmodule MishkaBlog.SiteBoundaryTest do
     end
   end
 
+  describe "a tag's and a collection's version preview" do
+    for {resource, version, factory, field, record_argument, label} <- [
+          {Tag, Tag.Version, :create_blog_tag!, :name, :tag_id, "tag"},
+          {Collection, Collection.Version, :create_collection!, :name, :collection_id,
+           "collection"}
+        ],
+        {action, scope} <- [
+          {:preview_version, :site},
+          {:master_preview_version, :master}
+        ] do
+      test "#{inspect(resource)} #{action}: another record's version is returned as the refusal",
+           ctx do
+        {opts, site} = preview_scope(unquote(scope), ctx)
+        own = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: site.id]])
+        sibling = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: site.id]])
+        version = version_of(unquote(version), sibling)
+
+        assert {:error, %Ash.Error.Invalid{} = error} =
+                 unquote(resource)
+                 |> Ash.Query.for_read(
+                   unquote(action),
+                   %{unquote(record_argument) => own.id, version_id: version.id},
+                   opts
+                 )
+                 |> Ash.read_one()
+
+        assert RestoreVersion.refusal(unquote(label)) in Enum.map(error.errors, & &1.message)
+      end
+
+      test "#{inspect(resource)} #{action}: a version that does not exist is an error", ctx do
+        {opts, site} = preview_scope(unquote(scope), ctx)
+        own = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: site.id]])
+
+        assert {:error, %Ash.Error.Invalid{}} =
+                 unquote(resource)
+                 |> Ash.Query.for_read(
+                   unquote(action),
+                   %{unquote(record_argument) => own.id, version_id: Ash.UUID.generate()},
+                   opts
+                 )
+                 |> Ash.read_one()
+      end
+
+      test "#{inspect(resource)} #{action}: the record's own version still previews", ctx do
+        {opts, site} = preview_scope(unquote(scope), ctx)
+        own = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: site.id]])
+        version = version_of(unquote(version), own)
+        changed = change_field(own, unquote(field))
+
+        assert {:ok, previewed} =
+                 unquote(resource)
+                 |> Ash.Query.for_read(
+                   unquote(action),
+                   %{unquote(record_argument) => own.id, version_id: version.id},
+                   opts
+                 )
+                 |> Ash.read_one()
+
+        assert Map.fetch!(previewed, unquote(field)) == Map.fetch!(own, unquote(field))
+        refute Map.fetch!(previewed, unquote(field)) == Map.fetch!(changed, unquote(field))
+      end
+    end
+
+    defp preview_scope(:site, ctx), do: {[actor: ctx.admin_a, tenant: ctx.site_a.id], ctx.site_a}
+    defp preview_scope(:master, ctx), do: {[actor: ctx.master], ctx.site_a}
+  end
+
   describe "another record's version, in the admin's language" do
     setup do
       Gettext.put_locale(MishkaCmsCore.Gettext, "fa")
@@ -1173,13 +1242,9 @@ defmodule MishkaBlog.SiteBoundaryTest do
     end
 
     defp preview(:read, resource, arguments, tenant) do
-      query =
-        Ash.Query.for_read(resource, :preview_version, arguments,
-          tenant: tenant,
-          authorize?: false
-        )
-
-      {:error, assert_raise(Ash.Error.Invalid, fn -> Ash.read_one(query, authorize?: false) end)}
+      resource
+      |> Ash.Query.for_read(:preview_version, arguments, tenant: tenant, authorize?: false)
+      |> Ash.read_one(authorize?: false)
     end
 
     defp preview(:action, resource, arguments, tenant) do

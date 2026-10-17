@@ -102,6 +102,38 @@ defmodule MishkaBlog.Resources.Changes.RestoreVersion do
   end
 
   @doc """
+  Each of `records` as it was in the version `version_id` of `version`, read with `opts` (the
+  caller's actor, tenant and `authorize?`) through the version's `:get_any` read:
+
+      preview(results, MishkaBlog.Tag.Version, version_id, "tag", Ash.Scope.to_opts(context))
+
+  A version that belongs to another record is refused with `refusal/1` of `label`, and one that
+  cannot be read comes back as the read's own error. Neither raises.
+  """
+  @spec preview([struct()], module(), String.t(), String.t(), keyword()) ::
+          {:ok, [struct()]} | {:error, Exception.t()}
+  def preview(records, version, version_id, label, opts) do
+    records
+    |> Enum.reduce_while({:ok, []}, fn record, {:ok, previews} ->
+      case Ash.get(version, version_id, Keyword.put(opts, :action, :get_any)) do
+        {:ok, %{version_source_id: source_id, changes: changes}} when source_id == record.id ->
+          fields = record |> Map.from_struct() |> Map.keys()
+          {:cont, {:ok, [struct(record, known_changes(changes, fields)) | previews]}}
+
+        {:ok, _another_records_version} ->
+          {:halt, {:error, refused(label)}}
+
+        {:error, error} ->
+          {:halt, {:error, error}}
+      end
+    end)
+    |> case do
+      {:ok, previews} -> {:ok, Enum.reverse(previews)}
+      error -> error
+    end
+  end
+
+  @doc """
   `changes` with the string value of `field` read through the attribute's own type on `resource`:
   `"active"` becomes `:active` for an atom attribute. A value the type refuses is dropped, so the
   record keeps its current one; a field that is absent or not a string is left as it is.
@@ -117,6 +149,14 @@ defmodule MishkaBlog.Resources.Changes.RestoreVersion do
     else
       _absent -> changes
     end
+  end
+
+  defp refused(label) do
+    Ash.Error.Invalid.exception(
+      errors: [
+        Ash.Error.Query.InvalidArgument.exception(field: :version_id, message: refusal(label))
+      ]
+    )
   end
 
   defp restore(changeset, changes, fields) do
