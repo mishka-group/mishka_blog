@@ -27,6 +27,14 @@ defmodule MishkaBlog.Resources.Changes.RestoreVersionTest do
       assert RestoreVersion.known_changes(nil, [:name]) == %{}
       assert RestoreVersion.known_changes(%{}, [:name]) == %{}
     end
+
+    test "JSON that does not parse, or is not an object, is an empty map" do
+      assert RestoreVersion.known_changes("not json {", [:name]) == %{}
+      assert RestoreVersion.known_changes(~s({"name":), [:name]) == %{}
+      assert RestoreVersion.known_changes(~s(["name"]), [:name]) == %{}
+      assert RestoreVersion.known_changes(~s("name"), [:name]) == %{}
+      assert RestoreVersion.known_changes("", [:name]) == %{}
+    end
   end
 
   describe "cast_field/3" do

@@ -88,7 +88,8 @@ defmodule MishkaBlog.Resources.Changes.RestoreVersion do
 
       known_changes(%{"name" => "Elixir", "junk" => 1}, [:name, :slug]) #=> %{name: "Elixir"}
 
-  `changes` may be a map with string or atom keys, or its JSON; anything else reads as `%{}`.
+  `changes` may be a map with string or atom keys, or its JSON; anything else, JSON that does not
+  parse or is not an object included, reads as `%{}`.
   """
   @spec known_changes(map() | String.t() | nil, [atom()]) :: %{atom() => term()}
   def known_changes(changes, fields) do
@@ -120,7 +121,6 @@ defmodule MishkaBlog.Resources.Changes.RestoreVersion do
 
   defp restore(changeset, changes, fields) do
     changes
-    |> snapshot()
     |> known_changes(fields)
     |> Enum.reduce(changeset, fn {field, value}, acc ->
       Ash.Changeset.force_change_attribute(acc, field, value)
@@ -128,6 +128,13 @@ defmodule MishkaBlog.Resources.Changes.RestoreVersion do
   end
 
   defp snapshot(changes) when is_map(changes), do: changes
-  defp snapshot(changes) when is_binary(changes), do: Jason.decode!(changes)
+
+  defp snapshot(changes) when is_binary(changes) do
+    case Jason.decode(changes) do
+      {:ok, decoded} when is_map(decoded) -> decoded
+      _not_an_object -> %{}
+    end
+  end
+
   defp snapshot(_none), do: %{}
 end

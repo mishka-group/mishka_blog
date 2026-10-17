@@ -1085,6 +1085,53 @@ defmodule MishkaBlog.SiteBoundaryTest do
     end
   end
 
+  describe "a version with no snapshot to restore" do
+    for {resource, version, factory, field, preview} <- [
+          {Tag, Tag.Version, :create_blog_tag!, :name, {:read, :tag_id}},
+          {Collection, Collection.Version, :create_collection!, :name, {:read, :collection_id}},
+          {Blogger, Blogger.Version, :create_blogger!, :display_name, {:action, :blogger_id}},
+          {Team, Team.Version, :create_team!, :name, {:action, :team_id}},
+          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :name,
+           {:action, :auto_posting_id}},
+          {BlogPost, BlogPost.Version, :create_blog_post!, :title, {:action, :post_id}}
+        ] do
+      test "#{inspect(resource)}: its preview shows the record as it is and its restore changes nothing",
+           ctx do
+        record = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: ctx.site_a.id]])
+        version = version_of(unquote(version), record)
+        changed = change_field(record, unquote(field))
+
+        version
+        |> Ash.Changeset.for_update(:update, %{changes: nil}, authorize?: false)
+        |> Ash.update!()
+
+        {kind, record_argument} = unquote(preview)
+
+        assert {:ok, %{} = previewed} =
+                 preview_as(
+                   kind,
+                   unquote(resource),
+                   :master_preview_version,
+                   %{record_argument => record.id, version_id: version.id},
+                   actor: ctx.master
+                 )
+
+        assert Map.fetch!(previewed, unquote(field)) == Map.fetch!(changed, unquote(field))
+
+        assert {:ok, restored} =
+                 unquote(resource)
+                 |> Ash.ActionInput.for_action(
+                   :master_restore_version_api,
+                   %{id: record.id, version_id: version.id},
+                   actor: ctx.master
+                 )
+                 |> Ash.run_action()
+
+        assert Map.fetch!(restored, unquote(field)) == Map.fetch!(changed, unquote(field))
+      end
+    end
+  end
+
   describe "another record's version, in the admin's language" do
     setup do
       Gettext.put_locale(MishkaCmsCore.Gettext, "fa")

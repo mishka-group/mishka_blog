@@ -1148,15 +1148,8 @@ defmodule MishkaBlog.AutoPosting do
                ),
              :valid <-
                if(version.version_source_id == auto_posting_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
           preview_auto_posting =
-            restored_attrs
+            version.changes
             |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
               List.delete(@admin_fields, :site_id)
             )
@@ -1211,15 +1204,8 @@ defmodule MishkaBlog.AutoPosting do
                ),
              :valid <-
                if(version.version_source_id == auto_posting_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
           preview_auto_posting =
-            restored_attrs
+            version.changes
             |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
               List.delete(@admin_fields, :site_id)
             )

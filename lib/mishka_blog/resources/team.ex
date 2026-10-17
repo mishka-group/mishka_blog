@@ -1628,15 +1628,8 @@ defmodule MishkaBlog.Team do
                  Ash.Scope.to_opts(context, action: :get_any)
                ),
              :valid <- if(version.version_source_id == team_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
           preview_team =
-            restored_attrs
+            version.changes
             |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
               List.delete(@admin_fields, :site_id)
             )
@@ -1694,15 +1687,8 @@ defmodule MishkaBlog.Team do
                  Ash.Scope.to_opts(context, action: :get_any, tenant: nil)
                ),
              :valid <- if(version.version_source_id == team_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
           preview_team =
-            restored_attrs
+            version.changes
             |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
               List.delete(@admin_fields, :site_id)
             )
