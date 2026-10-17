@@ -1550,42 +1550,7 @@ defmodule MishkaBlog.BlogPost do
                on_match: :ignore
              )
 
-      change fn changeset, _context ->
-        status = Ash.Changeset.get_attribute(changeset, :status)
-
-        changeset =
-          case status do
-            :published ->
-              if is_nil(Ash.Changeset.get_attribute(changeset, :published_at)) do
-                Ash.Changeset.force_change_attribute(
-                  changeset,
-                  :published_at,
-                  DateTime.utc_now() |> DateTime.truncate(:second)
-                )
-              else
-                changeset
-              end
-
-            :scheduled ->
-              if is_nil(Ash.Changeset.get_attribute(changeset, :scheduled_publish_at)) do
-                Ash.Changeset.add_error(changeset,
-                  field: :scheduled_publish_at,
-                  message:
-                    dgettext_noop(
-                      "errors",
-                      "Scheduled publish time is required for scheduled posts."
-                    )
-                )
-              else
-                changeset
-              end
-
-            _ ->
-              changeset
-          end
-
-        changeset
-      end
+      change MishkaBlog.Resources.Changes.PublishLifecycle
 
       # Highlights the code blocks of the sanitized content, before the row is written, and stores
       # what the content says: its reading time and the components it names.
@@ -1645,42 +1610,7 @@ defmodule MishkaBlog.BlogPost do
                on_match: :ignore
              )
 
-      change fn changeset, _context ->
-        status = Ash.Changeset.get_attribute(changeset, :status)
-
-        changeset =
-          case status do
-            :published ->
-              if is_nil(Ash.Changeset.get_attribute(changeset, :published_at)) do
-                Ash.Changeset.force_change_attribute(
-                  changeset,
-                  :published_at,
-                  DateTime.utc_now() |> DateTime.truncate(:second)
-                )
-              else
-                changeset
-              end
-
-            :scheduled ->
-              if is_nil(Ash.Changeset.get_attribute(changeset, :scheduled_publish_at)) do
-                Ash.Changeset.add_error(changeset,
-                  field: :scheduled_publish_at,
-                  message:
-                    dgettext_noop(
-                      "errors",
-                      "Scheduled publish time is required for scheduled posts."
-                    )
-                )
-              else
-                changeset
-              end
-
-            _ ->
-              changeset
-          end
-
-        changeset
-      end
+      change MishkaBlog.Resources.Changes.PublishLifecycle
 
       # Highlights the code blocks of the sanitized content, before the row is written, and stores
       # what the content says: its reading time and the components it names.
@@ -1749,47 +1679,7 @@ defmodule MishkaBlog.BlogPost do
                on_match: :ignore
              )
 
-      change fn changeset, _context ->
-        status = Ash.Changeset.get_attribute(changeset, :status)
-        old_status = changeset.data.status
-
-        changeset =
-          if status != old_status do
-            case status do
-              :published ->
-                if is_nil(Ash.Changeset.get_attribute(changeset, :published_at)) do
-                  Ash.Changeset.force_change_attribute(
-                    changeset,
-                    :published_at,
-                    DateTime.utc_now() |> DateTime.truncate(:second)
-                  )
-                else
-                  changeset
-                end
-
-              :scheduled ->
-                if is_nil(Ash.Changeset.get_attribute(changeset, :scheduled_publish_at)) do
-                  Ash.Changeset.add_error(changeset,
-                    field: :scheduled_publish_at,
-                    message:
-                      dgettext_noop(
-                        "errors",
-                        "Scheduled publish time is required for scheduled posts."
-                      )
-                  )
-                else
-                  changeset
-                end
-
-              _ ->
-                changeset
-            end
-          else
-            changeset
-          end
-
-        changeset
-      end
+      change MishkaBlog.Resources.Changes.PublishLifecycle
 
       # Highlights the code blocks of the sanitized content, before the row is written, and stores
       # what the content says: its reading time and the components it names.
@@ -1854,47 +1744,7 @@ defmodule MishkaBlog.BlogPost do
                on_match: :ignore
              )
 
-      change fn changeset, _context ->
-        status = Ash.Changeset.get_attribute(changeset, :status)
-        old_status = changeset.data.status
-
-        changeset =
-          if status != old_status do
-            case status do
-              :published ->
-                if is_nil(Ash.Changeset.get_attribute(changeset, :published_at)) do
-                  Ash.Changeset.force_change_attribute(
-                    changeset,
-                    :published_at,
-                    DateTime.utc_now() |> DateTime.truncate(:second)
-                  )
-                else
-                  changeset
-                end
-
-              :scheduled ->
-                if is_nil(Ash.Changeset.get_attribute(changeset, :scheduled_publish_at)) do
-                  Ash.Changeset.add_error(changeset,
-                    field: :scheduled_publish_at,
-                    message:
-                      dgettext_noop(
-                        "errors",
-                        "Scheduled publish time is required for scheduled posts."
-                      )
-                  )
-                else
-                  changeset
-                end
-
-              _ ->
-                changeset
-            end
-          else
-            changeset
-          end
-
-        changeset
-      end
+      change MishkaBlog.Resources.Changes.PublishLifecycle
 
       # Highlights the code blocks of the sanitized content, before the row is written, and stores
       # what the content says: its reading time and the components it names.
