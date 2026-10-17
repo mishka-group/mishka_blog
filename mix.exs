@@ -92,7 +92,7 @@ defmodule MishkaBlog.MixProject do
         "compile --warnings-as-errors",
         "format --check-formatted",
         "credo --strict",
-        "sobelow --skip --exit",
+        "sobelow --config",
         "deps.audit",
         "hex.audit",
         "dialyzer",
