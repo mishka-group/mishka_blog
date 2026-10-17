@@ -14,7 +14,11 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.AutoPosting.Index do
       socket
       |> assign(:page_title, gettext("Auto Posting"))
       |> assign(:url_state, nil)
-      |> subscribe_to_pubsub(socket.assigns.current_user)
+
+    socket =
+      if connected?(socket),
+        do: subscribe_to_pubsub(socket, socket.assigns.current_user),
+        else: socket
 
     {:ok, socket}
   end

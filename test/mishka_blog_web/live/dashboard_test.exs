@@ -414,4 +414,81 @@ defmodule MishkaBlogWeb.Test.DashboardTest do
       end
     end
   end
+
+  describe "the calendar and the comments link take only valid input" do
+    defp assigns(view), do: :sys.get_state(view.pid).socket.assigns
+
+    defp open_blog(conn, path, email) do
+      {:ok, view, _html} = conn |> log_in(create_admin(email)) |> live(path)
+      render_async(view, 5_000)
+      view
+    end
+
+    test "shift_month moves one month for -1 and 1 and ignores any other step", %{conn: conn} do
+      view = open_blog(conn, "/admin/dashboard/blog", "calstep@example.com")
+      month = assigns(view).month
+
+      for step <- ["abc", "99999999", "0", "2", "-2", "1.5", ""] do
+        render_click(view, "shift_month", %{"step" => step})
+        assert assigns(view).month == month, "step #{inspect(step)} moved the calendar"
+      end
+
+      render_click(view, "shift_month", %{})
+      render_click(view, "shift_month", %{"step" => ["1"]})
+      assert assigns(view).month == month
+
+      render_click(view, "shift_month", %{"step" => "1"})
+      assert assigns(view).month == Date.add(month, Date.days_in_month(month))
+
+      render_click(view, "shift_month", %{"step" => "-1"})
+      assert assigns(view).month == month
+
+      close(view)
+    end
+
+    test "select_day takes an ISO date and ignores anything else", %{conn: conn} do
+      view = open_blog(conn, "/admin/dashboard/blog", "calday@example.com")
+      selected = assigns(view).selected_date
+
+      for date <- ["junk", "2026-13-45", "2026-02-30", ""] do
+        render_click(view, "select_day", %{"date" => date})
+        assert assigns(view).selected_date == selected, "date #{inspect(date)} was taken"
+      end
+
+      render_click(view, "select_day", %{})
+      render_click(view, "select_day", %{"date" => %{"a" => "1"}})
+      assert assigns(view).selected_date == selected
+
+      render_click(view, "select_day", %{"date" => "2026-03-14"})
+      assert assigns(view).selected_date == ~D[2026-03-14]
+
+      close(view)
+    end
+
+    test "a post's comments link carries its id as one encoded query value", %{conn: conn} do
+      view = open_blog(conn, "/admin/dashboard/blog/posts", "commentslink@example.com")
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               render_click(view, "show_post_comments", %{"id" => "abc&x=1"})
+
+      uri = URI.parse(to)
+      assert uri.path == "/admin/dashboard/blog/comments"
+      assert URI.decode_query(uri.query) == %{"comments_filter_post_id" => "abc&x=1"}
+    end
+
+    test "Auto Posting subscribes once the socket is connected, not for the static render",
+         %{conn: conn} do
+      topic = "auto_posting:created"
+      conn = log_in(conn, create_admin("autopostsub@example.com"))
+
+      get(conn, "/admin/dashboard/blog/auto-posting")
+      refute self() in subscribers(topic)
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/blog/auto-posting")
+      assert view.pid in subscribers(topic)
+    end
+
+    defp subscribers(topic),
+      do: MishkaCmsCore.PubSub |> Registry.lookup(topic) |> Enum.map(&elem(&1, 0))
+  end
 end

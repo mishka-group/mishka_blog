@@ -121,12 +121,13 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Post.Index do
   # Gervaz syncs a table's filters to the URL under its `url_sync` prefix, so the comments page can
   # be opened already filtered by handing it `comments_filter_post_id` — no extra state to pass and
   # the reader can clear it from the Post filter like any other.
-  def handle_event("show_post_comments", %{"id" => post_id}, socket) do
-    {:noreply,
-     push_navigate(socket,
-       to: path(socket, "/admin/dashboard/blog/comments?comments_filter_post_id=#{post_id}")
-     )}
+  def handle_event("show_post_comments", %{"id" => post_id}, socket) when is_binary(post_id) do
+    query = URI.encode_query(%{"comments_filter_post_id" => post_id})
+
+    {:noreply, push_navigate(socket, to: path(socket, "/admin/dashboard/blog/comments?#{query}"))}
   end
+
+  def handle_event("show_post_comments", _params, socket), do: {:noreply, socket}
 
   def handle_event("toggle_version_preview", %{"version-id" => version_id}, socket) do
     current = socket.assigns.preview_version_id
