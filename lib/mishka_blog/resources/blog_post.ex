@@ -2673,49 +2673,11 @@ defmodule MishkaBlog.BlogPost do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        post_id = input.arguments.post_id
-        version_id = input.arguments.version_id
-
-        with {:ok, post} when not is_nil(post) <-
-               Ash.get(MishkaBlog.BlogPost, post_id, Ash.Scope.to_opts(context)),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(
-                 MishkaBlog.BlogPost.Version,
-                 version_id,
-                 Ash.Scope.to_opts(context, action: :get_any)
-               ),
-             :valid <- if(version.version_source_id == post_id, do: :valid, else: :invalid) do
-          preview =
-            version.changes
-            |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
-              List.delete(@admin_fields, :site_id)
-            )
-            |> then(&Map.merge(post, &1))
-
-          {:ok, preview}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "blog post")
-                     )
-                 )
-               ]
-             )}
-
-          {:ok, nil} ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.BlogPost)}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :post_id,
+           version: MishkaBlog.BlogPost.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           label: dgettext_noop("errors", "blog post")}
     end
 
     action :master_preview_version, :struct do
@@ -2727,53 +2689,12 @@ defmodule MishkaBlog.BlogPost do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, context ->
-        post_id = input.arguments.post_id
-        version_id = input.arguments.version_id
-
-        with {:ok, post} when not is_nil(post) <-
-               Ash.get(
-                 MishkaBlog.BlogPost,
-                 post_id,
-                 Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
-               ),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(
-                 MishkaBlog.BlogPost.Version,
-                 version_id,
-                 Ash.Scope.to_opts(context, action: :get_any, tenant: nil)
-               ),
-             :valid <- if(version.version_source_id == post_id, do: :valid, else: :invalid) do
-          preview =
-            version.changes
-            |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
-              List.delete(@admin_fields, :site_id)
-            )
-            |> then(&Map.merge(post, &1))
-
-          {:ok, preview}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "blog post")
-                     )
-                 )
-               ]
-             )}
-
-          {:ok, nil} ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.BlogPost)}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :post_id,
+           version: MishkaBlog.BlogPost.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           master: true,
+           label: dgettext_noop("errors", "blog post")}
     end
   end
 

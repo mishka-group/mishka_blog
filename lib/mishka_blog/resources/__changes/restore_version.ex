@@ -102,26 +102,32 @@ defmodule MishkaBlog.Resources.Changes.RestoreVersion do
   end
 
   @doc """
-  Each of `records` as it was in the version `version_id` of `version`, read with `opts` (the
-  caller's actor, tenant and `authorize?`) through the version's `:get_any` read:
+  Each of `records` as it was in the version `version_id`, read with `read_opts` (the caller's
+  actor, tenant and `authorize?`) through the version's `:get_any` read:
 
-      preview(results, MishkaBlog.Tag.Version, version_id, "tag", Ash.Scope.to_opts(context))
+      preview(results, [version: MishkaBlog.Tag.Version, label: "tag"], version_id,
+              Ash.Scope.to_opts(context))
 
-  A version that belongs to another record is refused with `refusal/1` of `label`, and one that
+  `opts` are the options of this change, `:version` and `:label`, and two more:
+
+  * `:fields` - The attributes copied from the version. Defaults to every field of the record.
+  * `:cast` - Fields whose string value is read through the attribute's own type, as `cast_field/3`
+    does. Defaults to none.
+
+  A version that belongs to another record is refused with `refusal/1` of `:label`, and one that
   cannot be read comes back as the read's own error. Neither raises.
   """
-  @spec preview([struct()], module(), String.t(), String.t(), keyword()) ::
+  @spec preview([struct()], keyword(), String.t(), keyword()) ::
           {:ok, [struct()]} | {:error, Exception.t()}
-  def preview(records, version, version_id, label, opts) do
+  def preview(records, opts, version_id, read_opts) do
     records
     |> Enum.reduce_while({:ok, []}, fn record, {:ok, previews} ->
-      case Ash.get(version, version_id, Keyword.put(opts, :action, :get_any)) do
+      case Ash.get(opts[:version], version_id, Keyword.put(read_opts, :action, :get_any)) do
         {:ok, %{version_source_id: source_id, changes: changes}} when source_id == record.id ->
-          fields = record |> Map.from_struct() |> Map.keys()
-          {:cont, {:ok, [struct(record, known_changes(changes, fields)) | previews]}}
+          {:cont, {:ok, [previewed(record, changes, opts) | previews]}}
 
         {:ok, _another_records_version} ->
-          {:halt, {:error, refused(label)}}
+          {:halt, {:error, refused(opts[:label])}}
 
         {:error, error} ->
           {:halt, {:error, error}}
@@ -149,6 +155,22 @@ defmodule MishkaBlog.Resources.Changes.RestoreVersion do
     else
       _absent -> changes
     end
+  end
+
+  defp previewed(record, changes, opts) do
+    fields =
+      Keyword.get_lazy(opts, :fields, fn -> record |> Map.from_struct() |> Map.keys() end)
+
+    changed =
+      changes
+      |> known_changes(fields)
+      |> cast_fields(record.__struct__, Keyword.get(opts, :cast, []))
+
+    struct(record, changed)
+  end
+
+  defp cast_fields(changes, resource, fields) do
+    Enum.reduce(fields, changes, &cast_field(&2, resource, &1))
   end
 
   defp refused(label) do

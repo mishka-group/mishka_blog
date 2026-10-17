@@ -1542,19 +1542,8 @@ defmodule MishkaBlog.Tag do
 
       filter expr(id == ^arg(:tag_id))
 
-      prepare fn query, context ->
-        version_id = Ash.Query.get_argument(query, :version_id)
-
-        Ash.Query.after_action(query, fn _query, results ->
-          MishkaBlog.Resources.Changes.RestoreVersion.preview(
-            results,
-            MishkaBlog.Tag.Version,
-            version_id,
-            dgettext_noop("errors", "tag"),
-            Ash.Scope.to_opts(context)
-          )
-        end)
-      end
+      prepare {MishkaBlog.Resources.Preparations.PreviewVersion,
+               version: MishkaBlog.Tag.Version, label: dgettext_noop("errors", "tag")}
     end
 
     read :master_preview_version do
@@ -1569,19 +1558,10 @@ defmodule MishkaBlog.Tag do
 
       filter expr(id == ^arg(:tag_id))
 
-      prepare fn query, context ->
-        version_id = Ash.Query.get_argument(query, :version_id)
-
-        Ash.Query.after_action(query, fn _query, results ->
-          MishkaBlog.Resources.Changes.RestoreVersion.preview(
-            results,
-            MishkaBlog.Tag.Version,
-            version_id,
-            dgettext_noop("errors", "tag"),
-            Ash.Scope.to_opts(context, tenant: nil)
-          )
-        end)
-      end
+      prepare {MishkaBlog.Resources.Preparations.PreviewVersion,
+               version: MishkaBlog.Tag.Version,
+               master: true,
+               label: dgettext_noop("errors", "tag")}
     end
   end
 

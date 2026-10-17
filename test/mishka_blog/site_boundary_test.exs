@@ -1201,6 +1201,135 @@ defmodule MishkaBlog.SiteBoundaryTest do
     defp preview_scope(:master, ctx), do: {[actor: ctx.master], ctx.site_a}
   end
 
+  describe "a record's version preview" do
+    for {resource, version, factory, field, record_argument} <- [
+          {Blogger, Blogger.Version, :create_blogger!, :display_name, :blogger_id},
+          {Team, Team.Version, :create_team!, :name, :team_id},
+          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :name, :auto_posting_id},
+          {BlogPost, BlogPost.Version, :create_blog_post!, :title, :post_id}
+        ],
+        {action, scope} <- [
+          {:preview_version, :site},
+          {:master_preview_version, :master}
+        ] do
+      test "#{inspect(resource)} #{action}: a record that does not exist is a not found error",
+           ctx do
+        {opts, site} = preview_scope(unquote(scope), ctx)
+        record = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: site.id]])
+        version = version_of(unquote(version), record)
+
+        assert {:error, %Ash.Error.Invalid{errors: errors}} =
+                 unquote(resource)
+                 |> Ash.ActionInput.for_action(
+                   unquote(action),
+                   %{unquote(record_argument) => Ash.UUID.generate(), version_id: version.id},
+                   opts
+                 )
+                 |> Ash.run_action()
+
+        assert Enum.any?(errors, &match?(%Ash.Error.Query.NotFound{}, &1))
+      end
+
+      test "#{inspect(resource)} #{action}: a version that does not exist is an error", ctx do
+        {opts, site} = preview_scope(unquote(scope), ctx)
+        record = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: site.id]])
+
+        assert {:error, %Ash.Error.Invalid{}} =
+                 unquote(resource)
+                 |> Ash.ActionInput.for_action(
+                   unquote(action),
+                   %{unquote(record_argument) => record.id, version_id: Ash.UUID.generate()},
+                   opts
+                 )
+                 |> Ash.run_action()
+      end
+
+      test "#{inspect(resource)} #{action}: only the fields a restore copies come from the version",
+           ctx do
+        {opts, site} = preview_scope(unquote(scope), ctx)
+        record = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: site.id]])
+        version = version_of(unquote(version), record)
+
+        version
+        |> Ash.Changeset.for_update(
+          :update,
+          %{
+            changes: %{
+              "site_id" => ctx.site_b.id,
+              "junk_#{System.unique_integer([:positive])}" => 1,
+              Atom.to_string(unquote(field)) => "From the snapshot"
+            }
+          },
+          authorize?: false
+        )
+        |> Ash.update!()
+
+        assert {:ok, previewed} =
+                 unquote(resource)
+                 |> Ash.ActionInput.for_action(
+                   unquote(action),
+                   %{unquote(record_argument) => record.id, version_id: version.id},
+                   opts
+                 )
+                 |> Ash.run_action()
+
+        assert Map.fetch!(previewed, unquote(field)) == "From the snapshot"
+        assert previewed.site_id == record.site_id
+        assert previewed.id == record.id
+      end
+    end
+
+    for {resource, version, factory, record_argument} <- [
+          {Blogger, Blogger.Version, :create_blogger!, :blogger_id},
+          {Team, Team.Version, :create_team!, :team_id},
+          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :auto_posting_id},
+          {BlogPost, BlogPost.Version, :create_blog_post!, :post_id}
+        ] do
+      test "#{inspect(resource)}: a user without the blog permission gets no preview", ctx do
+        record = apply(MishkaBlog.Test.Factory, unquote(factory), [[site_id: ctx.site_a.id]])
+        version = version_of(unquote(version), record)
+
+        nobody =
+          create_user_with_permissions!(["admin:dashboard:runtime:page"], site_id: ctx.site_a.id)
+
+        assert {:error, %Ash.Error.Forbidden{}} =
+                 unquote(resource)
+                 |> Ash.ActionInput.for_action(
+                   :preview_version,
+                   %{unquote(record_argument) => record.id, version_id: version.id},
+                   actor: nobody,
+                   tenant: ctx.site_a.id
+                 )
+                 |> Ash.run_action()
+      end
+    end
+
+    test "a team's preview reads its status through the attribute's type", ctx do
+      team = create_team!(site_id: ctx.site_a.id)
+      version = version_of(Team.Version, team)
+
+      for {snapshot, expected} <- [{"inactive", :inactive}, {"never_a_status", team.status}] do
+        version
+        |> Ash.Changeset.for_update(:update, %{changes: %{"status" => snapshot}},
+          authorize?: false
+        )
+        |> Ash.update!()
+
+        assert {:ok, previewed} =
+                 Team
+                 |> Ash.ActionInput.for_action(
+                   :preview_version,
+                   %{team_id: team.id, version_id: version.id},
+                   actor: ctx.admin_a,
+                   tenant: ctx.site_a.id
+                 )
+                 |> Ash.run_action()
+
+        assert previewed.status == expected
+      end
+    end
+  end
+
   describe "another record's version, in the admin's language" do
     setup do
       Gettext.put_locale(MishkaCmsCore.Gettext, "fa")

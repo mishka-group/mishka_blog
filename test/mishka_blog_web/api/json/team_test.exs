@@ -3100,6 +3100,58 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
 
         assert response.status in [400, 404, 422]
       end
+
+      test "a team that does not exist is not found, for a tenant admin and a master", %{
+        tenant_admin: tenant_admin,
+        master_user: master_user,
+        site: site
+      } do
+        team = create_team!(site_id: site.id, name: "Real Team", slug: "real-team")
+
+        team
+        |> Ash.Changeset.for_update(:update, %{name: "Real Team 2"},
+          tenant: site.id,
+          authorize?: false
+        )
+        |> Ash.update!()
+
+        wait_for_version_count("mishka_blog_team_versions", team.id, 2)
+
+        version =
+          MishkaBlog.Team.Version
+          |> Ash.Query.for_read(:read_any)
+          |> Ash.Query.filter(version_source_id == ^team.id)
+          |> Ash.Query.limit(1)
+          |> Ash.read_one!(authorize?: false)
+
+        missing = Ash.UUID.generate()
+
+        tenant_response =
+          make_api_request(
+            "#{@api_tenant_path}/#{missing}/version/#{version.id}/preview",
+            %{},
+            method: :get,
+            headers: [
+              {"authorization", "Bearer #{sign_in_tenant(tenant_admin, site)}"},
+              {"x-no-tenant", "false"}
+            ],
+            host: site.host
+          )
+
+        master_response =
+          make_api_request(
+            "#{@api_master_path}/#{missing}/version/#{version.id}/preview",
+            %{},
+            method: :get,
+            headers: [
+              {"authorization", "Bearer #{sign_in_master(master_user)}"},
+              {"x-no-tenant", "true"}
+            ]
+          )
+
+        assert tenant_response.status == 404
+        assert master_response.status == 404
+      end
     end
   end
 end

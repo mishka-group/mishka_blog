@@ -1134,47 +1134,11 @@ defmodule MishkaBlog.AutoPosting do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        auto_posting_id = input.arguments.auto_posting_id
-        version_id = input.arguments.version_id
-
-        with {:ok, auto_posting} when not is_nil(auto_posting) <-
-               Ash.get(MishkaBlog.AutoPosting, auto_posting_id, Ash.Scope.to_opts(context)),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(
-                 MishkaBlog.AutoPosting.Version,
-                 version_id,
-                 Ash.Scope.to_opts(context, action: :get_any)
-               ),
-             :valid <-
-               if(version.version_source_id == auto_posting_id, do: :valid, else: :invalid) do
-          preview_auto_posting =
-            version.changes
-            |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
-              List.delete(@admin_fields, :site_id)
-            )
-            |> then(&Map.merge(auto_posting, &1))
-
-          {:ok, preview_auto_posting}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "auto-posting configuration")
-                     )
-                 )
-               ]
-             )}
-
-          error ->
-            error
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :auto_posting_id,
+           version: MishkaBlog.AutoPosting.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           label: dgettext_noop("errors", "auto-posting configuration")}
     end
 
     action :master_preview_version, :struct do
@@ -1186,51 +1150,12 @@ defmodule MishkaBlog.AutoPosting do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, context ->
-        auto_posting_id = input.arguments.auto_posting_id
-        version_id = input.arguments.version_id
-
-        with {:ok, auto_posting} when not is_nil(auto_posting) <-
-               Ash.get(
-                 MishkaBlog.AutoPosting,
-                 auto_posting_id,
-                 Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
-               ),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(
-                 MishkaBlog.AutoPosting.Version,
-                 version_id,
-                 Ash.Scope.to_opts(context, action: :get_any, tenant: nil)
-               ),
-             :valid <-
-               if(version.version_source_id == auto_posting_id, do: :valid, else: :invalid) do
-          preview_auto_posting =
-            version.changes
-            |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
-              List.delete(@admin_fields, :site_id)
-            )
-            |> then(&Map.merge(auto_posting, &1))
-
-          {:ok, preview_auto_posting}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "auto-posting configuration")
-                     )
-                 )
-               ]
-             )}
-
-          error ->
-            error
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :auto_posting_id,
+           version: MishkaBlog.AutoPosting.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           master: true,
+           label: dgettext_noop("errors", "auto-posting configuration")}
     end
   end
 

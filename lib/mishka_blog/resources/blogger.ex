@@ -1661,49 +1661,11 @@ defmodule MishkaBlog.Blogger do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        blogger_id = input.arguments.blogger_id
-        version_id = input.arguments.version_id
-
-        with {:ok, blogger} when not is_nil(blogger) <-
-               Ash.get(MishkaBlog.Blogger, blogger_id, Ash.Scope.to_opts(context)),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(
-                 MishkaBlog.Blogger.Version,
-                 version_id,
-                 Ash.Scope.to_opts(context, action: :get_any)
-               ),
-             :valid <- if(version.version_source_id == blogger_id, do: :valid, else: :invalid) do
-          preview =
-            version.changes
-            |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
-              List.delete(@admin_fields, :site_id)
-            )
-            |> then(&Map.merge(blogger, &1))
-
-          {:ok, preview}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "blogger profile")
-                     )
-                 )
-               ]
-             )}
-
-          {:error, _} ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Blogger)}
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Blogger)}
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :blogger_id,
+           version: MishkaBlog.Blogger.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           label: dgettext_noop("errors", "blogger profile")}
     end
 
     action :master_preview_version, :struct do
@@ -1715,53 +1677,12 @@ defmodule MishkaBlog.Blogger do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, context ->
-        blogger_id = input.arguments.blogger_id
-        version_id = input.arguments.version_id
-
-        with {:ok, blogger} when not is_nil(blogger) <-
-               Ash.get(
-                 MishkaBlog.Blogger,
-                 blogger_id,
-                 Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
-               ),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(
-                 MishkaBlog.Blogger.Version,
-                 version_id,
-                 Ash.Scope.to_opts(context, action: :get_any, tenant: nil)
-               ),
-             :valid <- if(version.version_source_id == blogger_id, do: :valid, else: :invalid) do
-          preview =
-            version.changes
-            |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
-              List.delete(@admin_fields, :site_id)
-            )
-            |> then(&Map.merge(blogger, &1))
-
-          {:ok, preview}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "blogger profile")
-                     )
-                 )
-               ]
-             )}
-
-          {:error, _} ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Blogger)}
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Blogger)}
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :blogger_id,
+           version: MishkaBlog.Blogger.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           master: true,
+           label: dgettext_noop("errors", "blogger profile")}
     end
   end
 

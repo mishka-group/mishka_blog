@@ -1615,50 +1615,12 @@ defmodule MishkaBlog.Team do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        team_id = input.arguments.team_id
-        version_id = input.arguments.version_id
-
-        with {:ok, team} when not is_nil(team) <-
-               Ash.get(MishkaBlog.Team, team_id, Ash.Scope.to_opts(context)),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(
-                 MishkaBlog.Team.Version,
-                 version_id,
-                 Ash.Scope.to_opts(context, action: :get_any)
-               ),
-             :valid <- if(version.version_source_id == team_id, do: :valid, else: :invalid) do
-          preview_team =
-            version.changes
-            |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
-              List.delete(@admin_fields, :site_id)
-            )
-            |> MishkaBlog.Resources.Changes.RestoreVersion.cast_field(MishkaBlog.Team, :status)
-            |> then(&Map.merge(team, &1))
-
-          {:ok, preview_team}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "team")
-                     )
-                 )
-               ]
-             )}
-
-          {:error, _} ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)}
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)}
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :team_id,
+           version: MishkaBlog.Team.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           cast: [:status],
+           label: dgettext_noop("errors", "team")}
     end
 
     action :master_preview_version, :struct do
@@ -1670,54 +1632,13 @@ defmodule MishkaBlog.Team do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, context ->
-        team_id = input.arguments.team_id
-        version_id = input.arguments.version_id
-
-        with {:ok, team} when not is_nil(team) <-
-               Ash.get(
-                 MishkaBlog.Team,
-                 team_id,
-                 Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
-               ),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(
-                 MishkaBlog.Team.Version,
-                 version_id,
-                 Ash.Scope.to_opts(context, action: :get_any, tenant: nil)
-               ),
-             :valid <- if(version.version_source_id == team_id, do: :valid, else: :invalid) do
-          preview_team =
-            version.changes
-            |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
-              List.delete(@admin_fields, :site_id)
-            )
-            |> MishkaBlog.Resources.Changes.RestoreVersion.cast_field(MishkaBlog.Team, :status)
-            |> then(&Map.merge(team, &1))
-
-          {:ok, preview_team}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "team")
-                     )
-                 )
-               ]
-             )}
-
-          {:error, _} ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)}
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)}
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :team_id,
+           version: MishkaBlog.Team.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           cast: [:status],
+           master: true,
+           label: dgettext_noop("errors", "team")}
     end
   end
 

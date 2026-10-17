@@ -2800,6 +2800,61 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         assert body["data"]["attributes"]["display_name"] == "ORIGINAL"
         assert body["data"]["attributes"]["bio"] == "Original bio"
       end
+
+      test "a blogger that does not exist is not found, for a tenant admin and a master", %{
+        tenant_admin: tenant_admin,
+        master_user: master_user,
+        site: site,
+        site1_user: site1_user
+      } do
+        blogger =
+          create_blogger!(
+            site_id: site.id,
+            user_id: site1_user.id,
+            display_name: "REAL",
+            slug: "real-blogger"
+          )
+
+        blogger
+        |> Ash.Changeset.for_update(:update, %{display_name: "REAL TOO"},
+          tenant: site.id,
+          authorize?: false
+        )
+        |> Ash.update!()
+
+        wait_for_version_count("mishka_blog_blogger_versions", blogger.id, 2)
+
+        version =
+          MishkaBlog.Blogger.Version
+          |> Ash.Query.for_read(:read_any)
+          |> Ash.Query.filter(version_source_id: blogger.id)
+          |> Ash.Query.limit(1)
+          |> Ash.read_one!(authorize?: false)
+
+        missing = Ash.UUID.generate()
+
+        tenant_response =
+          make_api_request(
+            "#{@api_tenant_path}/#{missing}/version/#{version.id}/preview",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{sign_in_tenant(tenant_admin)}"}]
+          )
+
+        master_response =
+          make_api_request(
+            "#{@api_master_path}/#{missing}/version/#{version.id}/preview",
+            %{},
+            method: :get,
+            headers: [
+              {"authorization", "Bearer #{sign_in_master(master_user)}"},
+              {"x-no-tenant", "true"}
+            ]
+          )
+
+        assert tenant_response.status == 404
+        assert master_response.status == 404
+      end
     end
   end
 end

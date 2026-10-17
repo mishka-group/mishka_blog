@@ -1782,19 +1782,9 @@ defmodule MishkaBlog.Collection do
 
       filter expr(id == ^arg(:collection_id))
 
-      prepare fn query, context ->
-        version_id = Ash.Query.get_argument(query, :version_id)
-
-        Ash.Query.after_action(query, fn _query, results ->
-          MishkaBlog.Resources.Changes.RestoreVersion.preview(
-            results,
-            MishkaBlog.Collection.Version,
-            version_id,
-            dgettext_noop("errors", "collection"),
-            Ash.Scope.to_opts(context)
-          )
-        end)
-      end
+      prepare {MishkaBlog.Resources.Preparations.PreviewVersion,
+               version: MishkaBlog.Collection.Version,
+               label: dgettext_noop("errors", "collection")}
     end
 
     read :master_preview_version do
@@ -1809,19 +1799,10 @@ defmodule MishkaBlog.Collection do
 
       filter expr(id == ^arg(:collection_id))
 
-      prepare fn query, context ->
-        version_id = Ash.Query.get_argument(query, :version_id)
-
-        Ash.Query.after_action(query, fn _query, results ->
-          MishkaBlog.Resources.Changes.RestoreVersion.preview(
-            results,
-            MishkaBlog.Collection.Version,
-            version_id,
-            dgettext_noop("errors", "collection"),
-            Ash.Scope.to_opts(context, tenant: nil)
-          )
-        end)
-      end
+      prepare {MishkaBlog.Resources.Preparations.PreviewVersion,
+               version: MishkaBlog.Collection.Version,
+               master: true,
+               label: dgettext_noop("errors", "collection")}
     end
   end
 
