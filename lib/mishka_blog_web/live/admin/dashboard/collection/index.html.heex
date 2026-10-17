@@ -68,7 +68,7 @@ SPDX-License-Identifier: Apache-2.0
       <CardChrome.modal_head
         icon="hero-clock"
         title={gettext("Version history")}
-        subtitle={@versions_collection_name || gettext("Loading…")}
+        subtitle={@versions_record_name || gettext("Loading…")}
       />
 
       <%!-- Each edition keeps its own history, so the row switches which one the modal is showing
@@ -85,17 +85,17 @@ SPDX-License-Identifier: Apache-2.0
           type="button"
           phx-click="show_versions_for"
           phx-value-id={edition.id}
-          aria-pressed={to_string(edition.id == @versions_collection_id)}
+          aria-pressed={to_string(edition.id == @versions_record_id)}
           class={[
             "inline-flex items-center gap-1 rounded-[20px] border px-2.5 py-1 text-[10px] font-bold transition-colors",
-            (edition.id == @versions_collection_id &&
+            (edition.id == @versions_record_id &&
                LanguageAccent.for_language(edition.language).chip) ||
               "border-[#ecebe6] bg-white text-[#8a877f] hover:bg-[#f7f6f3]"
           ]}
         >
           <span class={[
             "size-1.5 rounded-full",
-            (edition.id == @versions_collection_id &&
+            (edition.id == @versions_record_id &&
                LanguageAccent.for_language(edition.language).fill) || "bg-[#d5d2c9]"
           ]}></span>
           {String.upcase(edition.language)}
