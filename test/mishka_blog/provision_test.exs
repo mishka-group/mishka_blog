@@ -20,6 +20,8 @@ defmodule MishkaBlog.ProvisionTest do
   """
   use MishkaBlog.DataCase, async: false
 
+  import ExUnit.CaptureLog
+
   alias MishkaBlog.Plugins.Installer
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Install.Extensions
@@ -754,6 +756,43 @@ defmodule MishkaBlog.ProvisionTest do
 
       assert Extensions.installed_version(site.id, :mishka_blog) == "unknown",
              "the answer was not written down, so it would be asked again on every render"
+    end
+
+    # ANY OF THE PAGES IS ENOUGH, and a page of another site is not this site's.
+    test "a site holding one of the pages counts as installed, and one holding none does not", %{
+      site: site
+    } do
+      refute Extensions.installed?(site.id, :mishka_blog)
+
+      other = create_site!(active: true)
+      create_page!(site_id: other.id, path: hd(Provision.page_paths()), active: true)
+
+      refute Extensions.installed?(site.id, :mishka_blog),
+             "a page of another site made this site look set up"
+
+      create_page!(site_id: site.id, path: hd(Provision.page_paths()), active: true)
+
+      assert Extensions.installed?(site.id, :mishka_blog)
+    end
+
+    # THE SCREEN GETS A FIXED MESSAGE, never the exception's own text; the log has the detail.
+    test "a failed install reports the fixed message and logs the exception", %{site: site} do
+      refused = create_user_with_permissions!(["admin:dashboard:blog"], site_id: site.id)
+
+      log =
+        capture_log(fn ->
+          assert {:error, {:extension_failed, message}} =
+                   Extensions.install(site.id, "mishka_blog", %{}, refused)
+
+          assert message ==
+                   "The install did not finish. Press Install again; details are in the server log."
+
+          refute message =~ "admin:dashboard"
+        end)
+
+      assert log =~ "[MishkaBlog] install on #{site.id} failed:"
+      assert log =~ "admin:dashboard:runtime:component"
+      refute Extensions.installed?(site.id, :mishka_blog)
     end
 
     test "is offered by the installer's own registry, with the label it declared" do
