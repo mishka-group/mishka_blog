@@ -1157,20 +1157,12 @@ defmodule MishkaBlog.AutoPosting do
               changes when is_binary(changes) -> Jason.decode!(changes)
             end
 
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-            |> Enum.map(&to_string/1)
-
           preview_auto_posting =
-            Enum.reduce(restored_attrs, auto_posting, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            restored_attrs
+            |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
+              List.delete(@admin_fields, :site_id)
+            )
+            |> then(&Map.merge(auto_posting, &1))
 
           {:ok, preview_auto_posting}
         else
@@ -1226,20 +1218,12 @@ defmodule MishkaBlog.AutoPosting do
               changes when is_binary(changes) -> Jason.decode!(changes)
             end
 
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-            |> Enum.map(&to_string/1)
-
           preview_auto_posting =
-            Enum.reduce(restored_attrs, auto_posting, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            restored_attrs
+            |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
+              List.delete(@admin_fields, :site_id)
+            )
+            |> then(&Map.merge(auto_posting, &1))
 
           {:ok, preview_auto_posting}
         else

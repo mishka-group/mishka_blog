@@ -2697,20 +2697,12 @@ defmodule MishkaBlog.BlogPost do
               changes when is_binary(changes) -> Jason.decode!(changes)
             end
 
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-
           preview =
-            Enum.reduce(restored_attrs, post, fn {key, value}, acc ->
-              key_atom = if is_binary(key), do: String.to_existing_atom(key), else: key
-
-              if key_atom in accepted_fields do
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            restored_attrs
+            |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
+              List.delete(@admin_fields, :site_id)
+            )
+            |> then(&Map.merge(post, &1))
 
           {:ok, preview}
         else
@@ -2768,20 +2760,12 @@ defmodule MishkaBlog.BlogPost do
               changes when is_binary(changes) -> Jason.decode!(changes)
             end
 
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-
           preview =
-            Enum.reduce(restored_attrs, post, fn {key, value}, acc ->
-              key_atom = if is_binary(key), do: String.to_existing_atom(key), else: key
-
-              if key_atom in accepted_fields do
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            restored_attrs
+            |> MishkaBlog.Resources.Changes.RestoreVersion.known_changes(
+              List.delete(@admin_fields, :site_id)
+            )
+            |> then(&Map.merge(post, &1))
 
           {:ok, preview}
         else

@@ -1559,13 +1559,12 @@ defmodule MishkaBlog.Tag do
                       )
               end
 
-              # Convert string keys to atom keys for struct
-              changes_with_atom_keys =
-                version.changes
-                |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
-                |> Map.new()
+              fields = tag |> Map.from_struct() |> Map.keys()
 
-              struct(tag, changes_with_atom_keys)
+              struct(
+                tag,
+                MishkaBlog.Resources.Changes.RestoreVersion.known_changes(version.changes, fields)
+              )
             end)
 
           {:ok, results}
@@ -1609,13 +1608,12 @@ defmodule MishkaBlog.Tag do
                       )
               end
 
-              # Convert string keys to atom keys for struct
-              changes_with_atom_keys =
-                version.changes
-                |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
-                |> Map.new()
+              fields = tag |> Map.from_struct() |> Map.keys()
 
-              struct(tag, changes_with_atom_keys)
+              struct(
+                tag,
+                MishkaBlog.Resources.Changes.RestoreVersion.known_changes(version.changes, fields)
+              )
             end)
 
           {:ok, results}
