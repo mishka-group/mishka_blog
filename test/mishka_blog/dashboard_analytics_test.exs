@@ -6,9 +6,9 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
   @moduledoc """
   The blog analytics page's numbers, read as a master and as a site's admin.
 
-  `MishkaBlog.Dashboard.Analytics.load/2` reads through the resources' master reads as a system call,
-  scoped by `MishkaCmsCore.Dashboard.Widget.scope/1`: a master (a user whose `site_id` is nil)
-  counts every site, a site's admin only its own.
+  `MishkaBlog.Dashboard.Analytics.load/2` reads as the viewer through the resources' own policies
+  (`MishkaBlog.Dashboard.Scope`): a master (a user whose `site_id` is nil) counts every site, a
+  site's admin only its own.
   """
   use MishkaBlog.DataCase, async: false
 

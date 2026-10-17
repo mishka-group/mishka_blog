@@ -5,8 +5,11 @@
 defmodule MishkaBlog.Dashboard.Widgets.CommentsModeration do
   @moduledoc """
   Dashboard widget (a `dashboard:widgets` plugin): comments awaiting moderation — a pending count
-  plus the latest few with an excerpt of their content (`Comment` `:master_read`, filtered to
-  `:pending`). A master moderates across every site; a tenant admin only their own site's.
+  plus the latest few with an excerpt of their content (`Comment`), read as the viewer through
+  `MishkaBlog.Dashboard.Scope`: a master moderates across every site, a site's admin only their own
+  site's, and a viewer without `admin:dashboard:blog:comment` none. Each author is named as the
+  comments page names them (`MishkaBlogWeb.Templates.CommentCard.author/1`), from what the viewer
+  may read of the account.
 
   How many comments the queue lists is the viewer's own setting — the card's gear in customize mode,
   or Settings → Blog → Dashboard widgets, both writing the same per-user row
@@ -18,6 +21,7 @@ defmodule MishkaBlog.Dashboard.Widgets.CommentsModeration do
   import Phoenix.Component
   require Ash.Query
 
+  alias MishkaBlog.Dashboard.Scope
   alias MishkaCmsCore.Dashboard.Widget
 
   @count %{
@@ -54,17 +58,12 @@ defmodule MishkaBlog.Dashboard.Widgets.CommentsModeration do
   end
 
   @doc """
-  Loads this widget's data off the dashboard render (in a Task), scoped to the viewer, listing as
+  Loads this widget's data off the dashboard render (in a Task), read as the viewer, listing as
   many comments as their own "Comments to show" setting asks for. Called as `load/1` (a direct call,
   no dashboard) it uses the declared default.
   """
   def load(user, config \\ %{}) do
-    scope = Widget.scope(user)
-
-    base =
-      MishkaBlog.Comment
-      |> Ash.Query.for_read(:master_read, %{}, authorize?: false)
-      |> scope_filter(scope)
+    base = Scope.query(MishkaBlog.Comment, user)
 
     counts = %{
       pending: count_status(base, :pending),
@@ -73,11 +72,11 @@ defmodule MishkaBlog.Dashboard.Widgets.CommentsModeration do
       approved: count_status(base, :approved)
     }
 
-    %{results: latest} =
+    latest =
       base
-      |> Ash.Query.load([:author_profile, :author_master? | authors_seen_by(scope)])
+      |> Ash.Query.load([:author, :author_profile, :author_master?])
       |> Ash.Query.sort(inserted_at: :desc)
-      |> Ash.read!(page: [limit: Map.get(config, @count.key, @count.default)], authorize?: false)
+      |> Scope.list(Map.get(config, @count.key, @count.default))
 
     %{counts: counts, latest: latest}
   end
@@ -167,16 +166,6 @@ defmodule MishkaBlog.Dashboard.Widgets.CommentsModeration do
   defp status_tone(:approved), do: :green
   defp status_tone(_), do: :gray
 
-  # A master reads every account; a site's admin only its own site's, so a master writing on a site
-  # is named there by its blogger profile on that site, or as a master, never by its account.
-  defp authors_seen_by(nil), do: [:author]
-
-  defp authors_seen_by(site_id),
-    do: [author: Ash.Query.filter(MishkaCmsCore.Accounts.User, site_id == ^site_id)]
-
   defp count_status(base, value),
-    do: base |> Ash.Query.filter(status == ^value) |> Ash.count!(authorize?: false)
-
-  defp scope_filter(query, nil), do: query
-  defp scope_filter(query, site_id), do: Ash.Query.filter(query, site_id == ^site_id)
+    do: base |> Ash.Query.filter(status == ^value) |> Scope.count()
 end
