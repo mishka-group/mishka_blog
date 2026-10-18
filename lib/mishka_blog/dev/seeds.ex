@@ -24,7 +24,7 @@ defmodule MishkaBlog.Dev.Seeds do
   Receives foundation data from `MishkaCmsCore.Dev.Seeds.dev_seed/0`.
   """
 
-  alias MishkaBlog.{BlogPost, Blogger, Collection, Tag}
+  alias MishkaBlog.{Blogger, BlogPost, Collection, Tag}
   alias MishkaCmsCore.Dev.Seeds
   import MishkaBlog.Dev.Generator
 

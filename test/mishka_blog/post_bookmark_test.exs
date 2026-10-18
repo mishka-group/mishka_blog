@@ -26,7 +26,7 @@ defmodule MishkaBlog.Test.PostBookmarkTest do
         bookmark = create_post_bookmark!(post_id: post.id, user_id: user.id)
 
         # Has UUID primary key
-        assert bookmark.id != nil
+        assert {:ok, _} = Ecto.UUID.cast(bookmark.id)
         # And foreign keys to post and user
         assert bookmark.post_id == post.id
         assert bookmark.user_id == user.id
@@ -49,7 +49,7 @@ defmodule MishkaBlog.Test.PostBookmarkTest do
 
         assert bookmark.post_id == post.id
         assert bookmark.user_id == user.id
-        assert bookmark.inserted_at != nil
+        assert %DateTime{} = bookmark.inserted_at
       end
 
       test "upsert prevents duplicate bookmarks" do
@@ -102,8 +102,7 @@ defmodule MishkaBlog.Test.PostBookmarkTest do
 
         bookmark = create_post_bookmark!(post_id: post.id, user_id: user.id)
 
-        assert bookmark.inserted_at != nil
-        assert is_struct(bookmark.inserted_at, DateTime)
+        assert %DateTime{} = bookmark.inserted_at
       end
     end
 

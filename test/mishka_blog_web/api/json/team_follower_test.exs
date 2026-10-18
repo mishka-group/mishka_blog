@@ -119,10 +119,17 @@ defmodule MishkaBlogWeb.Api.Json.TeamFollowerTest do
 
         assert response.status == 201
         body = Jason.decode!(response.resp_body)
-        assert body["data"]["attributes"]["followed_at"] != nil
+
+        assert {:ok, %DateTime{}, _offset} =
+                 DateTime.from_iso8601(body["data"]["attributes"]["followed_at"])
+
         assert body["data"]["attributes"]["notification_enabled"] == true
-        assert body["data"]["attributes"]["inserted_at"] != nil
-        assert body["data"]["attributes"]["updated_at"] != nil
+
+        assert {:ok, %DateTime{}, _offset} =
+                 DateTime.from_iso8601(body["data"]["attributes"]["inserted_at"])
+
+        assert {:ok, %DateTime{}, _offset} =
+                 DateTime.from_iso8601(body["data"]["attributes"]["updated_at"])
       end
 
       test "user can follow with notifications disabled", %{site: site, user1: user1} do
@@ -620,7 +627,7 @@ defmodule MishkaBlogWeb.Api.Json.TeamFollowerTest do
         body2 = Jason.decode!(list_response2.resp_body)
 
         # Inactive teams should be filtered out from my_following
-        assert length(body2["data"]) == 0
+        assert body2["data"] == []
       end
 
       test "user can see multiple follows with only active teams visible", %{
@@ -690,7 +697,9 @@ defmodule MishkaBlogWeb.Api.Json.TeamFollowerTest do
         assert length(body["data"]) == 1
 
         follow = hd(body["data"])
-        assert follow["attributes"]["followed_at"] != nil
+
+        assert {:ok, %DateTime{}, _offset} =
+                 DateTime.from_iso8601(follow["attributes"]["followed_at"])
       end
     end
   end

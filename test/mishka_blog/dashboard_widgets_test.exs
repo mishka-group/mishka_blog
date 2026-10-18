@@ -21,11 +21,11 @@ defmodule MishkaBlog.Dashboard.WidgetsTest do
   alias MishkaCmsCore.Dashboard.Widget
 
   alias MishkaBlog.Dashboard.Widgets.{
-    RecentPosts,
-    DraftsScheduled,
+    Bloggers,
     CommentsModeration,
-    TopPosts,
-    Bloggers
+    DraftsScheduled,
+    RecentPosts,
+    TopPosts
   }
 
   @widgets [
@@ -48,6 +48,8 @@ defmodule MishkaBlog.Dashboard.WidgetsTest do
   end
 
   for {module, id, link} <- @widgets do
+    # `unquote(module).call/1` is the application code; the check does not see through `unquote`.
+    # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
     test "#{id}: call/1 appends a valid descriptor with its admin link" do
       assert {:reply,
               %{

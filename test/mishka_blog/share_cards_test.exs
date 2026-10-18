@@ -12,7 +12,7 @@ defmodule MishkaBlog.ShareCardsTest do
   use MishkaBlog.DataCase, async: false
   use Oban.Testing, repo: MishkaBlog.Repo
 
-  alias MishkaBlog.{BlogPost, Blogger, Collection, ShareCards, Tag, Team}
+  alias MishkaBlog.{Blogger, BlogPost, Collection, ShareCards, Tag, Team}
 
   alias MishkaBlog.Plugins.{
     BloggerShareCard,

@@ -21,7 +21,7 @@ defmodule MishkaBlog.Test.CollectionTest do
 
       test "uses UUID v7 for primary keys" do
         collection = create_collection!()
-        assert is_binary(collection.id)
+        assert {:ok, _} = Ecto.UUID.cast(collection.id)
         assert String.length(collection.id) == 36
       end
 
@@ -101,7 +101,7 @@ defmodule MishkaBlog.Test.CollectionTest do
 
         collection = create_collection!(name: "Master Collection", site_id: site.id)
 
-        assert collection.language_group_id != nil
+        assert {:ok, _} = Ecto.UUID.cast(collection.language_group_id)
       end
 
       test "defaults status to draft" do
@@ -420,7 +420,7 @@ defmodule MishkaBlog.Test.CollectionTest do
           |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id, authorize?: false)
           |> Ash.destroy!(return_destroyed?: true)
 
-        assert archived.archived_at != nil
+        assert %DateTime{} = archived.archived_at
         assert archived.status == :archived
 
         # Should not appear in normal reads
@@ -490,7 +490,7 @@ defmodule MishkaBlog.Test.CollectionTest do
           )
 
         assert fetched.id == collection.id
-        assert fetched.archived_at != nil
+        assert %DateTime{} = fetched.archived_at
       end
 
       test "master_unarchive restores collection" do
@@ -963,6 +963,74 @@ defmodule MishkaBlog.Test.CollectionTest do
       end
     end
 
+    describe "effective permissions up the parent chain" do
+      defp effective_permissions!(collection, site) do
+        collection
+        |> Ash.load!(:effective_permissions, tenant: site.id, authorize?: false)
+        |> Map.fetch!(:effective_permissions)
+      end
+
+      test "a collection with none of its own takes those of the nearest parent that names some" do
+        site = create_site!()
+
+        top = create_collection!(site_id: site.id, permissions: ["members:read"])
+        middle = create_collection!(site_id: site.id, parent_collection_id: top.id)
+        bottom = create_collection!(site_id: site.id, parent_collection_id: middle.id)
+
+        assert effective_permissions!(top, site) == ["members:read"]
+        assert effective_permissions!(middle, site) == ["members:read"]
+        assert effective_permissions!(bottom, site) == ["members:read"]
+      end
+
+      test "a collection that names permissions keeps its own over its parents'" do
+        site = create_site!()
+
+        top = create_collection!(site_id: site.id, permissions: ["members:read"])
+
+        middle =
+          create_collection!(
+            site_id: site.id,
+            parent_collection_id: top.id,
+            permissions: ["staff:read"]
+          )
+
+        bottom = create_collection!(site_id: site.id, parent_collection_id: middle.id)
+
+        assert effective_permissions!(middle, site) == ["staff:read"]
+        assert effective_permissions!(bottom, site) == ["staff:read"]
+      end
+
+      test "a chain without any permissions opens to everyone" do
+        site = create_site!()
+
+        top = create_collection!(site_id: site.id)
+        bottom = create_collection!(site_id: site.id, parent_collection_id: top.id)
+
+        assert effective_permissions!(bottom, site) == []
+      end
+
+      test "a parent cycle with no permissions ends the walk and opens to everyone" do
+        site = create_site!()
+
+        a = create_collection!(site_id: site.id)
+        b = create_collection!(site_id: site.id, parent_collection_id: a.id)
+
+        a =
+          a
+          |> Ash.Changeset.for_update(:update, %{parent_collection_id: b.id},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.update!()
+
+        assert a.parent_collection_id == b.id
+        assert b.parent_collection_id == a.id
+
+        assert effective_permissions!(a, site) == []
+        assert effective_permissions!(b, site) == []
+      end
+    end
+
     describe "relationships" do
       test "belongs_to site" do
         site = create_site!()
@@ -1398,7 +1466,6 @@ defmodule MishkaBlog.Test.CollectionTest do
           |> Ash.read_one!(authorize?: false)
 
         assert result.id == collection.id
-        assert is_list(result.sorted_versions)
         assert length(result.sorted_versions) == 5
       end
 
@@ -1430,7 +1497,6 @@ defmodule MishkaBlog.Test.CollectionTest do
           |> Ash.read_one!(authorize?: false)
 
         assert result.id == collection.id
-        assert is_list(result.sorted_versions)
         assert length(result.sorted_versions) == 3
       end
     end
@@ -1464,7 +1530,6 @@ defmodule MishkaBlog.Test.CollectionTest do
         assert length(result.results) == 1
         collection_data = List.first(result.results)
         assert collection_data.id == collection.id
-        assert is_list(collection_data.sorted_versions)
         assert length(collection_data.sorted_versions) == 3
       end
 
@@ -1494,7 +1559,6 @@ defmodule MishkaBlog.Test.CollectionTest do
 
         assert length(result.results) == 1
         collection_data = List.first(result.results)
-        assert is_list(collection_data.sorted_versions)
         assert length(collection_data.sorted_versions) == 3
       end
 
@@ -1826,7 +1890,7 @@ defmodule MishkaBlog.Test.CollectionTest do
           |> Ash.Query.set_tenant(site.id)
           |> Ash.read_one!(authorize?: false)
 
-        assert result.latest_version != nil
+        assert %Collection.Version{} = result.latest_version
         assert result.latest_version.changes["description"] == "Third"
       end
 

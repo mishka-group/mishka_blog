@@ -82,20 +82,121 @@ defmodule MishkaBlog.Resources.Changes.RestoreVersion do
     )
   end
 
-  defp restore(changeset, changes, fields) do
+  @doc """
+  The entries of a version's `changes` whose key names one of `fields`, keyed by that atom. A key
+  that names no field is left out, so reading a version never creates an atom:
+
+      known_changes(%{"name" => "Elixir", "junk" => 1}, [:name, :slug]) #=> %{name: "Elixir"}
+
+  `changes` may be a map with string or atom keys, or its JSON; anything else, JSON that does not
+  parse or is not an object included, reads as `%{}`.
+  """
+  @spec known_changes(map() | String.t() | nil, [atom()]) :: %{atom() => term()}
+  def known_changes(changes, fields) do
     by_name = Map.new(fields, &{Atom.to_string(&1), &1})
 
-    changes
-    |> snapshot()
-    |> Enum.reduce(changeset, fn {key, value}, acc ->
-      case Map.fetch(by_name, to_string(key)) do
-        {:ok, field} -> Ash.Changeset.force_change_attribute(acc, field, value)
-        :error -> acc
+    for {key, value} <- snapshot(changes),
+        {:ok, field} <- [Map.fetch(by_name, to_string(key))],
+        into: %{},
+        do: {field, value}
+  end
+
+  @doc """
+  Each of `records` as it was in the version `version_id`, read with `read_opts` (the caller's
+  actor, tenant and `authorize?`) through the version's `:get_any` read:
+
+      preview(results, [version: MishkaBlog.Tag.Version, label: "tag"], version_id,
+              Ash.Scope.to_opts(context))
+
+  `opts` are the options of this change, `:version` and `:label`, and two more:
+
+  * `:fields` - The attributes copied from the version. Defaults to every field of the record.
+  * `:cast` - Fields whose string value is read through the attribute's own type, as `cast_field/3`
+    does. Defaults to none.
+
+  A version that belongs to another record is refused with `refusal/1` of `:label`, and one that
+  cannot be read comes back as the read's own error. Neither raises.
+  """
+  @spec preview([struct()], keyword(), String.t(), keyword()) ::
+          {:ok, [struct()]} | {:error, Exception.t()}
+  def preview(records, opts, version_id, read_opts) do
+    records
+    |> Enum.reduce_while({:ok, []}, fn record, {:ok, previews} ->
+      case Ash.get(opts[:version], version_id, Keyword.put(read_opts, :action, :get_any)) do
+        {:ok, %{version_source_id: source_id, changes: changes}} when source_id == record.id ->
+          {:cont, {:ok, [previewed(record, changes, opts) | previews]}}
+
+        {:ok, _another_records_version} ->
+          {:halt, {:error, refused(opts[:label])}}
+
+        {:error, error} ->
+          {:halt, {:error, error}}
       end
+    end)
+    |> case do
+      {:ok, previews} -> {:ok, Enum.reverse(previews)}
+      error -> error
+    end
+  end
+
+  @doc """
+  `changes` with the string value of `field` read through the attribute's own type on `resource`:
+  `"active"` becomes `:active` for an atom attribute. A value the type refuses is dropped, so the
+  record keeps its current one; a field that is absent or not a string is left as it is.
+  """
+  @spec cast_field(%{atom() => term()}, Ash.Resource.t(), atom()) :: %{atom() => term()}
+  def cast_field(changes, resource, field) do
+    with {:ok, value} when is_binary(value) <- Map.fetch(changes, field),
+         %{type: type, constraints: constraints} <- Ash.Resource.Info.attribute(resource, field) do
+      case Ash.Type.cast_input(type, value, constraints) do
+        {:ok, cast} -> Map.put(changes, field, cast)
+        _refused -> Map.delete(changes, field)
+      end
+    else
+      _absent -> changes
+    end
+  end
+
+  defp previewed(record, changes, opts) do
+    fields =
+      Keyword.get_lazy(opts, :fields, fn -> record |> Map.from_struct() |> Map.keys() end)
+
+    changed =
+      changes
+      |> known_changes(fields)
+      |> cast_fields(record.__struct__, Keyword.get(opts, :cast, []))
+
+    struct(record, changed)
+  end
+
+  defp cast_fields(changes, resource, fields) do
+    Enum.reduce(fields, changes, &cast_field(&2, resource, &1))
+  end
+
+  defp refused(label) do
+    Ash.Error.Invalid.exception(
+      errors: [
+        Ash.Error.Query.InvalidArgument.exception(field: :version_id, message: refusal(label))
+      ]
+    )
+  end
+
+  defp restore(changeset, changes, fields) do
+    changes
+    |> known_changes(fields)
+    |> Enum.reduce(changeset, fn {field, value}, acc ->
+      Ash.Changeset.force_change_attribute(acc, field, value)
     end)
   end
 
   defp snapshot(changes) when is_map(changes), do: changes
-  defp snapshot(changes) when is_binary(changes), do: Jason.decode!(changes)
+
+  defp snapshot(changes) when is_binary(changes) do
+    case Jason.decode(changes) do
+      {:ok, decoded} when is_map(decoded) -> decoded
+      _not_an_object -> %{}
+    end
+  end
+
   defp snapshot(_none), do: %{}
 end

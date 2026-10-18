@@ -18,9 +18,9 @@ defmodule MishkaBlog.SiteLinksTest do
   require Ash.Query
 
   alias MishkaBlog.{
-    BlogPost,
     Blogger,
     BloggerFollower,
+    BlogPost,
     Collection,
     Comment,
     CommentVote,
@@ -1017,7 +1017,7 @@ defmodule MishkaBlog.SiteLinksTest do
         end
 
         assert {:error, _} = restore.(edition)
-        refute is_nil(reload(edition).archived_at)
+        assert %DateTime{} = reload(edition).archived_at
 
         assert {:ok, _} = restore.(first)
         assert {:ok, _} = restore.(edition)

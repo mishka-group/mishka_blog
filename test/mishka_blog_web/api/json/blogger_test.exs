@@ -333,7 +333,6 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) >= 2
 
         ids = Enum.map(body["data"], & &1["id"])
@@ -377,7 +376,6 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert blogger1.id in ids
@@ -489,7 +487,8 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         body = Jason.decode!(response.resp_body)
         assert body["data"]["attributes"]["display_name"] == "User Blogger"
         # Verify the blogger is associated with the correct user
-        assert body["data"]["relationships"]["user"] != nil
+        assert body["data"]["attributes"]["user_id"] == site1_user.id
+        assert %{"links" => %{}, "meta" => %{}} = body["data"]["relationships"]["user"]
       end
 
       test "tenant admin can get blogger by user_id for their site", %{
@@ -807,7 +806,6 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert blogger1.id in ids
@@ -1283,7 +1281,6 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert active1.id in ids
@@ -1481,7 +1478,6 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         assert body["data"]["attributes"]["display_name"] == "Team Blogger"
 
         # Verify included teams (should be limited to 10)
-        assert is_list(body["included"])
         team_records = Enum.filter(body["included"], fn inc -> inc["type"] == "team" end)
         assert length(team_records) == 10
 
@@ -1703,7 +1699,6 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         body = Jason.decode!(response.resp_body)
 
         # Verify included posts (should be limited to 10)
-        assert is_list(body["included"])
         post_records = Enum.filter(body["included"], fn inc -> inc["type"] == "blog_post" end)
         assert length(post_records) == 10
 
@@ -2068,7 +2063,6 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
 
         # Check sorted_versions in attributes
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) == 3
       end
 
@@ -2147,7 +2141,6 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         assert response1.status == 200
         body1 = Jason.decode!(response1.resp_body)
         sorted_versions1 = body1["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions1)
         assert length(sorted_versions1) == 2
 
         # Get site2 blogger with versions
@@ -2162,7 +2155,6 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         assert response2.status == 200
         body2 = Jason.decode!(response2.resp_body)
         sorted_versions2 = body2["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions2)
         assert length(sorted_versions2) == 1
       end
     end
@@ -2236,12 +2228,10 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
 
         # Check latest_version calculation
         latest_version = body["data"]["attributes"]["latest_version"]
-        assert is_map(latest_version)
-        assert latest_version["changes"]["bio"] == "Bio 5"
+        assert %{"changes" => %{"bio" => "Bio 5"}} = latest_version
 
         # Check recent_versions calculation (should return up to 10)
         recent_versions = body["data"]["attributes"]["recent_versions"]
-        assert is_list(recent_versions)
         assert length(recent_versions) == 5
 
         # Verify they're sorted descending (newest first)
@@ -2412,13 +2402,11 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         body = Jason.decode!(response.resp_body)
 
         # Returns 1 blogger with versions loaded
-        assert is_list(body["data"])
         assert length(body["data"]) == 1
 
         # Check the versions inside the blogger
         blogger_data = List.first(body["data"])
         sorted_versions = blogger_data["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) == 4
       end
 
@@ -2487,13 +2475,11 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) == 1
 
         # Check the versions inside the blogger
         blogger_data = List.first(body["data"])
         sorted_versions = blogger_data["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) == 2
       end
     end
@@ -2799,6 +2785,61 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         body = Jason.decode!(response.resp_body)
         assert body["data"]["attributes"]["display_name"] == "ORIGINAL"
         assert body["data"]["attributes"]["bio"] == "Original bio"
+      end
+
+      test "a blogger that does not exist is not found, for a tenant admin and a master", %{
+        tenant_admin: tenant_admin,
+        master_user: master_user,
+        site: site,
+        site1_user: site1_user
+      } do
+        blogger =
+          create_blogger!(
+            site_id: site.id,
+            user_id: site1_user.id,
+            display_name: "REAL",
+            slug: "real-blogger"
+          )
+
+        blogger
+        |> Ash.Changeset.for_update(:update, %{display_name: "REAL TOO"},
+          tenant: site.id,
+          authorize?: false
+        )
+        |> Ash.update!()
+
+        wait_for_version_count("mishka_blog_blogger_versions", blogger.id, 2)
+
+        version =
+          MishkaBlog.Blogger.Version
+          |> Ash.Query.for_read(:read_any)
+          |> Ash.Query.filter(version_source_id: blogger.id)
+          |> Ash.Query.limit(1)
+          |> Ash.read_one!(authorize?: false)
+
+        missing = Ash.UUID.generate()
+
+        tenant_response =
+          make_api_request(
+            "#{@api_tenant_path}/#{missing}/version/#{version.id}/preview",
+            %{},
+            method: :get,
+            headers: [{"authorization", "Bearer #{sign_in_tenant(tenant_admin)}"}]
+          )
+
+        master_response =
+          make_api_request(
+            "#{@api_master_path}/#{missing}/version/#{version.id}/preview",
+            %{},
+            method: :get,
+            headers: [
+              {"authorization", "Bearer #{sign_in_master(master_user)}"},
+              {"x-no-tenant", "true"}
+            ]
+          )
+
+        assert tenant_response.status == 404
+        assert master_response.status == 404
       end
     end
   end

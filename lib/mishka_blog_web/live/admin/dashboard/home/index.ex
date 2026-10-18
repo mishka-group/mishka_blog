@@ -185,7 +185,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
     {:noreply, (socket.assigns.show_calendar && load_calendar(socket)) || socket}
   end
 
-  def handle_event("shift_month", %{"step" => step}, socket) do
+  def handle_event("shift_month", %{"step" => step}, socket) when step in ["-1", "1"] do
     month = shift_month(socket.assigns.month, String.to_integer(step))
     selected = same_day_in(month, socket.assigns.selected_date)
 
@@ -196,6 +196,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
 
     {:noreply, socket}
   end
+
+  def handle_event("shift_month", _params, socket), do: {:noreply, socket}
 
   def handle_event("this_month", _params, socket) do
     today = Date.utc_today()
@@ -208,9 +210,14 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
     {:noreply, socket}
   end
 
-  def handle_event("select_day", %{"date" => date}, socket) do
-    {:noreply, assign(socket, :selected_date, Date.from_iso8601!(date))}
+  def handle_event("select_day", %{"date" => date}, socket) when is_binary(date) do
+    case Date.from_iso8601(date) do
+      {:ok, selected} -> {:noreply, assign(socket, :selected_date, selected)}
+      {:error, _invalid} -> {:noreply, socket}
+    end
   end
+
+  def handle_event("select_day", _params, socket), do: {:noreply, socket}
 
   def handle_event("extension_install", params, socket) do
     allowed? = socket.assigns.may_provision?
@@ -483,7 +490,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   @spec day_label(Date.t()) :: String.t()
   def day_label(date), do: Localized.date(date, :MMMEd)
 
-  @doc "The calendar's column heads, Sunday first, e.g. `[\"Sun\", \"Mon\", …]`."
+  @doc ~s(The calendar's column heads, Sunday first, e.g. `["Sun", "Mon", …]`.)
   @spec weekday_labels() :: [String.t()]
   def weekday_labels, do: Enum.map(0..6, &Localized.date(Date.add(@a_sunday, &1), :E))
 

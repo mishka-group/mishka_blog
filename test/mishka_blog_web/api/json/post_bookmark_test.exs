@@ -118,8 +118,12 @@ defmodule MishkaBlogWeb.Api.Json.PostBookmarkTest do
 
         assert response.status == 201
         body = Jason.decode!(response.resp_body)
-        assert body["data"]["attributes"]["inserted_at"] != nil
-        assert body["data"]["attributes"]["updated_at"] != nil
+
+        assert {:ok, %DateTime{}, _offset} =
+                 DateTime.from_iso8601(body["data"]["attributes"]["inserted_at"])
+
+        assert {:ok, %DateTime{}, _offset} =
+                 DateTime.from_iso8601(body["data"]["attributes"]["updated_at"])
       end
 
       test "unauthenticated user cannot create bookmark", %{site: site} do
@@ -495,7 +499,7 @@ defmodule MishkaBlogWeb.Api.Json.PostBookmarkTest do
 
         # With read_action :public_list on the relationship,
         # bookmarks for non-published posts should be filtered out
-        assert length(body2["data"]) == 0
+        assert body2["data"] == []
       end
 
       test "user can see multiple bookmarks with only published posts visible", %{

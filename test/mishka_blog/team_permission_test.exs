@@ -15,7 +15,7 @@ defmodule MishkaBlog.Test.TeamPermissionTest do
 
     test "resource has UUID primary key" do
       team_permission = create_team_permission!()
-      assert is_binary(team_permission.id)
+      assert {:ok, _} = Ecto.UUID.cast(team_permission.id)
       assert String.length(team_permission.id) == 36
     end
 
@@ -128,7 +128,7 @@ defmodule MishkaBlog.Test.TeamPermissionTest do
       # Find our created permission in the list
       read_perm = Enum.find(read_perms, &(&1.id == created_perm.id))
 
-      assert read_perm
+      assert %TeamPermission{} = read_perm
       assert read_perm.team_id == created_perm.team_id
       assert read_perm.permission_id == created_perm.permission_id
     end
@@ -191,7 +191,7 @@ defmodule MishkaBlog.Test.TeamPermissionTest do
       identities = Ash.Resource.Info.identities(TeamPermission)
       unique_identity = Enum.find(identities, &(&1.name == :unique_team_permission))
 
-      assert unique_identity
+      assert %Ash.Resource.Identity{name: :unique_team_permission} = unique_identity
       assert unique_identity.keys == [:team_id, :permission_id]
     end
 

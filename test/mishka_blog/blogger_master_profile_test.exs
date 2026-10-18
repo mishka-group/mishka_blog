@@ -22,7 +22,7 @@ defmodule MishkaBlog.BloggerMasterProfileTest do
 
   import MishkaBlog.Test.Factory
 
-  alias MishkaBlog.{BlogPost, Blogger, PostBlogger, Team}
+  alias MishkaBlog.{Blogger, BlogPost, PostBlogger, Team}
   alias MishkaCmsCore.Accounts.User
   alias MishkaCmsCore.Runtime.States.SiteState
 

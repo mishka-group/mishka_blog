@@ -45,7 +45,7 @@ defmodule MishkaBlog.Test.PostCollectionTest do
 
         assert assignment.post_id == post.id
         assert assignment.collection_id == collection.id
-        assert assignment.inserted_at != nil
+        assert %DateTime{} = assignment.inserted_at
       end
 
       test "upsert prevents duplicate assignments" do
@@ -97,8 +97,7 @@ defmodule MishkaBlog.Test.PostCollectionTest do
 
         assignment = create_post_collection!(post_id: post.id, collection_id: collection.id)
 
-        assert assignment.inserted_at != nil
-        assert is_struct(assignment.inserted_at, DateTime)
+        assert %DateTime{} = assignment.inserted_at
       end
     end
 

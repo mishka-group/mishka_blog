@@ -18,7 +18,7 @@ defmodule MishkaBlog.ShareCards do
 
   require Ash.Query
 
-  alias MishkaBlog.{BlogPost, Blogger, Collection, Tag, Team}
+  alias MishkaBlog.{Blogger, BlogPost, Collection, Tag, Team}
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
   alias MishkaCmsCore.Runtime.Languages
 

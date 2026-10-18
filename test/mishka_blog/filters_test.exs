@@ -13,10 +13,10 @@ defmodule MishkaBlog.Test.FiltersTest do
 
   if Code.ensure_loaded?(MishkaBlog) do
     alias MishkaBlog.Test.Plugins.{
-      BlogPostRenderContent,
-      BlogPostQueryPublished,
-      BlogCommentBeforeCreatePublic,
       BlogBloggerQueryPublicBySlug,
+      BlogCommentBeforeCreatePublic,
+      BlogPostQueryPublished,
+      BlogPostRenderContent,
       BlogTeamQueryPublicList
     }
 
@@ -43,7 +43,7 @@ defmodule MishkaBlog.Test.FiltersTest do
 
         Ash.read!(MishkaBlog.BlogPost, action: :published, tenant: site.id, authorize?: false)
 
-        assert_receive {:query_hook_fired, :published}, 5000
+        assert_receive {:query_hook_fired, :published}
       end)
     end
 
@@ -57,7 +57,7 @@ defmodule MishkaBlog.Test.FiltersTest do
         |> Ash.Query.for_read(:public_by_slug, %{slug: "mona"}, actor: visitor, tenant: site.id)
         |> Ash.read_one!()
 
-        assert_receive {:query_hook_fired, :public_by_slug, %{id: id}}, 5000
+        assert_receive {:query_hook_fired, :public_by_slug, %{id: id}}
         assert id == visitor.id
       end)
     end
@@ -71,7 +71,7 @@ defmodule MishkaBlog.Test.FiltersTest do
         |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site.id)
         |> Ash.read!()
 
-        assert_receive {:query_hook_fired, :public_list}, 5000
+        assert_receive {:query_hook_fired, :public_list}
       end)
     end
 

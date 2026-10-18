@@ -16,20 +16,22 @@ defmodule MishkaBlog.Dashboard.Analytics do
   never updated, so "views" here means *distinct readers who opened a post*, and `inserted_at` is the
   first time each one did. That is the unit every figure below is in.
 
-  Scoping is `MishkaBlog.Dashboard.Overview`'s: `MishkaCmsCore.Dashboard.Widget.scope/1` turns the
-  viewer into `nil` (a master, counting every site) or a site id (a tenant admin, counting only
-  theirs), `MishkaBlog.PostView` carries no `site_id` of its own so it is scoped through its post, and
-  every query runs `authorize?: false` through the resource's own read action.
+  Every figure is read as `user` through `MishkaBlog.Dashboard.Scope`, as
+  `MishkaBlog.Dashboard.Overview` reads its own: a master (a user whose `site_id` is nil) counts every
+  site, a site user only its own. `MishkaBlog.PostView` has no master read and carries no `site_id`;
+  both viewers read it through `:read`, which its policies keep to the viewer's site, joined to its
+  post (`not is_nil(post.id)`), so a view of an archived post is not counted.
 
-  The window is read once — five selected columns over one `Ash.read!/2` — and the series, the reader
-  count, the referrers, the audience split and the top posts are folded out of those rows in memory.
-  Each of those panels is a `GROUP BY` that an Ash read does not express, and one narrow read beats
-  five hand-written queries. The all-time and previous-window totals stay `Ash.count!/2` calls, as
-  they are single numbers.
+  The window is read once — five selected columns over one read — and the series, the reader count,
+  the referrers, the audience split and the top posts are folded out of those rows in memory. Each of
+  those panels is a `GROUP BY` that an Ash read does not express, and one narrow read beats five
+  hand-written queries. The all-time and previous-window totals stay `Ash.count/2` calls, as they are
+  single numbers.
 
   Views and posts are read only for a holder of `admin:dashboard:blog:post`, and comments only for a
-  holder of `admin:dashboard:blog:comment` (`MishkaBlog.Dashboard.Overview.areas/1`); an area the
-  viewer does not hold is read as empty, so its figures are zero and an engagement rate needs both.
+  holder of `admin:dashboard:blog:comment` (`MishkaBlog.Dashboard.Overview.areas/1`) — the
+  permissions those resources' policies ask for. A read of an area the viewer does not hold is
+  refused and counted as no data, so its figures are zero and an engagement rate needs both.
 
   The caller runs this off the render — see `MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index`.
   """
@@ -39,8 +41,8 @@ defmodule MishkaBlog.Dashboard.Analytics do
 
   alias MishkaBlog.BlogPost
   alias MishkaBlog.Comment
+  alias MishkaBlog.Dashboard.Scope
   alias MishkaBlog.PostView
-  alias MishkaCmsCore.Dashboard.Widget
 
   @ranges [7, 30, 90]
   @default_days 30
@@ -56,7 +58,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
   def default_days, do: @default_days
 
   @doc """
-  Reads the analytics page for the last `days` days, scoped to `user`.
+  Reads the analytics page for the last `days` days, as `user` (see `MishkaBlog.Dashboard.Scope`).
 
   Returns a flat map: the all-time and windowed view totals, the window before it to compare
   against, today and yesterday, the distinct readers behind them, the comment engagement rate, and
@@ -67,16 +69,15 @@ defmodule MishkaBlog.Dashboard.Analytics do
   `:from` and `:to` are the window's own bounds, so the page can say which days it is describing
   rather than assuming they match the `days` it asked for.
   """
-  @spec load(map() | nil, pos_integer()) :: map()
+  @spec load(map(), pos_integer()) :: map()
   def load(user, days \\ @default_days) when days > 0 do
-    scope = {Widget.scope(user), MishkaBlog.Dashboard.Overview.areas(user)}
     today = Date.utc_today()
     from = Date.add(today, -(days - 1))
     previous_from = Date.add(from, -days)
     previous_to = Date.add(from, -1)
 
-    views = views_base(scope)
-    comments = comments_base(scope)
+    views = views_base(user)
+    comments = Scope.query(Comment, user)
 
     rows = window_rows(views, from, today)
     daily = series(rows, from, days)
@@ -102,7 +103,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
       peak: Enum.max_by(daily, & &1.count),
       referrers: referrers(rows),
       audience: audience(rows),
-      top_posts: top_posts(rows, scope)
+      top_posts: top_posts(rows, user)
     }
   end
 
@@ -110,7 +111,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
     views
     |> in_days(from, to)
     |> Ash.Query.select([:inserted_at, :ip_address, :referer, :user_id, :post_id])
-    |> Ash.read!(authorize?: false)
+    |> Scope.list()
   end
 
   # Every day of the window is emitted, including the empty ones: a line drawn only through the days
@@ -158,27 +159,27 @@ defmodule MishkaBlog.Dashboard.Analytics do
   defp host_label(host, _referer) when is_binary(host) and host != "", do: String.downcase(host)
   defp host_label(_host, referer), do: referer
 
-  defp top_posts(rows, scope) do
+  defp top_posts(rows, user) do
     rows
     |> Enum.frequencies_by(& &1.post_id)
     |> Enum.sort_by(fn {_id, count} -> -count end)
     |> Enum.take(@top_posts)
-    |> with_titles(scope)
+    |> with_titles(user)
   end
 
-  defp with_titles([], _scope), do: []
+  defp with_titles([], _user), do: []
 
-  # A post the viewer's scope cannot read simply drops out of the ranking rather than appearing as an
-  # untitled row: the counts came from a join the tenant can see, the titles must come from one too.
-  defp with_titles(counted, scope) do
+  # A post the viewer cannot read simply drops out of the ranking rather than appearing as an
+  # untitled row: the counts came from views the viewer may read, the titles must come from posts it
+  # may read too.
+  defp with_titles(counted, user) do
     views = Map.new(counted)
 
-    scope
-    |> posts_base()
+    BlogPost
+    |> Scope.query(user)
     |> Ash.Query.filter(id in ^Map.keys(views))
     |> Ash.Query.select([:id, :title, :status, :published_at])
-    |> Ash.read!(page: [limit: map_size(views)], authorize?: false)
-    |> Map.fetch!(:results)
+    |> Scope.list(map_size(views))
     |> Enum.map(
       &%{
         title: &1.title,
@@ -190,44 +191,8 @@ defmodule MishkaBlog.Dashboard.Analytics do
     |> Enum.sort_by(&{-&1.views, &1.title})
   end
 
-  defp posts_base(scope),
-    do:
-      BlogPost
-      |> Ash.Query.for_read(:master_read, %{}, authorize?: false)
-      |> by_site(scope, :post)
-
-  defp comments_base(scope),
-    do:
-      Comment
-      |> Ash.Query.for_read(:master_read, %{}, authorize?: false)
-      |> by_site(scope, :comment)
-
-  # The viewer's site, and nothing of an area it does not hold.
-  defp by_site(query, {site_id, areas}, area), do: query |> held(areas, area) |> by_site(site_id)
-
-  defp by_site(query, nil), do: query
-  defp by_site(query, site_id), do: Ash.Query.filter(query, site_id == ^site_id)
-
-  defp views_base({nil, areas}),
-    do:
-      PostView
-      |> Ash.Query.for_read(:read)
-      |> Ash.Query.filter(not is_nil(post.id))
-      |> held(areas, :post)
-
-  defp views_base({site_id, areas}),
-    do:
-      PostView
-      |> Ash.Query.for_read(:read)
-      |> Ash.Query.filter(post.site_id == ^site_id)
-      |> held(areas, :post)
-
-  defp held(query, areas, area) do
-    case Map.get(areas, area, false) do
-      true -> query
-      false -> Ash.Query.filter(query, false)
-    end
-  end
+  defp views_base(user),
+    do: PostView |> Scope.query(user, :read) |> Ash.Query.filter(not is_nil(post.id))
 
   defp in_days(query, from, to) do
     Ash.Query.filter(
@@ -243,5 +208,5 @@ defmodule MishkaBlog.Dashboard.Analytics do
   defp rate(_interactions, 0), do: 0
   defp rate(interactions, views), do: round(interactions * 100 / views)
 
-  defp count(query), do: Ash.count!(query, authorize?: false)
+  defp count(query), do: Scope.count(query)
 end

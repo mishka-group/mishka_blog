@@ -344,7 +344,6 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
         body = Jason.decode!(response.resp_body)
 
         # Should only see approved comments
-        assert is_list(body["data"])
         approved_ids = Enum.map(body["data"], & &1["id"])
         assert comment_approved.id in approved_ids
       end
@@ -678,11 +677,9 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) == 6
 
         # Verify authors are included
-        assert is_list(body["included"])
         user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
         assert length(user_records) == 6
 
@@ -1046,7 +1043,6 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
         assert body["data"]["id"] == child.id
 
         # Verify parent is included
-        assert is_list(body["included"])
         comment_records = Enum.filter(body["included"], fn inc -> inc["type"] == "comment" end)
         assert length(comment_records) == 1
 
@@ -1099,7 +1095,6 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
         assert body["data"]["id"] == parent.id
 
         # Verify replies are included
-        assert is_list(body["included"])
         reply_records = Enum.filter(body["included"], fn inc -> inc["type"] == "comment" end)
         assert length(reply_records) == 5
 
@@ -1139,8 +1134,7 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
             user.id
           end
 
-        # Fetch parent with replies and then author (nested includes not always supported in JSON:API)
-        # Let's test just replies first
+        # Fetch the parent with its replies included
         response =
           make_api_request(
             "#{@api_tenant_path}/#{parent.id}?include=replies",
@@ -1242,7 +1236,7 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
 
         # Find our comment in the list
         comment_data = Enum.find(body["data"], fn c -> c["id"] == comment.id end)
-        assert comment_data != nil
+        assert %{"type" => "comment"} = comment_data
 
         attributes = comment_data["attributes"]
         # 5 votes: indices 1,3,5 = down (3), indices 2,4 = up (2)
@@ -1318,7 +1312,6 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) == 10
       end
 

@@ -115,7 +115,7 @@ defmodule MishkaBlogWeb.Api.Json.CommentVoteTest do
         body = Jason.decode!(response.resp_body)
         assert body["data"]["attributes"]["vote_type"] == "up"
         # Verify the vote was created for the correct user and comment
-        assert body["data"]["id"] != nil
+        assert {:ok, _} = Ecto.UUID.cast(body["data"]["id"])
       end
 
       test "user can create a downvote on a comment", %{site: site, user1: user1} do
@@ -581,8 +581,12 @@ defmodule MishkaBlogWeb.Api.Json.CommentVoteTest do
 
         assert response.status == 201
         body = Jason.decode!(response.resp_body)
-        assert body["data"]["attributes"]["inserted_at"] != nil
-        assert body["data"]["attributes"]["updated_at"] != nil
+
+        assert {:ok, %DateTime{}, _offset} =
+                 DateTime.from_iso8601(body["data"]["attributes"]["inserted_at"])
+
+        assert {:ok, %DateTime{}, _offset} =
+                 DateTime.from_iso8601(body["data"]["attributes"]["updated_at"])
       end
     end
 

@@ -121,6 +121,30 @@ defmodule MishkaBlog.SeedsArchivalTest do
 
   defp ids(rows), do: Enum.map(rows, & &1.id)
 
+  # The six examples as a re-run reads them back, the posts with their collections, tags and, for
+  # the locked one, bloggers.
+  defp seeded_examples(site) do
+    assert MishkaBlog.Dev.Seeds.dev_seed(site.id, []) == :already_seeded
+
+    %{
+      locked:
+        example!(BlogPost, site.id, "members-only-release-checklist", [
+          :tenant_collections,
+          :tenant_tags,
+          :tenant_bloggers
+        ]),
+      unindexed:
+        example!(BlogPost, site.id, "kept-out-of-search-engines", [
+          :tenant_collections,
+          :tenant_tags
+        ]),
+      category: example!(Collection, site.id, "members-only"),
+      unindexed_category: example!(Collection, site.id, "ideas-in-progress"),
+      unlisted: example!(Tag, site.id, "unlisted"),
+      locked_tag: example!(Tag, site.id, "staff-only")
+    }
+  end
+
   # A full seed is expensive, so it runs ONCE for the whole file and every assertion about seeded
   # data lives in the single test below.
   describe "a seeded site" do
@@ -166,29 +190,15 @@ defmodule MishkaBlog.SeedsArchivalTest do
       %{site: site, blogger: create_blogger!(site_id: site.id)}
     end
 
-    test "are written with their permissions, robots meta, links and author", %{
-      site: site,
-      blogger: blogger
-    } do
-      assert MishkaBlog.Dev.Seeds.dev_seed(site.id, []) == :already_seeded
-
-      locked =
-        example!(BlogPost, site.id, "members-only-release-checklist", [
-          :tenant_collections,
-          :tenant_tags,
-          :tenant_bloggers
-        ])
-
-      unindexed =
-        example!(BlogPost, site.id, "kept-out-of-search-engines", [
-          :tenant_collections,
-          :tenant_tags
-        ])
-
-      category = example!(Collection, site.id, "members-only")
-      unindexed_category = example!(Collection, site.id, "ideas-in-progress")
-      unlisted = example!(Tag, site.id, "unlisted")
-      locked_tag = example!(Tag, site.id, "staff-only")
+    test "are written published and in English, with their titles and permissions", %{site: site} do
+      %{
+        locked: locked,
+        unindexed: unindexed,
+        category: category,
+        unindexed_category: unindexed_category,
+        unlisted: unlisted,
+        locked_tag: locked_tag
+      } = seeded_examples(site)
 
       for post <- [locked, unindexed] do
         assert post.status == :published
@@ -198,14 +208,9 @@ defmodule MishkaBlog.SeedsArchivalTest do
 
       assert locked.title == "Members only: the release checklist"
       assert locked.permissions == ["admin:dashboard:blog:post"]
-      assert ids(locked.tenant_collections) == [category.id]
-      assert ids(locked.tenant_tags) == [locked_tag.id]
-      assert ids(locked.tenant_bloggers) == [blogger.id]
 
       assert unindexed.title == "Kept out of search engines"
       assert unindexed.permissions == []
-      assert ids(unindexed.tenant_tags) == [unlisted.id]
-      assert ids(unindexed.tenant_collections) == [unindexed_category.id]
 
       assert {category.name, category.status, category.language} ==
                {"Members only", :active, "en"}
@@ -217,8 +222,21 @@ defmodule MishkaBlog.SeedsArchivalTest do
       assert {unindexed_category.name, unindexed_category.status, unindexed_category.permissions} ==
                {"Ideas in progress", :active, []}
 
-      assert {locked_tag.name, locked_tag.permissions, locked_tag.seo_tags} ==
-               {"Staff only", ["admin:dashboard:blog:post"], []}
+      assert {locked_tag.name, locked_tag.permissions} ==
+               {"Staff only", ["admin:dashboard:blog:post"]}
+    end
+
+    test "carry the robots meta only where they are kept out of search engines", %{site: site} do
+      %{
+        locked: locked,
+        unindexed: unindexed,
+        category: category,
+        unindexed_category: unindexed_category,
+        unlisted: unlisted,
+        locked_tag: locked_tag
+      } = seeded_examples(site)
+
+      assert locked_tag.seo_tags == []
 
       for row <- [unindexed, unlisted, unindexed_category] do
         assert [%{tag: "meta", attrs: %{"name" => "robots"}, content: "noindex, follow"}] =
@@ -229,6 +247,29 @@ defmodule MishkaBlog.SeedsArchivalTest do
                [locked, unindexed, category, unindexed_category, unlisted, locked_tag],
                &PageEditions.listed?/1
              )
+    end
+
+    test "link each post to its collection and its tag", %{site: site} do
+      %{
+        locked: locked,
+        unindexed: unindexed,
+        category: category,
+        unindexed_category: unindexed_category,
+        unlisted: unlisted,
+        locked_tag: locked_tag
+      } = seeded_examples(site)
+
+      assert ids(locked.tenant_collections) == [category.id]
+      assert ids(locked.tenant_tags) == [locked_tag.id]
+
+      assert ids(unindexed.tenant_tags) == [unlisted.id]
+      assert ids(unindexed.tenant_collections) == [unindexed_category.id]
+    end
+
+    test "credit the locked post to the site's blogger", %{site: site, blogger: blogger} do
+      %{locked: locked} = seeded_examples(site)
+
+      assert ids(locked.tenant_bloggers) == [blogger.id]
     end
 
     test "a second run writes no second copy, and leaves an edited or archived one as it is", %{

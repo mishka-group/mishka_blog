@@ -171,35 +171,32 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   defp categories(site_id, actor), do: split(category_locks(site_id), actor)
 
   # Which posts, or the comments of which, the reader may open: `true` when none is closed to it.
-  defp opens_post(kind, {opened_own, closed_own}, {opened, closed}) do
-    case {kind, closed_own, closed} do
-      {_kind, [], []} ->
-        true
+  defp opens_post(_kind, {_opened_own, []}, {_opened, []}), do: true
 
-      {:post, _closed_own, []} ->
-        Ash.Expr.expr(id not in ^closed_own)
+  defp opens_post(:post, {_opened_own, closed_own}, {_opened, []}),
+    do: Ash.Expr.expr(id not in ^closed_own)
 
-      {:comment, _closed_own, []} ->
-        Ash.Expr.expr(post_id not in ^closed_own)
+  defp opens_post(:post, {opened_own, closed_own}, {opened, closed}) do
+    locked = opened ++ closed
 
-      {:post, _closed_own, _closed} ->
-        locked = opened ++ closed
+    Ash.Expr.expr(
+      id not in ^closed_own and
+        (id in ^opened_own or not exists(tenant_collections, id in ^locked) or
+           exists(tenant_collections, id in ^opened))
+    )
+  end
 
-        Ash.Expr.expr(
-          id not in ^closed_own and
-            (id in ^opened_own or not exists(tenant_collections, id in ^locked) or
-               exists(tenant_collections, id in ^opened))
-        )
+  defp opens_post(:comment, {_opened_own, closed_own}, {_opened, []}),
+    do: Ash.Expr.expr(post_id not in ^closed_own)
 
-      {:comment, _closed_own, _closed} ->
-        locked = opened ++ closed
+  defp opens_post(:comment, {opened_own, closed_own}, {opened, closed}) do
+    locked = opened ++ closed
 
-        Ash.Expr.expr(
-          post_id not in ^closed_own and
-            (post_id in ^opened_own or not exists(post.tenant_collections, id in ^locked) or
-               exists(post.tenant_collections, id in ^opened))
-        )
-    end
+    Ash.Expr.expr(
+      post_id not in ^closed_own and
+        (post_id in ^opened_own or not exists(post.tenant_collections, id in ^locked) or
+           exists(post.tenant_collections, id in ^opened))
+    )
   end
 
   defp not_in([]), do: true

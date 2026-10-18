@@ -20,7 +20,7 @@ defmodule MishkaBlog.Test.AutoPostingTest do
 
       test "uses UUID v7 for primary keys" do
         auto_posting = create_auto_posting!()
-        assert is_binary(auto_posting.id)
+        assert {:ok, _} = Ecto.UUID.cast(auto_posting.id)
         assert String.length(auto_posting.id) == 36
       end
 
@@ -270,7 +270,7 @@ defmodule MishkaBlog.Test.AutoPostingTest do
           |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id, authorize?: false)
           |> Ash.destroy!(return_destroyed?: true)
 
-        assert archived.archived_at != nil
+        assert %DateTime{} = archived.archived_at
 
         # Should not appear in normal reads
         postings =
@@ -918,9 +918,9 @@ defmodule MishkaBlog.Test.AutoPostingTest do
           |> Ash.Query.load(:latest_version)
           |> Ash.read_one!(authorize?: false)
 
-        assert is_struct(loaded.latest_version)
+        assert %MishkaBlog.AutoPosting.Version{} = loaded.latest_version
         assert loaded.latest_version.changes["name"] == "Third"
-        assert is_binary(loaded.latest_version.id)
+        assert {:ok, _} = Ecto.UUID.cast(loaded.latest_version.id)
       end
 
       test "recent_versions returns up to 10 most recent versions" do
@@ -954,7 +954,6 @@ defmodule MishkaBlog.Test.AutoPostingTest do
           |> Ash.read_one!(authorize?: false)
 
         # Should only return 10 most recent
-        assert is_list(loaded.recent_versions)
         assert length(loaded.recent_versions) == 10
 
         # Should be in descending order (newest first)

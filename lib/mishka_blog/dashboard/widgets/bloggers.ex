@@ -6,8 +6,9 @@ defmodule MishkaBlog.Dashboard.Widgets.Bloggers do
   @moduledoc """
   Dashboard widget (a `dashboard:widgets` plugin): the top bloggers leaderboard — a podium of the
   three most-published profiles plus the runners-up, each with their post tally and publish role
-  (`Blogger` `:master_read` + the `post_count` aggregate). A master ranks bloggers across every
-  site; a tenant admin only their own site's.
+  (`Blogger` + the `post_count` aggregate), read as the viewer through `MishkaBlog.Dashboard.Scope`:
+  a master ranks bloggers across every site, a site's admin only their own site's, and a viewer
+  without `admin:dashboard:blog:post` none.
 
   How many bloggers the leaderboard ranks is the viewer's own setting — the card's gear in customize
   mode, or Settings → Blog → Dashboard widgets, both writing the same per-user row
@@ -19,6 +20,7 @@ defmodule MishkaBlog.Dashboard.Widgets.Bloggers do
   import Phoenix.Component
   require Ash.Query
 
+  alias MishkaBlog.Dashboard.Scope
   alias MishkaCmsCore.Dashboard.Widget
 
   @palette ~w(#5b57d6 #1f9d6b #cf8a24 #3b6fd4 #8a877f)
@@ -57,26 +59,23 @@ defmodule MishkaBlog.Dashboard.Widgets.Bloggers do
   end
 
   @doc """
-  Loads this widget's data off the dashboard render (in a Task), scoped to the viewer and sized by
+  Loads this widget's data off the dashboard render (in a Task), read as the viewer and sized by
   their own "Bloggers to rank" setting. Called as `load/1` (a direct call, no dashboard) it uses the
   declared default.
   """
   def load(user, config \\ %{}) do
-    base =
-      MishkaBlog.Blogger
-      |> Ash.Query.for_read(:master_read, %{}, authorize?: false)
-      |> scope_filter(Widget.scope(user))
+    base = Scope.query(MishkaBlog.Blogger, user)
 
-    %{results: top} =
+    top =
       base
       |> Ash.Query.load(:post_count)
       |> Ash.Query.sort(post_count: :desc, inserted_at: :desc)
-      |> Ash.read!(page: [limit: Map.get(config, @count.key, @count.default)], authorize?: false)
+      |> Scope.list(Map.get(config, @count.key, @count.default))
 
     active =
       base
       |> Ash.Query.filter(inserted_at >= ^month_start())
-      |> Ash.count!(authorize?: false)
+      |> Scope.count()
 
     %{active_this_month: active, bloggers: top}
   end
@@ -235,7 +234,4 @@ defmodule MishkaBlog.Dashboard.Widgets.Bloggers do
     today = Date.utc_today()
     DateTime.new!(Date.new!(today.year, today.month, 1), ~T[00:00:00])
   end
-
-  defp scope_filter(query, nil), do: query
-  defp scope_filter(query, site_id), do: Ash.Query.filter(query, site_id == ^site_id)
 end

@@ -206,7 +206,8 @@ defmodule MishkaBlog.Collection do
 
     version_extensions authorizers: [Ash.Policy.Authorizer]
 
-    mixin {MishkaBlog.Resources.Mixins.CollectionPaperTrailMixin, :postgres, []}
+    mixin {MishkaBlog.Resources.Mixins.PaperTrailMixin, :postgres,
+           ["mishka_blog_collection_versions"]}
   end
 
   # JSON API configuration for REST endpoints
@@ -1262,18 +1263,9 @@ defmodule MishkaBlog.Collection do
                 )
       end
 
-      validate fn changeset, _context ->
-        parent_id = Ash.Changeset.get_attribute(changeset, :parent_collection_id)
-        collection_id = changeset.data.id
-
-        if !is_nil(parent_id) and parent_id == collection_id do
-          {:error,
-           field: :parent_collection_id,
-           message: dgettext_noop("errors", "Collection cannot be its own parent.")}
-        else
-          :ok
-        end
-      end
+      validate {MishkaBlog.Resources.Validations.NotItsOwnParent,
+                field: :parent_collection_id,
+                message: dgettext_noop("errors", "Collection cannot be its own parent.")}
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
 
@@ -1296,18 +1288,9 @@ defmodule MishkaBlog.Collection do
                 )
       end
 
-      validate fn changeset, _context ->
-        parent_id = Ash.Changeset.get_attribute(changeset, :parent_collection_id)
-        collection_id = changeset.data.id
-
-        if !is_nil(parent_id) and parent_id == collection_id do
-          {:error,
-           field: :parent_collection_id,
-           message: dgettext_noop("errors", "Collection cannot be its own parent.")}
-        else
-          :ok
-        end
-      end
+      validate {MishkaBlog.Resources.Validations.NotItsOwnParent,
+                field: :parent_collection_id,
+                message: dgettext_noop("errors", "Collection cannot be its own parent.")}
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
     end
@@ -1703,12 +1686,13 @@ defmodule MishkaBlog.Collection do
         id = input.arguments.id
         version_id = input.arguments.version_id
 
-        case Ash.get(MishkaBlog.Collection, id, tenant: context.tenant, authorize?: false) do
+        case Ash.get(MishkaBlog.Collection, id, Ash.Scope.to_opts(context)) do
           {:ok, record} when not is_nil(record) ->
             record
-            |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-              tenant: context.tenant,
-              authorize?: false
+            |> Ash.Changeset.for_update(
+              :restore_version,
+              %{version_id: version_id},
+              Ash.Scope.to_opts(context)
             )
             |> Ash.update()
 
@@ -1746,15 +1730,21 @@ defmodule MishkaBlog.Collection do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
+      run fn input, context ->
         id = input.arguments.id
         version_id = input.arguments.version_id
 
-        case Ash.get(MishkaBlog.Collection, id, action: :master_get, authorize?: false) do
+        case Ash.get(
+               MishkaBlog.Collection,
+               id,
+               Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
+             ) do
           {:ok, record} when not is_nil(record) ->
             record
-            |> Ash.Changeset.for_update(:master_restore_version, %{version_id: version_id},
-              authorize?: false
+            |> Ash.Changeset.for_update(
+              :master_restore_version,
+              %{version_id: version_id},
+              Ash.Scope.to_opts(context, tenant: nil)
             )
             |> Ash.update()
 
@@ -1775,42 +1765,9 @@ defmodule MishkaBlog.Collection do
 
       filter expr(id == ^arg(:collection_id))
 
-      prepare fn query, context ->
-        version_id = Ash.Query.get_argument(query, :version_id)
-
-        Ash.Query.after_action(query, fn _query, results ->
-          results =
-            Enum.map(results, fn collection ->
-              version =
-                MishkaBlog.Collection.Version
-                |> Ash.get!(version_id, action: :get_any, authorize?: false)
-
-              if version.version_source_id != collection.id do
-                raise Ash.Error.Invalid.exception(
-                        errors: [
-                          Ash.Error.Query.InvalidArgument.exception(
-                            field: :version_id,
-                            message:
-                              MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                                dgettext_noop("errors", "collection")
-                              )
-                          )
-                        ]
-                      )
-              end
-
-              # Convert string keys to atom keys for struct
-              changes_with_atom_keys =
-                version.changes
-                |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
-                |> Map.new()
-
-              struct(collection, changes_with_atom_keys)
-            end)
-
-          {:ok, results}
-        end)
-      end
+      prepare {MishkaBlog.Resources.Preparations.PreviewVersion,
+               version: MishkaBlog.Collection.Version,
+               label: dgettext_noop("errors", "collection")}
     end
 
     read :master_preview_version do
@@ -1825,42 +1782,10 @@ defmodule MishkaBlog.Collection do
 
       filter expr(id == ^arg(:collection_id))
 
-      prepare fn query, context ->
-        version_id = Ash.Query.get_argument(query, :version_id)
-
-        Ash.Query.after_action(query, fn _query, results ->
-          results =
-            Enum.map(results, fn collection ->
-              version =
-                MishkaBlog.Collection.Version
-                |> Ash.get!(version_id, action: :get_any, authorize?: false)
-
-              if version.version_source_id != collection.id do
-                raise Ash.Error.Invalid.exception(
-                        errors: [
-                          Ash.Error.Query.InvalidArgument.exception(
-                            field: :version_id,
-                            message:
-                              MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                                dgettext_noop("errors", "collection")
-                              )
-                          )
-                        ]
-                      )
-              end
-
-              # Convert string keys to atom keys for struct
-              changes_with_atom_keys =
-                version.changes
-                |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
-                |> Map.new()
-
-              struct(collection, changes_with_atom_keys)
-            end)
-
-          {:ok, results}
-        end)
-      end
+      prepare {MishkaBlog.Resources.Preparations.PreviewVersion,
+               version: MishkaBlog.Collection.Version,
+               master: true,
+               label: dgettext_noop("errors", "collection")}
     end
   end
 

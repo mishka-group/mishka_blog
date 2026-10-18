@@ -307,7 +307,6 @@ defmodule MishkaBlogWeb.Api.Json.AutoPostingTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) >= 2
 
         ids = Enum.map(body["data"], & &1["id"])
@@ -336,7 +335,6 @@ defmodule MishkaBlogWeb.Api.Json.AutoPostingTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert auto_posting1.id in ids
@@ -484,7 +482,6 @@ defmodule MishkaBlogWeb.Api.Json.AutoPostingTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert active1.id in ids
@@ -811,7 +808,6 @@ defmodule MishkaBlogWeb.Api.Json.AutoPostingTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert auto_posting1.id in ids
@@ -1091,7 +1087,6 @@ defmodule MishkaBlogWeb.Api.Json.AutoPostingTest do
 
         # Check sorted_versions in attributes
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) == 3
       end
 
@@ -1164,7 +1159,6 @@ defmodule MishkaBlogWeb.Api.Json.AutoPostingTest do
         assert response1.status == 200
         body1 = Jason.decode!(response1.resp_body)
         sorted_versions1 = body1["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions1)
         assert length(sorted_versions1) == 2
 
         # Get site2 auto-posting with versions
@@ -1179,7 +1173,6 @@ defmodule MishkaBlogWeb.Api.Json.AutoPostingTest do
         assert response2.status == 200
         body2 = Jason.decode!(response2.resp_body)
         sorted_versions2 = body2["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions2)
         assert length(sorted_versions2) == 1
       end
     end
@@ -1227,11 +1220,9 @@ defmodule MishkaBlogWeb.Api.Json.AutoPostingTest do
         assert attrs["version_count"] == 4
 
         # Check latest_version
-        assert is_map(attrs["latest_version"])
         assert attrs["latest_version"]["changes"]["description"] == "Update 3"
 
         # Check recent_versions
-        assert is_list(attrs["recent_versions"])
         assert length(attrs["recent_versions"]) == 4
       end
 
@@ -1371,13 +1362,11 @@ defmodule MishkaBlogWeb.Api.Json.AutoPostingTest do
         body = Jason.decode!(response.resp_body)
 
         # Returns 1 auto_posting with versions loaded
-        assert is_list(body["data"])
         assert length(body["data"]) == 1
 
         # Check the versions inside the auto_posting
         auto_posting_data = List.first(body["data"])
         sorted_versions = auto_posting_data["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) == 6
       end
 

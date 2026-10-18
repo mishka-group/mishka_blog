@@ -42,6 +42,7 @@ defmodule MishkaBlog.BlogPost do
 
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
+  alias Ash.Error.Query.NotFound
   require Ash.Query
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -242,7 +243,7 @@ defmodule MishkaBlog.BlogPost do
 
     version_extensions authorizers: [Ash.Policy.Authorizer]
 
-    mixin {MishkaBlog.Resources.Mixins.BlogPostPaperTrailMixin, :postgres, []}
+    mixin {MishkaBlog.Resources.Mixins.PaperTrailMixin, :postgres, ["mishka_blog_post_versions"]}
   end
 
   # JSON API configuration for REST endpoints
@@ -1550,42 +1551,7 @@ defmodule MishkaBlog.BlogPost do
                on_match: :ignore
              )
 
-      change fn changeset, _context ->
-        status = Ash.Changeset.get_attribute(changeset, :status)
-
-        changeset =
-          case status do
-            :published ->
-              if is_nil(Ash.Changeset.get_attribute(changeset, :published_at)) do
-                Ash.Changeset.force_change_attribute(
-                  changeset,
-                  :published_at,
-                  DateTime.utc_now() |> DateTime.truncate(:second)
-                )
-              else
-                changeset
-              end
-
-            :scheduled ->
-              if is_nil(Ash.Changeset.get_attribute(changeset, :scheduled_publish_at)) do
-                Ash.Changeset.add_error(changeset,
-                  field: :scheduled_publish_at,
-                  message:
-                    dgettext_noop(
-                      "errors",
-                      "Scheduled publish time is required for scheduled posts."
-                    )
-                )
-              else
-                changeset
-              end
-
-            _ ->
-              changeset
-          end
-
-        changeset
-      end
+      change MishkaBlog.Resources.Changes.PublishLifecycle
 
       # Highlights the code blocks of the sanitized content, before the row is written, and stores
       # what the content says: its reading time and the components it names.
@@ -1645,42 +1611,7 @@ defmodule MishkaBlog.BlogPost do
                on_match: :ignore
              )
 
-      change fn changeset, _context ->
-        status = Ash.Changeset.get_attribute(changeset, :status)
-
-        changeset =
-          case status do
-            :published ->
-              if is_nil(Ash.Changeset.get_attribute(changeset, :published_at)) do
-                Ash.Changeset.force_change_attribute(
-                  changeset,
-                  :published_at,
-                  DateTime.utc_now() |> DateTime.truncate(:second)
-                )
-              else
-                changeset
-              end
-
-            :scheduled ->
-              if is_nil(Ash.Changeset.get_attribute(changeset, :scheduled_publish_at)) do
-                Ash.Changeset.add_error(changeset,
-                  field: :scheduled_publish_at,
-                  message:
-                    dgettext_noop(
-                      "errors",
-                      "Scheduled publish time is required for scheduled posts."
-                    )
-                )
-              else
-                changeset
-              end
-
-            _ ->
-              changeset
-          end
-
-        changeset
-      end
+      change MishkaBlog.Resources.Changes.PublishLifecycle
 
       # Highlights the code blocks of the sanitized content, before the row is written, and stores
       # what the content says: its reading time and the components it names.
@@ -1749,47 +1680,7 @@ defmodule MishkaBlog.BlogPost do
                on_match: :ignore
              )
 
-      change fn changeset, _context ->
-        status = Ash.Changeset.get_attribute(changeset, :status)
-        old_status = changeset.data.status
-
-        changeset =
-          if status != old_status do
-            case status do
-              :published ->
-                if is_nil(Ash.Changeset.get_attribute(changeset, :published_at)) do
-                  Ash.Changeset.force_change_attribute(
-                    changeset,
-                    :published_at,
-                    DateTime.utc_now() |> DateTime.truncate(:second)
-                  )
-                else
-                  changeset
-                end
-
-              :scheduled ->
-                if is_nil(Ash.Changeset.get_attribute(changeset, :scheduled_publish_at)) do
-                  Ash.Changeset.add_error(changeset,
-                    field: :scheduled_publish_at,
-                    message:
-                      dgettext_noop(
-                        "errors",
-                        "Scheduled publish time is required for scheduled posts."
-                      )
-                  )
-                else
-                  changeset
-                end
-
-              _ ->
-                changeset
-            end
-          else
-            changeset
-          end
-
-        changeset
-      end
+      change MishkaBlog.Resources.Changes.PublishLifecycle
 
       # Highlights the code blocks of the sanitized content, before the row is written, and stores
       # what the content says: its reading time and the components it names.
@@ -1854,47 +1745,7 @@ defmodule MishkaBlog.BlogPost do
                on_match: :ignore
              )
 
-      change fn changeset, _context ->
-        status = Ash.Changeset.get_attribute(changeset, :status)
-        old_status = changeset.data.status
-
-        changeset =
-          if status != old_status do
-            case status do
-              :published ->
-                if is_nil(Ash.Changeset.get_attribute(changeset, :published_at)) do
-                  Ash.Changeset.force_change_attribute(
-                    changeset,
-                    :published_at,
-                    DateTime.utc_now() |> DateTime.truncate(:second)
-                  )
-                else
-                  changeset
-                end
-
-              :scheduled ->
-                if is_nil(Ash.Changeset.get_attribute(changeset, :scheduled_publish_at)) do
-                  Ash.Changeset.add_error(changeset,
-                    field: :scheduled_publish_at,
-                    message:
-                      dgettext_noop(
-                        "errors",
-                        "Scheduled publish time is required for scheduled posts."
-                      )
-                  )
-                else
-                  changeset
-                end
-
-              _ ->
-                changeset
-            end
-          else
-            changeset
-          end
-
-        changeset
-      end
+      change MishkaBlog.Resources.Changes.PublishLifecycle
 
       # Highlights the code blocks of the sanitized content, before the row is written, and stores
       # what the content says: its reading time and the components it names.
@@ -2455,10 +2306,7 @@ defmodule MishkaBlog.BlogPost do
       prepare fn query, context ->
         post_id = Ash.Query.get_argument(query, :post_id)
 
-        case Ash.get(MishkaBlog.BlogPost, post_id,
-               tenant: context.tenant,
-               authorize?: false
-             ) do
+        case Ash.get(MishkaBlog.BlogPost, post_id, Ash.Scope.to_opts(context)) do
           {:ok, _post} ->
             query
             |> Ash.Query.filter(id == ^post_id)
@@ -2471,7 +2319,7 @@ defmodule MishkaBlog.BlogPost do
           {:error, _reason} ->
             Ash.Query.add_error(
               query,
-              Ash.Error.Query.NotFound.exception(resource: MishkaBlog.BlogPost)
+              NotFound.exception(resource: MishkaBlog.BlogPost)
             )
         end
       end
@@ -2486,12 +2334,13 @@ defmodule MishkaBlog.BlogPost do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      prepare fn query, _context ->
+      prepare fn query, context ->
         post_id = Ash.Query.get_argument(query, :post_id)
 
-        case Ash.get(MishkaBlog.BlogPost, post_id,
-               action: :master_get,
-               authorize?: false
+        case Ash.get(
+               MishkaBlog.BlogPost,
+               post_id,
+               Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
              ) do
           {:ok, _post} ->
             query
@@ -2505,7 +2354,7 @@ defmodule MishkaBlog.BlogPost do
           {:error, _reason} ->
             Ash.Query.add_error(
               query,
-              Ash.Error.Query.NotFound.exception(resource: MishkaBlog.BlogPost)
+              NotFound.exception(resource: MishkaBlog.BlogPost)
             )
         end
       end
@@ -2552,14 +2401,20 @@ defmodule MishkaBlog.BlogPost do
         post_id = input.arguments.id
         version_id = input.arguments.version_id
 
-        Ash.get(MishkaBlog.BlogPost, post_id,
-          action: :read,
-          tenant: context.tenant,
-          authorize?: false
-        )
+        Ash.get(MishkaBlog.BlogPost, post_id, Ash.Scope.to_opts(context, action: :read))
         |> case do
           {:ok, post} when not is_nil(post) ->
-            if !is_nil(post.archived_at) do
+            if is_nil(post.archived_at) do
+              tenant = post.site_id
+
+              post
+              |> Ash.Changeset.for_update(
+                :restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: tenant)
+              )
+              |> Ash.update()
+            else
               {:error,
                Ash.Error.Invalid.exception(
                  errors: [
@@ -2573,19 +2428,10 @@ defmodule MishkaBlog.BlogPost do
                    )
                  ]
                )}
-            else
-              tenant = post.site_id
-
-              post
-              |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                tenant: tenant,
-                authorize?: false
-              )
-              |> Ash.update()
             end
 
           _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.BlogPost)}
+            {:error, NotFound.exception(resource: MishkaBlog.BlogPost)}
         end
       end
     end
@@ -2627,17 +2473,26 @@ defmodule MishkaBlog.BlogPost do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
+      run fn input, context ->
         post_id = input.arguments.id
         version_id = input.arguments.version_id
 
-        Ash.get(MishkaBlog.BlogPost, post_id,
-          action: :master_get,
-          authorize?: false
+        Ash.get(
+          MishkaBlog.BlogPost,
+          post_id,
+          Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
         )
         |> case do
           {:ok, post} when not is_nil(post) ->
-            if !is_nil(post.archived_at) do
+            if is_nil(post.archived_at) do
+              post
+              |> Ash.Changeset.for_update(
+                :master_restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: nil)
+              )
+              |> Ash.update()
+            else
               {:error,
                Ash.Error.Invalid.exception(
                  errors: [
@@ -2651,16 +2506,10 @@ defmodule MishkaBlog.BlogPost do
                    )
                  ]
                )}
-            else
-              post
-              |> Ash.Changeset.for_update(:master_restore_version, %{version_id: version_id},
-                authorize?: false
-              )
-              |> Ash.update()
             end
 
           _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.BlogPost)}
+            {:error, NotFound.exception(resource: MishkaBlog.BlogPost)}
         end
       end
     end
@@ -2675,66 +2524,11 @@ defmodule MishkaBlog.BlogPost do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        post_id = input.arguments.post_id
-        version_id = input.arguments.version_id
-
-        with {:ok, post} when not is_nil(post) <-
-               Ash.get(MishkaBlog.BlogPost, post_id,
-                 tenant: context.tenant,
-                 authorize?: false
-               ),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.BlogPost.Version, version_id,
-                 action: :get_any,
-                 authorize?: false
-               ),
-             :valid <- if(version.version_source_id == post_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-
-          preview =
-            Enum.reduce(restored_attrs, post, fn {key, value}, acc ->
-              key_atom = if is_binary(key), do: String.to_existing_atom(key), else: key
-
-              if key_atom in accepted_fields do
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
-
-          {:ok, preview}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "blog post")
-                     )
-                 )
-               ]
-             )}
-
-          {:ok, nil} ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.BlogPost)}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :post_id,
+           version: MishkaBlog.BlogPost.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           label: dgettext_noop("errors", "blog post")}
     end
 
     action :master_preview_version, :struct do
@@ -2746,66 +2540,12 @@ defmodule MishkaBlog.BlogPost do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
-        post_id = input.arguments.post_id
-        version_id = input.arguments.version_id
-
-        with {:ok, post} when not is_nil(post) <-
-               Ash.get(MishkaBlog.BlogPost, post_id,
-                 action: :master_get,
-                 authorize?: false
-               ),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.BlogPost.Version, version_id,
-                 action: :get_any,
-                 authorize?: false
-               ),
-             :valid <- if(version.version_source_id == post_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-
-          preview =
-            Enum.reduce(restored_attrs, post, fn {key, value}, acc ->
-              key_atom = if is_binary(key), do: String.to_existing_atom(key), else: key
-
-              if key_atom in accepted_fields do
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
-
-          {:ok, preview}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "blog post")
-                     )
-                 )
-               ]
-             )}
-
-          {:ok, nil} ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.BlogPost)}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :post_id,
+           version: MishkaBlog.BlogPost.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           master: true,
+           label: dgettext_noop("errors", "blog post")}
     end
   end
 

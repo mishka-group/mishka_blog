@@ -187,7 +187,7 @@ defmodule MishkaBlog.Tag do
 
     version_extensions authorizers: [Ash.Policy.Authorizer]
 
-    mixin {MishkaBlog.Resources.Mixins.TagPaperTrailMixin, :postgres, []}
+    mixin {MishkaBlog.Resources.Mixins.PaperTrailMixin, :postgres, ["mishka_blog_tag_versions"]}
   end
 
   # JSON API configuration for REST endpoints
@@ -1023,18 +1023,9 @@ defmodule MishkaBlog.Tag do
         message dgettext_noop("errors", "Cannot edit archived tag. Please unarchive it first.")
       end
 
-      validate fn changeset, _context ->
-        parent_id = Ash.Changeset.get_attribute(changeset, :parent_tag_id)
-        tag_id = changeset.data.id
-
-        if !is_nil(parent_id) and parent_id == tag_id do
-          {:error,
-           field: :parent_tag_id,
-           message: dgettext_noop("errors", "Tag cannot be its own parent.")}
-        else
-          :ok
-        end
-      end
+      validate {MishkaBlog.Resources.Validations.NotItsOwnParent,
+                field: :parent_tag_id,
+                message: dgettext_noop("errors", "Tag cannot be its own parent.")}
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
 
@@ -1054,18 +1045,9 @@ defmodule MishkaBlog.Tag do
         message dgettext_noop("errors", "Cannot edit archived tag. Please unarchive it first.")
       end
 
-      validate fn changeset, _context ->
-        parent_id = Ash.Changeset.get_attribute(changeset, :parent_tag_id)
-        tag_id = changeset.data.id
-
-        if !is_nil(parent_id) and parent_id == tag_id do
-          {:error,
-           field: :parent_tag_id,
-           message: dgettext_noop("errors", "Tag cannot be its own parent.")}
-        else
-          :ok
-        end
-      end
+      validate {MishkaBlog.Resources.Validations.NotItsOwnParent,
+                field: :parent_tag_id,
+                message: dgettext_noop("errors", "Tag cannot be its own parent.")}
 
       change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
     end
@@ -1380,7 +1362,7 @@ defmodule MishkaBlog.Tag do
         tag_id = Ash.Query.get_argument(query, :tag_id)
 
         # First verify the tag belongs to the tenant
-        case Ash.get(MishkaBlog.Tag, tag_id, tenant: context.tenant, authorize?: false) do
+        case Ash.get(MishkaBlog.Tag, tag_id, Ash.Scope.to_opts(context)) do
           {:ok, _tag} ->
             query
             |> Ash.Query.filter(id == ^tag_id)
@@ -1460,11 +1442,12 @@ defmodule MishkaBlog.Tag do
         version_id = input.arguments.version_id
 
         with {:ok, tag} when not is_nil(tag) <-
-               Ash.get(MishkaBlog.Tag, id, tenant: context.tenant, authorize?: false) do
+               Ash.get(MishkaBlog.Tag, id, Ash.Scope.to_opts(context)) do
           tag
-          |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-            tenant: context.tenant,
-            authorize?: false
+          |> Ash.Changeset.for_update(
+            :restore_version,
+            %{version_id: version_id},
+            Ash.Scope.to_opts(context)
           )
           |> Ash.update()
         end
@@ -1506,15 +1489,21 @@ defmodule MishkaBlog.Tag do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
+      run fn input, context ->
         id = input.arguments.id
         version_id = input.arguments.version_id
 
-        case Ash.get(MishkaBlog.Tag, id, action: :master_get, authorize?: false) do
+        case Ash.get(
+               MishkaBlog.Tag,
+               id,
+               Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
+             ) do
           {:ok, record} when not is_nil(record) ->
             record
-            |> Ash.Changeset.for_update(:master_restore_version, %{version_id: version_id},
-              authorize?: false
+            |> Ash.Changeset.for_update(
+              :master_restore_version,
+              %{version_id: version_id},
+              Ash.Scope.to_opts(context, tenant: nil)
             )
             |> Ash.update()
 
@@ -1535,42 +1524,8 @@ defmodule MishkaBlog.Tag do
 
       filter expr(id == ^arg(:tag_id))
 
-      prepare fn query, context ->
-        version_id = Ash.Query.get_argument(query, :version_id)
-
-        Ash.Query.after_action(query, fn _query, results ->
-          results =
-            Enum.map(results, fn tag ->
-              version =
-                MishkaBlog.Tag.Version
-                |> Ash.get!(version_id, action: :get_any, authorize?: false)
-
-              if version.version_source_id != tag.id do
-                raise Ash.Error.Invalid.exception(
-                        errors: [
-                          Ash.Error.Query.InvalidArgument.exception(
-                            field: :version_id,
-                            message:
-                              MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                                dgettext_noop("errors", "tag")
-                              )
-                          )
-                        ]
-                      )
-              end
-
-              # Convert string keys to atom keys for struct
-              changes_with_atom_keys =
-                version.changes
-                |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
-                |> Map.new()
-
-              struct(tag, changes_with_atom_keys)
-            end)
-
-          {:ok, results}
-        end)
-      end
+      prepare {MishkaBlog.Resources.Preparations.PreviewVersion,
+               version: MishkaBlog.Tag.Version, label: dgettext_noop("errors", "tag")}
     end
 
     read :master_preview_version do
@@ -1585,42 +1540,10 @@ defmodule MishkaBlog.Tag do
 
       filter expr(id == ^arg(:tag_id))
 
-      prepare fn query, context ->
-        version_id = Ash.Query.get_argument(query, :version_id)
-
-        Ash.Query.after_action(query, fn _query, results ->
-          results =
-            Enum.map(results, fn tag ->
-              version =
-                MishkaBlog.Tag.Version
-                |> Ash.get!(version_id, action: :get_any, authorize?: false)
-
-              if version.version_source_id != tag.id do
-                raise Ash.Error.Invalid.exception(
-                        errors: [
-                          Ash.Error.Query.InvalidArgument.exception(
-                            field: :version_id,
-                            message:
-                              MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                                dgettext_noop("errors", "tag")
-                              )
-                          )
-                        ]
-                      )
-              end
-
-              # Convert string keys to atom keys for struct
-              changes_with_atom_keys =
-                version.changes
-                |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
-                |> Map.new()
-
-              struct(tag, changes_with_atom_keys)
-            end)
-
-          {:ok, results}
-        end)
-      end
+      prepare {MishkaBlog.Resources.Preparations.PreviewVersion,
+               version: MishkaBlog.Tag.Version,
+               master: true,
+               label: dgettext_noop("errors", "tag")}
     end
   end
 

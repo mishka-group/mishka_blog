@@ -150,10 +150,13 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     # what a patch to another URL does to `params`. It is the only re-render that reaches a
     # component at all: LiveView's change tracking skips a component whose assigns are the same.
     def handle_info({:attrs, id, attrs}, socket) do
-      blocks =
-        Enum.map(socket.assigns.blocks, fn block ->
-          (block["id"] == id && Map.put(block, "attrs", attrs)) || block
-        end)
+      with_attrs = fn block ->
+        (block["id"] == id && Map.put(block, "attrs", attrs)) || block
+      end
+
+      # The host LiveView of this test reads its own assigns.
+      # credo:disable-for-next-line Jump.CredoChecks.AvoidSocketAssignsInTest
+      blocks = Enum.map(socket.assigns.blocks, with_attrs)
 
       {:noreply, Phoenix.Component.assign(socket, :blocks, blocks)}
     end
@@ -586,7 +589,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           render_async(view, @async)
         end)
 
-      assert Enum.count(asked, &String.contains?(&1, "mishka_blog_posts")) == 0,
+      refute Enum.any?(asked, &String.contains?(&1, "mishka_blog_posts")),
              "the page around it redrawing sent the block back to the database"
 
       assert render(view) =~ ~s(<span data-role="ticks">1</span>),
@@ -1168,7 +1171,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert render(view) =~ "Second",
              "the page never handed the block anything new, so this proves nothing"
 
-      assert Enum.count(asked, &String.contains?(&1, "mishka_blog_posts")) == 0,
+      refute Enum.any?(asked, &String.contains?(&1, "mishka_blog_posts")),
              "renaming a heading sent the block back to the database"
 
       assert roles(render(view), "blog-list-item") == 2
@@ -2612,8 +2615,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
             {"mishka_blog_collections", ~s("name")},
             {"mishka_blog_bloggers", ""}
           ] do
-        assert Enum.count(off, &(String.contains?(&1, table) and String.contains?(&1, drawn))) ==
-                 0,
+        refute Enum.any?(off, &(String.contains?(&1, table) and String.contains?(&1, drawn))),
                "#{table} was read for a part the page does not draw"
       end
 
@@ -2623,7 +2625,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           render(view)
         end)
 
-      assert Enum.count(on, &String.contains?(&1, "mishka_blog_tags")) > 0,
+      assert Enum.any?(on, &String.contains?(&1, "mishka_blog_tags")),
              "the switches being on has to be the difference, or this asserts nothing"
     end
 

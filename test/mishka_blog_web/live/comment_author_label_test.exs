@@ -15,8 +15,8 @@ defmodule MishkaBlogWeb.Test.CommentAuthorLabelTest do
   import Phoenix.LiveViewTest
   import MishkaBlog.Test.Factory
 
-  alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaBlogWeb.Templates.CommentCard
+  alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.States.SiteState
 
   require Ash.Query

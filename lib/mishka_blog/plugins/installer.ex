@@ -15,6 +15,11 @@ defmodule MishkaBlog.Plugins.Installer do
   listen for a site being created. A site added to a running CMS gets its own core content and
   nothing else until an admin asks for the blog from the Blog menu — which is the only honest
   default, because a site may be a landing page that will never have a blog.
+
+  The request's `:actor` is whoever pressed the button and must hold what
+  `MishkaCmsCore.Runtime.ExtensionProvision.required/1` names. A request with no actor is the
+  install wizard's own run and is answered only until the CMS is installed
+  (`MishkaCmsCore.Install.installed?/0`); after that it is refused like an actor holding nothing.
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext
@@ -32,9 +37,12 @@ defmodule MishkaBlog.Plugins.Installer do
       ]
     }
 
+  require Ash.Query
   require Logger
 
   alias MishkaBlog.Provision
+  alias MishkaCmsCore.Install
+  alias MishkaCmsCore.Runtime.ExtensionProvision
 
   @key "mishka_blog"
 
@@ -65,36 +73,65 @@ defmodule MishkaBlog.Plugins.Installer do
 
     # THE ACTOR RIDES ON THE PAYLOAD, put there by whoever asked. The wizard sends none — it runs
     # before there is a user — and a dashboard sends the session's, so what this writes is written
-    # as them and the resource's own policy answers for it.
+    # as them and the resource's own policy answers for it. NOBODY IS ANSWERED ONLY WHILE THE CMS IS
+    # BEING INSTALLED: once it is, a request with no actor is refused like an actor holding nothing.
     actor = Map.get(payload, :actor)
 
-    {:reply, %{payload | reports: reports ++ [Provision.ensure!(site_id, answers, actor: actor)]}}
+    report =
+      case missing(actor) do
+        [] ->
+          Provision.ensure!(site_id, answers, actor: actor)
+
+        names ->
+          %{
+            error:
+              gettext("Setting the blog up needs these permissions: %{names}",
+                names: Enum.join(names, ", ")
+              )
+          }
+      end
+
+    {:reply, %{payload | reports: reports ++ [report]}}
   rescue
     error ->
-      # WHAT THE SITE DID GET STAYS WRITTEN. The components go in before the pages, so a run that
-      # raises has usually written some of it, and rolling back would take away what works. The
-      # screen is told the run failed and the logs say why; a second run writes only what is still
-      # missing, which is what makes pressing the button again the right thing to do.
+      # THE RESCUE STAYS BECAUSE CORE OFFERS ONLY `ensure!/4`: the install writes through the
+      # raising API, and one extension's failure must not take the installer down with it. WHAT THE
+      # SITE DID GET STAYS WRITTEN. The components go in before the pages, so a run that raises has
+      # usually written some of it, and rolling back would take away what works. The screen gets a
+      # fixed message, never the exception's own text, and the logs carry the detail; a second run
+      # writes only what is still missing, which is what makes pressing the button again the right
+      # thing to do.
       Logger.error("[MishkaBlog] install on #{site_id} failed: #{Exception.message(error)}")
-      {:reply, %{payload | reports: payload.reports ++ [%{error: Exception.message(error)}]}}
+      {:reply, %{payload | reports: payload.reports ++ [%{error: install_failed_message()}]}}
   end
 
   def call(payload), do: {:reply, payload}
 
+  defp missing(nil) do
+    if Install.installed?(),
+      do: ExtensionProvision.missing(Provision.manifest(), nil),
+      else: []
+  end
+
+  defp missing(actor), do: ExtensionProvision.missing(Provision.manifest(), actor)
+
   # ANY OF THEM, not all. A site an admin has pruned still has this extension; a site that has never
   # had it has none of them.
   defp pages_present?(site_id) do
-    require Ash.Query
-
     paths = Provision.page_paths()
 
     MishkaCmsCore.Runtime.Page
     |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
     |> Ash.Query.filter(site_id == ^site_id and path in ^paths)
     |> Ash.Query.select([:id])
-    |> Ash.read!(authorize?: false, page: [limit: 1])
-    |> then(fn %{results: rows} -> rows != [] end)
-  rescue
-    _unreadable -> false
+    |> Ash.read(authorize?: false, page: [limit: 1])
+    |> case do
+      {:ok, %{results: rows}} -> rows != []
+      {:error, _unreadable} -> false
+    end
+  end
+
+  defp install_failed_message do
+    gettext("The install did not finish. Press Install again; details are in the server log.")
   end
 end

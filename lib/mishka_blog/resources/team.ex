@@ -49,6 +49,7 @@ defmodule MishkaBlog.Team do
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
+  alias Ash.Error.Query.NotFound
   require Ash.Query
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -198,7 +199,7 @@ defmodule MishkaBlog.Team do
 
     version_extensions authorizers: [Ash.Policy.Authorizer]
 
-    mixin {MishkaBlog.Resources.Mixins.TeamPaperTrailMixin, :postgres, []}
+    mixin {MishkaBlog.Resources.Mixins.PaperTrailMixin, :postgres, ["mishka_blog_team_versions"]}
   end
 
   # JSON API configuration for REST endpoints
@@ -1436,7 +1437,7 @@ defmodule MishkaBlog.Team do
         team_id = Ash.Query.get_argument(query, :team_id)
 
         # First verify the team belongs to the tenant
-        case Ash.get(MishkaBlog.Team, team_id, tenant: context.tenant, authorize?: false) do
+        case Ash.get(MishkaBlog.Team, team_id, Ash.Scope.to_opts(context)) do
           {:ok, _team} ->
             query
             |> Ash.Query.filter(id == ^team_id)
@@ -1449,7 +1450,7 @@ defmodule MishkaBlog.Team do
           {:error, _reason} ->
             Ash.Query.add_error(
               query,
-              Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)
+              NotFound.exception(resource: MishkaBlog.Team)
             )
         end
       end
@@ -1512,14 +1513,20 @@ defmodule MishkaBlog.Team do
         team_id = input.arguments.id
         version_id = input.arguments.version_id
 
-        Ash.get(MishkaBlog.Team, team_id,
-          action: :read,
-          tenant: context.tenant,
-          authorize?: false
-        )
+        Ash.get(MishkaBlog.Team, team_id, Ash.Scope.to_opts(context, action: :read))
         |> case do
           {:ok, team} when not is_nil(team) ->
-            if !is_nil(team.archived_at) do
+            if is_nil(team.archived_at) do
+              tenant = team.site_id
+
+              team
+              |> Ash.Changeset.for_update(
+                :restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: tenant)
+              )
+              |> Ash.update()
+            else
               {:error,
                Ash.Error.Invalid.exception(
                  errors: [
@@ -1533,19 +1540,10 @@ defmodule MishkaBlog.Team do
                    )
                  ]
                )}
-            else
-              tenant = team.site_id
-
-              team
-              |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                tenant: tenant,
-                authorize?: false
-              )
-              |> Ash.update()
             end
 
           _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)}
+            {:error, NotFound.exception(resource: MishkaBlog.Team)}
         end
       end
     end
@@ -1585,20 +1583,26 @@ defmodule MishkaBlog.Team do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
+      run fn input, context ->
         id = input.arguments.id
         version_id = input.arguments.version_id
 
-        case Ash.get(MishkaBlog.Team, id, action: :master_get, authorize?: false) do
+        case Ash.get(
+               MishkaBlog.Team,
+               id,
+               Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
+             ) do
           {:ok, record} when not is_nil(record) ->
             record
-            |> Ash.Changeset.for_update(:master_restore_version, %{version_id: version_id},
-              authorize?: false
+            |> Ash.Changeset.for_update(
+              :master_restore_version,
+              %{version_id: version_id},
+              Ash.Scope.to_opts(context, tenant: nil)
             )
             |> Ash.update()
 
           _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)}
+            {:error, NotFound.exception(resource: MishkaBlog.Team)}
         end
       end
     end
@@ -1612,67 +1616,12 @@ defmodule MishkaBlog.Team do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        team_id = input.arguments.team_id
-        version_id = input.arguments.version_id
-
-        with {:ok, team} when not is_nil(team) <-
-               Ash.get(MishkaBlog.Team, team_id, tenant: context.tenant, authorize?: false),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.Team.Version, version_id, action: :get_any, authorize?: false),
-             :valid <- if(version.version_source_id == team_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-            |> Enum.map(&to_string/1)
-
-          preview_team =
-            Enum.reduce(restored_attrs, team, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-
-                value =
-                  cond do
-                    key_atom == :status and is_binary(value) -> String.to_atom(value)
-                    true -> value
-                  end
-
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
-
-          {:ok, preview_team}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "team")
-                     )
-                 )
-               ]
-             )}
-
-          {:error, _} ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)}
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)}
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :team_id,
+           version: MishkaBlog.Team.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           cast: [:status],
+           label: dgettext_noop("errors", "team")}
     end
 
     action :master_preview_version, :struct do
@@ -1684,67 +1633,13 @@ defmodule MishkaBlog.Team do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
-        team_id = input.arguments.team_id
-        version_id = input.arguments.version_id
-
-        with {:ok, team} when not is_nil(team) <-
-               Ash.get(MishkaBlog.Team, team_id, action: :master_get, authorize?: false),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.Team.Version, version_id, action: :get_any, authorize?: false),
-             :valid <- if(version.version_source_id == team_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-            |> Enum.map(&to_string/1)
-
-          preview_team =
-            Enum.reduce(restored_attrs, team, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-
-                value =
-                  cond do
-                    key_atom == :status and is_binary(value) -> String.to_atom(value)
-                    true -> value
-                  end
-
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
-
-          {:ok, preview_team}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "team")
-                     )
-                 )
-               ]
-             )}
-
-          {:error, _} ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)}
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)}
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :team_id,
+           version: MishkaBlog.Team.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           cast: [:status],
+           master: true,
+           label: dgettext_noop("errors", "team")}
     end
   end
 

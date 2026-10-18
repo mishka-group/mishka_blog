@@ -46,9 +46,9 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
   require Ash.Query
 
-  alias MishkaBlog.{BlogPost, Blogger, Collection, Team}
-  alias MishkaCmsCore.Runtime.{Languages, PageEditions, Seo}
+  alias MishkaBlog.{Blogger, BlogPost, Collection, Team}
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
+  alias MishkaCmsCore.Runtime.{Languages, PageEditions, Seo}
 
   # Each kind of row: the record its page says it shows, the fields its address and whether it is
   # listed are read from, and what it loads to know the permissions it opens with.

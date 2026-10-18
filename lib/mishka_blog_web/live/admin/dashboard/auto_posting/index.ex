@@ -3,6 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule MishkaBlogWeb.Live.Admin.Dashboard.AutoPosting.Index do
+  @moduledoc """
+  The auto posting list: a Gervaz table of the site's auto posting configurations. The page decodes
+  the URL state and, once connected, forwards the PubSub broadcasts of its site (every site for a
+  master) into the table component.
+
+  See `MishkaBlog.AutoPosting` for the table, filter and row-action definitions.
+  """
   use MishkaCmsCore.ExtensionLiveView
 
   alias MishkaCmsCore.Accounts.User
@@ -14,7 +21,11 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.AutoPosting.Index do
       socket
       |> assign(:page_title, gettext("Auto Posting"))
       |> assign(:url_state, nil)
-      |> subscribe_to_pubsub(socket.assigns.current_user)
+
+    socket =
+      if connected?(socket),
+        do: subscribe_to_pubsub(socket, socket.assigns.current_user),
+        else: socket
 
     {:ok, socket}
   end

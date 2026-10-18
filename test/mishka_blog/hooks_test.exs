@@ -17,12 +17,12 @@ defmodule MishkaBlog.Test.HooksTest do
     alias MishkaInstaller.Event.{Event, EventHandler}
 
     alias MishkaBlog.Test.Plugins.{
-      BlogPostAfterCreate,
-      BlogCommentAfterCreate,
       BlogBloggerAfterCreate,
+      BlogCommentAfterCreate,
+      BlogPostAfterCreate,
       BlogPostRatingAfterCreate,
-      BlogTeamAfterCreate,
-      BlogPostRatingAfterRemove
+      BlogPostRatingAfterRemove,
+      BlogTeamAfterCreate
     }
 
     @probes [
@@ -51,7 +51,7 @@ defmodule MishkaBlog.Test.HooksTest do
       post = create_blog_post!(site_id: site.id)
       post_id = post.id
 
-      assert_receive {:blog_post_after_create, ^post_id, meta}, 5000
+      assert_receive {:blog_post_after_create, ^post_id, meta}
       assert meta.site_id == site.id
     end
 
@@ -61,7 +61,7 @@ defmodule MishkaBlog.Test.HooksTest do
       comment = create_comment!(site_id: site.id, post_id: post.id)
       comment_id = comment.id
 
-      assert_receive {:blog_comment_after_create, ^comment_id, meta}, 5000
+      assert_receive {:blog_comment_after_create, ^comment_id, meta}
       assert meta.site_id == site.id
     end
 
@@ -70,7 +70,7 @@ defmodule MishkaBlog.Test.HooksTest do
       blogger = create_blogger!(site_id: site.id)
       blogger_id = blogger.id
 
-      assert_receive {:blog_blogger_after_create, ^blogger_id, meta}, 5000
+      assert_receive {:blog_blogger_after_create, ^blogger_id, meta}
       assert meta.site_id == site.id
     end
 
@@ -79,7 +79,7 @@ defmodule MishkaBlog.Test.HooksTest do
       team = create_team!(site_id: site.id)
       team_id = team.id
 
-      assert_receive {:blog_team_after_create, ^team_id, meta}, 5000
+      assert_receive {:blog_team_after_create, ^team_id, meta}
       assert meta.site_id == site.id
     end
 
@@ -87,7 +87,7 @@ defmodule MishkaBlog.Test.HooksTest do
       rating = create_post_rating!()
       rating_id = rating.id
 
-      assert_receive {:blog_post_rating_after_create, ^rating_id, _meta}, 5000
+      assert_receive {:blog_post_rating_after_create, ^rating_id, _meta}
     end
 
     test "post rating DESTROY (:remove) dispatches blog:post_rating:after_remove — destroys are hooked" do
@@ -96,7 +96,7 @@ defmodule MishkaBlog.Test.HooksTest do
 
       Ash.destroy!(rating, action: :remove, authorize?: false)
 
-      assert_receive {:blog_post_rating_after_remove, ^rating_id, _meta}, 5000
+      assert_receive {:blog_post_rating_after_remove, ^rating_id, _meta}
     end
 
     defp register_plugin(module, event) do

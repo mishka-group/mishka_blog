@@ -205,7 +205,12 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       for entry <- activity do
         assert %{kind: kind, title: title, at: %DateTime{}} = entry
         assert kind in [:post, :comment, :blogger]
-        assert is_binary(title)
+
+        assert {kind, title} in [
+                 {:post, "Activity Post"},
+                 {:comment, "Activity comment content"},
+                 {:blogger, "Activity Blogger"}
+               ]
       end
 
       assert Enum.sort(Enum.map(activity, & &1.kind)) == [:blogger, :comment, :post]
@@ -729,7 +734,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       for {label, icon, path, primary?} <- actions do
         assert is_binary(label) and is_binary(icon)
         assert String.starts_with?(path, "/admin/dashboard/")
-        assert is_boolean(primary?)
+        assert primary? in [true, false]
       end
     end
   end

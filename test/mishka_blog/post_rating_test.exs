@@ -26,7 +26,7 @@ defmodule MishkaBlog.Test.PostRatingTest do
         rating = create_post_rating!(post_id: post.id, user_id: user.id, rating: 5)
 
         # Has UUID primary key
-        assert rating.id != nil
+        assert {:ok, _} = Ecto.UUID.cast(rating.id)
         # And foreign keys to post and user
         assert rating.post_id == post.id
         assert rating.user_id == user.id
@@ -50,8 +50,8 @@ defmodule MishkaBlog.Test.PostRatingTest do
         assert rating.post_id == post.id
         assert rating.user_id == user.id
         assert rating.rating == 5
-        assert rating.inserted_at != nil
-        assert rating.updated_at != nil
+        assert %DateTime{} = rating.inserted_at
+        assert %DateTime{} = rating.updated_at
       end
 
       test "accepts rating values from 1 to 5" do
@@ -120,10 +120,8 @@ defmodule MishkaBlog.Test.PostRatingTest do
 
         rating = create_post_rating!(post_id: post.id, user_id: user.id, rating: 4)
 
-        assert rating.inserted_at != nil
-        assert is_struct(rating.inserted_at, DateTime)
-        assert rating.updated_at != nil
-        assert is_struct(rating.updated_at, DateTime)
+        assert %DateTime{} = rating.inserted_at
+        assert %DateTime{} = rating.updated_at
       end
     end
 

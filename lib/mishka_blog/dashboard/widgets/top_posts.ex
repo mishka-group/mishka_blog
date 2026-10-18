@@ -5,8 +5,9 @@
 defmodule MishkaBlog.Dashboard.Widgets.TopPosts do
   @moduledoc """
   Dashboard widget (a `dashboard:widgets` plugin): the most-viewed published posts with their view
-  and bookmark tallies (`BlogPost` `:master_read` + the `view_count` / `bookmark_count` aggregates).
-  A master ranks posts across every site; a tenant admin only their own site's.
+  tally (`BlogPost` + the `view_count` aggregate), read as the viewer through
+  `MishkaBlog.Dashboard.Scope`: a master ranks posts across every site, a site's admin only their
+  own site's, and a viewer without `admin:dashboard:blog:post` none.
 
   How many posts the leaderboard ranks is the viewer's own setting — the card's gear in customize
   mode, or Settings → Blog → Dashboard widgets, both writing the same per-user row
@@ -17,6 +18,7 @@ defmodule MishkaBlog.Dashboard.Widgets.TopPosts do
   import Phoenix.Component
   require Ash.Query
 
+  alias MishkaBlog.Dashboard.Scope
   alias MishkaCmsCore.Dashboard.Widget
   alias MishkaCmsCore.Localized
 
@@ -54,19 +56,18 @@ defmodule MishkaBlog.Dashboard.Widgets.TopPosts do
   end
 
   @doc """
-  Loads this widget's data off the dashboard render (in a Task), scoped to the viewer and sized by
+  Loads this widget's data off the dashboard render (in a Task), read as the viewer and sized by
   their own "Posts to rank" setting. Called as `load/1` (a direct call, no dashboard) it uses the
   declared default.
   """
   def load(user, config \\ %{}) do
-    %{results: posts} =
+    posts =
       MishkaBlog.BlogPost
-      |> Ash.Query.for_read(:master_read, %{}, authorize?: false)
-      |> scope_filter(Widget.scope(user))
+      |> Scope.query(user)
       |> Ash.Query.filter(status == :published)
       |> Ash.Query.load([:view_count])
       |> Ash.Query.sort(view_count: :desc)
-      |> Ash.read!(page: [limit: Map.get(config, @count.key, @count.default)], authorize?: false)
+      |> Scope.list(Map.get(config, @count.key, @count.default))
 
     %{posts: posts}
   end
@@ -146,7 +147,4 @@ defmodule MishkaBlog.Dashboard.Widgets.TopPosts do
   defp chip(1), do: "bg-[#5b57d6] text-white"
   defp chip(r) when r in [2, 3], do: "bg-[#eeedfb] text-[#5b57d6]"
   defp chip(_), do: "bg-[#f2f1ec] text-[#8a877f]"
-
-  defp scope_filter(query, nil), do: query
-  defp scope_filter(query, site_id), do: Ash.Query.filter(query, site_id == ^site_id)
 end

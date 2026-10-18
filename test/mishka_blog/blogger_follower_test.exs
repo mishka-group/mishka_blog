@@ -19,7 +19,7 @@ defmodule MishkaBlog.Test.BloggerFollowerTest do
 
       test "uses UUID v7 for primary keys" do
         follow = create_blogger_follower!()
-        assert is_binary(follow.id)
+        assert {:ok, _} = Ecto.UUID.cast(follow.id)
         assert String.length(follow.id) == 36
       end
 
@@ -44,14 +44,13 @@ defmodule MishkaBlog.Test.BloggerFollowerTest do
         assert follow.blogger_id == blogger.id
         assert follow.follower_user_id == user.id
         assert follow.notification_enabled == true
-        assert follow.followed_at != nil
+        assert %DateTime{} = follow.followed_at
       end
 
       test "auto-sets followed_at timestamp" do
         follow = create_blogger_follower!()
 
-        assert follow.followed_at != nil
-        assert is_struct(follow.followed_at, DateTime)
+        assert %DateTime{} = follow.followed_at
         # Should be recent (within last minute)
         assert DateTime.diff(DateTime.utc_now(), follow.followed_at, :second) < 60
       end

@@ -170,7 +170,8 @@ defmodule MishkaBlog.AutoPosting do
 
     version_extensions authorizers: [Ash.Policy.Authorizer]
 
-    mixin {MishkaBlog.Resources.Mixins.AutoPostingPaperTrailMixin, :postgres, []}
+    mixin {MishkaBlog.Resources.Mixins.PaperTrailMixin, :postgres,
+           ["mishka_blog_auto_posting_versions"]}
   end
 
   # JSON API configuration for REST endpoints
@@ -935,10 +936,7 @@ defmodule MishkaBlog.AutoPosting do
         auto_posting_id = Ash.Query.get_argument(query, :auto_posting_id)
 
         # Verify the auto-posting belongs to the tenant
-        case Ash.get(MishkaBlog.AutoPosting, auto_posting_id,
-               tenant: context.tenant,
-               authorize?: false
-             ) do
+        case Ash.get(MishkaBlog.AutoPosting, auto_posting_id, Ash.Scope.to_opts(context)) do
           {:ok, _auto_posting} ->
             query
             |> Ash.Query.filter(id == ^auto_posting_id)
@@ -1034,44 +1032,7 @@ defmodule MishkaBlog.AutoPosting do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
       run fn input, context ->
-        auto_posting_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        Ash.get(MishkaBlog.AutoPosting, auto_posting_id,
-          action: :read,
-          tenant: context.tenant,
-          authorize?: false
-        )
-        |> case do
-          {:ok, auto_posting} when not is_nil(auto_posting) ->
-            if !is_nil(auto_posting.archived_at) do
-              {:error,
-               Ash.Error.Invalid.exception(
-                 errors: [
-                   Ash.Error.Changes.InvalidAttribute.exception(
-                     field: :archived_at,
-                     message:
-                       dgettext_noop(
-                         "errors",
-                         "Cannot restore version of archived auto-posting. Please unarchive it first."
-                       )
-                   )
-                 ]
-               )}
-            else
-              tenant = auto_posting.site_id
-
-              auto_posting
-              |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                tenant: tenant,
-                authorize?: false
-              )
-              |> Ash.update()
-            end
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.AutoPosting)}
-        end
+        restore(input, context, Ash.Scope.to_opts(context, action: :read))
       end
     end
 
@@ -1084,44 +1045,8 @@ defmodule MishkaBlog.AutoPosting do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
-        auto_posting_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        Ash.get(MishkaBlog.AutoPosting, auto_posting_id,
-          action: :master_get,
-          authorize?: false
-        )
-        |> case do
-          {:ok, auto_posting} when not is_nil(auto_posting) ->
-            if !is_nil(auto_posting.archived_at) do
-              {:error,
-               Ash.Error.Invalid.exception(
-                 errors: [
-                   Ash.Error.Changes.InvalidAttribute.exception(
-                     field: :archived_at,
-                     message:
-                       dgettext_noop(
-                         "errors",
-                         "Cannot restore version of archived auto-posting. Please unarchive it first."
-                       )
-                   )
-                 ]
-               )}
-            else
-              tenant = auto_posting.site_id
-
-              auto_posting
-              |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                tenant: tenant,
-                authorize?: false
-              )
-              |> Ash.update()
-            end
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.AutoPosting)}
-        end
+      run fn input, context ->
+        restore(input, context, Ash.Scope.to_opts(context, action: :master_get, tenant: nil))
       end
     end
 
@@ -1134,64 +1059,11 @@ defmodule MishkaBlog.AutoPosting do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        auto_posting_id = input.arguments.auto_posting_id
-        version_id = input.arguments.version_id
-
-        with {:ok, auto_posting} when not is_nil(auto_posting) <-
-               Ash.get(MishkaBlog.AutoPosting, auto_posting_id,
-                 tenant: context.tenant,
-                 authorize?: false
-               ),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.AutoPosting.Version, version_id,
-                 action: :get_any,
-                 authorize?: false
-               ),
-             :valid <-
-               if(version.version_source_id == auto_posting_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-            |> Enum.map(&to_string/1)
-
-          preview_auto_posting =
-            Enum.reduce(restored_attrs, auto_posting, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
-
-          {:ok, preview_auto_posting}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "auto-posting configuration")
-                     )
-                 )
-               ]
-             )}
-
-          error ->
-            error
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :auto_posting_id,
+           version: MishkaBlog.AutoPosting.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           label: dgettext_noop("errors", "auto-posting configuration")}
     end
 
     action :master_preview_version, :struct do
@@ -1203,64 +1075,12 @@ defmodule MishkaBlog.AutoPosting do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
-        auto_posting_id = input.arguments.auto_posting_id
-        version_id = input.arguments.version_id
-
-        with {:ok, auto_posting} when not is_nil(auto_posting) <-
-               Ash.get(MishkaBlog.AutoPosting, auto_posting_id,
-                 action: :master_get,
-                 authorize?: false
-               ),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.AutoPosting.Version, version_id,
-                 action: :get_any,
-                 authorize?: false
-               ),
-             :valid <-
-               if(version.version_source_id == auto_posting_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-            |> Enum.map(&to_string/1)
-
-          preview_auto_posting =
-            Enum.reduce(restored_attrs, auto_posting, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
-
-          {:ok, preview_auto_posting}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "auto-posting configuration")
-                     )
-                 )
-               ]
-             )}
-
-          error ->
-            error
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :auto_posting_id,
+           version: MishkaBlog.AutoPosting.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           master: true,
+           label: dgettext_noop("errors", "auto-posting configuration")}
     end
   end
 
@@ -1445,6 +1265,37 @@ defmodule MishkaBlog.AutoPosting do
       message dgettext_noop("errors", "This plugin already has a configuration for this site.")
       all_tenants? true
       nils_distinct? false
+    end
+  end
+
+  defp restore(input, context, read_opts) do
+    case Ash.get(MishkaBlog.AutoPosting, input.arguments.id, read_opts) do
+      {:ok, %{archived_at: nil} = auto_posting} ->
+        auto_posting
+        |> Ash.Changeset.for_update(
+          :restore_version,
+          %{version_id: input.arguments.version_id},
+          Ash.Scope.to_opts(context, tenant: auto_posting.site_id)
+        )
+        |> Ash.update()
+
+      {:ok, %{archived_at: _archived}} ->
+        {:error,
+         Ash.Error.Invalid.exception(
+           errors: [
+             Ash.Error.Changes.InvalidAttribute.exception(
+               field: :archived_at,
+               message:
+                 dgettext_noop(
+                   "errors",
+                   "Cannot restore version of archived auto-posting. Please unarchive it first."
+                 )
+             )
+           ]
+         )}
+
+      _unreadable ->
+        {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.AutoPosting)}
     end
   end
 

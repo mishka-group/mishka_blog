@@ -453,17 +453,10 @@ defmodule MishkaBlog.Test.CollectionPropertyTest do
 
         assert changeset.valid?
         # Test that defaults would be applied
-        assert changeset.attributes[:status] == :draft or
-                 changeset.attributes[:status] in [:active, :archived, :draft]
-
-        assert changeset.attributes[:language] == "en" or
-                 is_binary(changeset.attributes[:language])
-
-        assert changeset.attributes[:featured] == false or
-                 is_boolean(changeset.attributes[:featured])
-
-        assert changeset.attributes[:display_order] == 0 or
-                 is_integer(changeset.attributes[:display_order])
+        assert changeset.attributes[:status] == :draft
+        assert changeset.attributes[:language] == "en"
+        assert changeset.attributes[:featured] == false
+        assert changeset.attributes[:display_order] == 0
       end
     end
 

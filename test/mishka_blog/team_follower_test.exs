@@ -19,7 +19,7 @@ defmodule MishkaBlog.Test.TeamFollowerTest do
 
       test "uses UUID v7 for primary keys" do
         follow = create_team_follower!()
-        assert is_binary(follow.id)
+        assert {:ok, _} = Ecto.UUID.cast(follow.id)
         assert String.length(follow.id) == 36
       end
 
@@ -50,7 +50,7 @@ defmodule MishkaBlog.Test.TeamFollowerTest do
         assert follow.team_id == team.id
         assert follow.follower_user_id == user.id
         assert follow.notification_enabled == true
-        assert follow.followed_at != nil
+        assert %DateTime{} = follow.followed_at
       end
 
       test "defaults notification_enabled to true" do
@@ -441,6 +441,9 @@ defmodule MishkaBlog.Test.TeamFollowerTest do
       end
     end
 
+    defp read_ids({:ok, rows}), do: Enum.map(rows, & &1.id)
+    defp read_ids({:error, %Ash.Error.Forbidden{}}), do: []
+
     describe "authorization policies" do
       test "by_team action allows public access" do
         team = create_team!()
@@ -458,7 +461,7 @@ defmodule MishkaBlog.Test.TeamFollowerTest do
 
       test "read action requires user to be the follower" do
         user = create_user!()
-        _other_user = create_user!()
+        other_user = create_user!()
 
         follow = create_team_follower!(follower_user_id: user.id)
 
@@ -468,64 +471,101 @@ defmodule MishkaBlog.Test.TeamFollowerTest do
           |> Ash.Query.for_read(:read, %{}, authorize?: false)
           |> Ash.read!()
 
-        assert length(result) >= 1
+        assert result != []
         assert follow.id in Enum.map(result, & &1.id)
 
-        # With authorization and wrong actor, the policy filter would exclude it
-        # But since this is a test without proper actor setup, we skip authorization
+        assert [only] = Ash.read!(TeamFollower, actor: user)
+        assert only.id == follow.id
+
+        assert Ash.read(TeamFollower, actor: other_user) |> read_ids() == []
       end
 
-      test "create action with authorization checks follower_user_id matches actor" do
+      test "create action with authorization relates the follow to the actor and refuses no actor" do
         user = create_user!()
         team = create_team!()
 
-        # For testing, we use authorize?: false
-        # In production, the policy would enforce this
-        {:ok, _follow} =
-          TeamFollower
-          |> Ash.Changeset.for_create(
-            :create,
-            %{team_id: team.id},
-            actor: user,
-            authorize?: false
-          )
-          |> Ash.create()
+        assert {:ok, follow} =
+                 TeamFollower
+                 |> Ash.Changeset.for_create(:create, %{team_id: team.id},
+                   actor: user,
+                   tenant: team.site_id
+                 )
+                 |> Ash.create()
 
-        # Policy ensures users can only create follows for themselves
-        # Testing this requires proper actor context which is complex in unit tests
+        assert follow.follower_user_id == user.id
+
+        assert {:error, %Ash.Error.Forbidden{}} =
+                 TeamFollower
+                 |> Ash.Changeset.for_create(:create, %{team_id: team.id}, tenant: team.site_id)
+                 |> Ash.create()
       end
 
-      test "update action with authorization checks ownership" do
+      test "create action does not take a follower_user_id from the caller" do
         user = create_user!()
+        someone_else = create_user!()
+        team = create_team!()
+
+        assert {:error, %Ash.Error.Invalid{errors: errors}} =
+                 TeamFollower
+                 |> Ash.Changeset.for_create(
+                   :create,
+                   %{team_id: team.id, follower_user_id: someone_else.id},
+                   actor: user,
+                   tenant: team.site_id
+                 )
+                 |> Ash.create()
+
+        assert [%Ash.Error.Invalid.NoSuchInput{input: :follower_user_id}] = errors
+      end
+
+      test "update action with authorization lets only the follower toggle notifications" do
+        user = create_user!()
+        other_user = create_user!()
 
         follow = create_team_follower!(follower_user_id: user.id)
 
-        # Without authorization, update works
-        {:ok, _updated} =
-          follow
-          |> Ash.Changeset.for_update(
-            :toggle_notifications,
-            %{notification_enabled: false},
-            authorize?: false
-          )
-          |> Ash.update()
+        assert {:error, %Ash.Error.Forbidden{}} =
+                 follow
+                 |> Ash.Changeset.for_update(
+                   :toggle_notifications,
+                   %{notification_enabled: false},
+                   actor: other_user
+                 )
+                 |> Ash.update()
 
-        # With proper actor context, only the follower can update
-        # Policy enforces: follower_user_id == ^actor(:id)
+        assert Ash.get!(TeamFollower, follow.id, authorize?: false).notification_enabled == true
+
+        assert {:ok, updated} =
+                 follow
+                 |> Ash.Changeset.for_update(
+                   :toggle_notifications,
+                   %{notification_enabled: false},
+                   actor: user
+                 )
+                 |> Ash.update()
+
+        assert updated.notification_enabled == false
       end
 
-      test "destroy action with authorization checks ownership" do
+      test "destroy action with authorization lets only the follower unfollow" do
         user = create_user!()
+        other_user = create_user!()
 
         follow = create_team_follower!(follower_user_id: user.id)
 
-        # Without authorization, destroy works
-        follow
-        |> Ash.Changeset.for_destroy(:unfollow, %{}, authorize?: false)
-        |> Ash.destroy!()
+        assert {:error, %Ash.Error.Forbidden{}} =
+                 follow
+                 |> Ash.Changeset.for_destroy(:unfollow, %{}, actor: other_user)
+                 |> Ash.destroy()
 
-        # With proper actor context, only the follower can destroy
-        # Policy enforces: follower_user_id == ^actor(:id)
+        assert {:ok, _still_followed} = Ash.get(TeamFollower, follow.id, authorize?: false)
+
+        assert :ok =
+                 follow
+                 |> Ash.Changeset.for_destroy(:unfollow, %{}, actor: user)
+                 |> Ash.destroy()
+
+        assert {:error, _gone} = Ash.get(TeamFollower, follow.id, authorize?: false)
       end
     end
 
@@ -680,7 +720,7 @@ defmodule MishkaBlog.Test.TeamFollowerTest do
         follow = create_team_follower!()
 
         # followed_at should be set
-        assert follow.followed_at != nil
+        assert %DateTime{} = follow.followed_at
 
         # Attempting to manually set followed_at should not change it
         original_time = follow.followed_at

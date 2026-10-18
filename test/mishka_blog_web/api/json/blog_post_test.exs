@@ -313,7 +313,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) >= 2
 
         ids = Enum.map(body["data"], & &1["id"])
@@ -359,7 +358,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert post1.id in ids
@@ -792,7 +790,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert post.id in ids
@@ -851,7 +848,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert published.id in ids
@@ -978,7 +974,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         assert body["data"]["id"] == post.id
 
         # Verify included collections (should be limited to 10)
-        assert is_list(body["included"])
 
         collection_records =
           Enum.filter(body["included"], fn inc -> inc["type"] == "collection" end)
@@ -2174,7 +2169,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert published1.id in ids
@@ -2232,7 +2226,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert draft1.id in ids
@@ -2281,7 +2274,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert scheduled.id in ids
@@ -2334,7 +2326,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert featured.id in ids
@@ -2373,7 +2364,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert post.id in ids
@@ -2453,7 +2443,9 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
         assert body["data"]["attributes"]["status"] == "scheduled"
-        assert body["data"]["attributes"]["scheduled_publish_at"] != nil
+
+        assert {:ok, %DateTime{}, _offset} =
+                 DateTime.from_iso8601(body["data"]["attributes"]["scheduled_publish_at"])
       end
 
       test "master admin can schedule a post", %{master_user: master_user, site: site} do
@@ -2711,7 +2703,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert post_en.id in ids
@@ -2773,7 +2764,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert post_en.id in ids
@@ -2886,7 +2876,7 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         # Find our post in the list
         post_data = Enum.find(body["data"], fn p -> p["id"] == post.id end)
-        assert post_data != nil
+        assert %{"type" => "blog_post"} = post_data
 
         # Verify collections are paginated
         if body["included"] do
@@ -2894,7 +2884,7 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
             Enum.filter(body["included"], fn inc -> inc["type"] == "collection" end)
 
           # Should have collections (up to 10 per post)
-          assert length(collection_records) > 0
+          assert collection_records != []
           assert length(collection_records) <= 10
         end
       end
@@ -2961,11 +2951,11 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         body = Jason.decode!(response.resp_body)
 
         post_data = Enum.find(body["data"], fn p -> p["id"] == post.id end)
-        assert post_data != nil
+        assert %{"type" => "blog_post"} = post_data
 
         if body["included"] do
           blogger_records = Enum.filter(body["included"], fn inc -> inc["type"] == "blogger" end)
-          assert length(blogger_records) > 0
+          assert blogger_records != []
           assert length(blogger_records) <= 5
         end
       end
@@ -3031,11 +3021,11 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         body = Jason.decode!(response.resp_body)
 
         post_data = Enum.find(body["data"], fn p -> p["id"] == post.id end)
-        assert post_data != nil
+        assert %{"type" => "blog_post"} = post_data
 
         if body["included"] do
           tag_records = Enum.filter(body["included"], fn inc -> inc["type"] == "tag" end)
-          assert length(tag_records) > 0
+          assert tag_records != []
           assert length(tag_records) <= 8
         end
       end
@@ -3098,11 +3088,11 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         body = Jason.decode!(response.resp_body)
 
         post_data = Enum.find(body["data"], fn p -> p["id"] == post.id end)
-        assert post_data != nil
+        assert %{"type" => "blog_post"} = post_data
 
         if body["included"] do
           comment_records = Enum.filter(body["included"], fn inc -> inc["type"] == "comment" end)
-          assert length(comment_records) > 0
+          assert comment_records != []
           assert length(comment_records) <= 6
         end
       end
@@ -3159,7 +3149,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         # Check sorted_versions in attributes
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) >= 3
       end
 
@@ -3241,7 +3230,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         assert response1.status == 200
         body1 = Jason.decode!(response1.resp_body)
         sorted_versions1 = body1["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions1)
         assert length(sorted_versions1) >= 2
 
         # Get site2 post with versions
@@ -3256,8 +3244,7 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         assert response2.status == 200
         body2 = Jason.decode!(response2.resp_body)
         sorted_versions2 = body2["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions2)
-        assert length(sorted_versions2) >= 1
+        assert sorted_versions2 != []
       end
     end
 
@@ -3330,12 +3317,10 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         # Check latest_version calculation
         latest_version = body["data"]["attributes"]["latest_version"]
-        assert is_map(latest_version)
         assert latest_version["changes"]["content"] == "Content 5"
 
         # Check recent_versions calculation (should return up to 10)
         recent_versions = body["data"]["attributes"]["recent_versions"]
-        assert is_list(recent_versions)
         assert length(recent_versions) >= 5
 
         # Verify they're sorted descending (newest first)
@@ -3505,13 +3490,11 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         body = Jason.decode!(response.resp_body)
 
         # Returns 1 post with versions loaded
-        assert is_list(body["data"])
         assert length(body["data"]) == 1
 
         # Check the versions inside the post
         post_data = List.first(body["data"])
         sorted_versions = post_data["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) >= 4
       end
 
@@ -3580,7 +3563,6 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
 
-        assert is_list(body["data"])
         assert length(body["data"]) == 1
 
         post_data = List.first(body["data"])

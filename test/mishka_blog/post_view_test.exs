@@ -23,7 +23,7 @@ defmodule MishkaBlog.Test.PostViewTest do
 
         view = create_post_view!(post_id: post.id, user_id: user.id)
 
-        assert is_binary(view.id)
+        assert {:ok, _} = Ecto.UUID.cast(view.id)
         assert String.length(view.id) == 36
       end
 
@@ -52,7 +52,7 @@ defmodule MishkaBlog.Test.PostViewTest do
         assert view.user_id == user.id
         assert view.ip_address == "192.168.1.100"
         assert view.user_agent == "Mozilla/5.0"
-        assert view.inserted_at != nil
+        assert %DateTime{} = view.inserted_at
       end
 
       test "creates view for guest user (null user_id)" do
@@ -76,7 +76,7 @@ defmodule MishkaBlog.Test.PostViewTest do
         assert view.post_id == post.id
         assert view.user_id == nil
         assert view.ip_address == "192.168.1.100"
-        assert view.inserted_at != nil
+        assert %DateTime{} = view.inserted_at
       end
 
       test "upsert prevents duplicate authenticated user views" do
@@ -239,8 +239,7 @@ defmodule MishkaBlog.Test.PostViewTest do
 
         view = create_post_view!(post_id: post.id, user_id: user.id)
 
-        assert view.inserted_at != nil
-        assert is_struct(view.inserted_at, DateTime)
+        assert %DateTime{} = view.inserted_at
       end
 
       test "requires ip_address for all views" do

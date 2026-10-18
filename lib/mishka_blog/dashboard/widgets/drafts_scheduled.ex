@@ -5,8 +5,9 @@
 defmodule MishkaBlog.Dashboard.Widgets.DraftsScheduled do
   @moduledoc """
   Dashboard widget (a `dashboard:widgets` plugin): draft vs scheduled post counts plus the latest
-  unpublished posts — drafts with their age, scheduled posts with their publish time (`BlogPost`
-  `:master_read`). A master sees every site's pipeline; a tenant admin only their own site's.
+  unpublished posts — drafts with their age, scheduled posts with their publish time (`BlogPost`),
+  read as the viewer through `MishkaBlog.Dashboard.Scope`: a master sees every site's pipeline, a
+  site's admin only their own site's, and a viewer without `admin:dashboard:blog:post` none.
 
   How many posts the list holds is the viewer's own setting — the card's gear in customize mode, or
   Settings → Blog → Dashboard widgets, both writing the same per-user row
@@ -18,6 +19,7 @@ defmodule MishkaBlog.Dashboard.Widgets.DraftsScheduled do
   import Phoenix.Component
   require Ash.Query
 
+  alias MishkaBlog.Dashboard.Scope
   alias MishkaCmsCore.Dashboard.Widget
 
   @count %{
@@ -54,24 +56,22 @@ defmodule MishkaBlog.Dashboard.Widgets.DraftsScheduled do
   end
 
   @doc """
-  Loads this widget's data off the dashboard render (in a Task), scoped to the viewer and sized by
+  Loads this widget's data off the dashboard render (in a Task), read as the viewer and sized by
   their own "Posts to list" setting. Called as `load/1` (a direct call, no dashboard) it uses the
   declared default.
   """
   def load(user, config \\ %{}) do
-    scope = Widget.scope(user)
+    base = Scope.query(MishkaBlog.BlogPost, user)
 
-    %{results: latest} =
-      MishkaBlog.BlogPost
-      |> Ash.Query.for_read(:master_read, %{}, authorize?: false)
-      |> scope_filter(scope)
+    latest =
+      base
       |> Ash.Query.filter(status in [:draft, :scheduled])
       |> Ash.Query.sort(inserted_at: :desc)
-      |> Ash.read!(page: [limit: Map.get(config, @count.key, @count.default)], authorize?: false)
+      |> Scope.list(Map.get(config, @count.key, @count.default))
 
     %{
-      drafts: count_status(scope, :draft),
-      scheduled: count_status(scope, :scheduled),
+      drafts: count_status(base, :draft),
+      scheduled: count_status(base, :scheduled),
       latest: latest
     }
   end
@@ -117,16 +117,8 @@ defmodule MishkaBlog.Dashboard.Widgets.DraftsScheduled do
     """
   end
 
-  defp count_status(scope, value) do
-    MishkaBlog.BlogPost
-    |> Ash.Query.for_read(:master_read, %{}, authorize?: false)
-    |> scope_filter(scope)
-    |> Ash.Query.filter(status == ^value)
-    |> Ash.count!(authorize?: false)
-  end
-
-  defp scope_filter(query, nil), do: query
-  defp scope_filter(query, site_id), do: Ash.Query.filter(query, site_id == ^site_id)
+  defp count_status(base, value),
+    do: base |> Ash.Query.filter(status == ^value) |> Scope.count()
 
   defp time_label(%{status: :scheduled, scheduled_publish_at: %DateTime{} = at}),
     do: MishkaCmsCore.Localized.datetime(at, :MMMdHm)

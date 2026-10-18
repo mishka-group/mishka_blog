@@ -194,7 +194,8 @@ defmodule MishkaBlog.Blogger do
 
     version_extensions authorizers: [Ash.Policy.Authorizer]
 
-    mixin {MishkaBlog.Resources.Mixins.BloggerPaperTrailMixin, :postgres, []}
+    mixin {MishkaBlog.Resources.Mixins.PaperTrailMixin, :postgres,
+           ["mishka_blog_blogger_versions"]}
   end
 
   # JSON API configuration for REST endpoints
@@ -1463,10 +1464,7 @@ defmodule MishkaBlog.Blogger do
         blogger_id = Ash.Query.get_argument(query, :blogger_id)
 
         # First verify the blogger belongs to the tenant
-        case Ash.get(MishkaBlog.Blogger, blogger_id,
-               tenant: context.tenant,
-               authorize?: false
-             ) do
+        case Ash.get(MishkaBlog.Blogger, blogger_id, Ash.Scope.to_opts(context)) do
           {:ok, _blogger} ->
             query
             |> Ash.Query.filter(id == ^blogger_id)
@@ -1542,14 +1540,20 @@ defmodule MishkaBlog.Blogger do
         blogger_id = input.arguments.id
         version_id = input.arguments.version_id
 
-        Ash.get(MishkaBlog.Blogger, blogger_id,
-          action: :read,
-          tenant: context.tenant,
-          authorize?: false
-        )
+        Ash.get(MishkaBlog.Blogger, blogger_id, Ash.Scope.to_opts(context, action: :read))
         |> case do
           {:ok, blogger} when not is_nil(blogger) ->
-            if !is_nil(blogger.archived_at) do
+            if is_nil(blogger.archived_at) do
+              tenant = blogger.site_id
+
+              blogger
+              |> Ash.Changeset.for_update(
+                :restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: tenant)
+              )
+              |> Ash.update()
+            else
               {:error,
                Ash.Error.Invalid.exception(
                  errors: [
@@ -1563,16 +1567,6 @@ defmodule MishkaBlog.Blogger do
                    )
                  ]
                )}
-            else
-              tenant = blogger.site_id
-
-              blogger
-              |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                actor: context.actor,
-                tenant: tenant,
-                authorize?: false
-              )
-              |> Ash.update()
             end
 
           _ ->
@@ -1617,13 +1611,22 @@ defmodule MishkaBlog.Blogger do
         blogger_id = input.arguments.id
         version_id = input.arguments.version_id
 
-        Ash.get(MishkaBlog.Blogger, blogger_id,
-          action: :master_get,
-          authorize?: false
+        Ash.get(
+          MishkaBlog.Blogger,
+          blogger_id,
+          Ash.Scope.to_opts(context, action: :master_get, tenant: nil)
         )
         |> case do
           {:ok, blogger} when not is_nil(blogger) ->
-            if !is_nil(blogger.archived_at) do
+            if is_nil(blogger.archived_at) do
+              blogger
+              |> Ash.Changeset.for_update(
+                :master_restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: nil)
+              )
+              |> Ash.update()
+            else
               {:error,
                Ash.Error.Invalid.exception(
                  errors: [
@@ -1637,13 +1640,6 @@ defmodule MishkaBlog.Blogger do
                    )
                  ]
                )}
-            else
-              blogger
-              |> Ash.Changeset.for_update(:master_restore_version, %{version_id: version_id},
-                actor: context.actor,
-                authorize?: false
-              )
-              |> Ash.update()
             end
 
           _ ->
@@ -1663,66 +1659,11 @@ defmodule MishkaBlog.Blogger do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        blogger_id = input.arguments.blogger_id
-        version_id = input.arguments.version_id
-
-        with {:ok, blogger} when not is_nil(blogger) <-
-               Ash.get(MishkaBlog.Blogger, blogger_id,
-                 tenant: context.tenant,
-                 authorize?: false
-               ),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.Blogger.Version, version_id,
-                 action: :get_any,
-                 authorize?: false
-               ),
-             :valid <- if(version.version_source_id == blogger_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-
-          preview =
-            Enum.reduce(restored_attrs, blogger, fn {key, value}, acc ->
-              key_atom = if is_binary(key), do: String.to_existing_atom(key), else: key
-
-              if key_atom in accepted_fields do
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
-
-          {:ok, preview}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "blogger profile")
-                     )
-                 )
-               ]
-             )}
-
-          {:error, _} ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Blogger)}
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Blogger)}
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :blogger_id,
+           version: MishkaBlog.Blogger.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           label: dgettext_noop("errors", "blogger profile")}
     end
 
     action :master_preview_version, :struct do
@@ -1734,66 +1675,12 @@ defmodule MishkaBlog.Blogger do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
-        blogger_id = input.arguments.blogger_id
-        version_id = input.arguments.version_id
-
-        with {:ok, blogger} when not is_nil(blogger) <-
-               Ash.get(MishkaBlog.Blogger, blogger_id,
-                 action: :master_get,
-                 authorize?: false
-               ),
-             {:ok, version} when not is_nil(version) <-
-               Ash.get(MishkaBlog.Blogger.Version, version_id,
-                 action: :get_any,
-                 authorize?: false
-               ),
-             :valid <- if(version.version_source_id == blogger_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-
-          preview =
-            Enum.reduce(restored_attrs, blogger, fn {key, value}, acc ->
-              key_atom = if is_binary(key), do: String.to_existing_atom(key), else: key
-
-              if key_atom in accepted_fields do
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
-
-          {:ok, preview}
-        else
-          :invalid ->
-            {:error,
-             Ash.Error.Invalid.exception(
-               errors: [
-                 Ash.Error.Changes.InvalidAttribute.exception(
-                   field: :version_id,
-                   message:
-                     MishkaBlog.Resources.Changes.RestoreVersion.refusal(
-                       dgettext_noop("errors", "blogger profile")
-                     )
-                 )
-               ]
-             )}
-
-          {:error, _} ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Blogger)}
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Blogger)}
-        end
-      end
+      run {MishkaBlog.Resources.Actions.PreviewVersion,
+           record: :blogger_id,
+           version: MishkaBlog.Blogger.Version,
+           fields: List.delete(@admin_fields, :site_id),
+           master: true,
+           label: dgettext_noop("errors", "blogger profile")}
     end
   end
 

@@ -4,9 +4,9 @@
 
 defmodule MishkaBlog.Dashboard.Widgets.RecentPosts do
   @moduledoc """
-  Dashboard widget (a `dashboard:widgets` plugin): the latest blog posts with their status, read
-  through `BlogPost`'s cross-tenant `:master_read`. A master sees every site's posts; a tenant admin
-  only their own site's.
+  Dashboard widget (a `dashboard:widgets` plugin): the latest blog posts with their status, read as
+  the viewer through `MishkaBlog.Dashboard.Scope`: a master sees every site's posts, a site's admin
+  only their own site's, and a viewer without `admin:dashboard:blog:post` none.
 
   How many posts it reads is the viewer's own setting — the card's gear in customize mode, or
   Settings → Blog → Dashboard widgets, both writing the same per-user row
@@ -16,8 +16,8 @@ defmodule MishkaBlog.Dashboard.Widgets.RecentPosts do
   use MishkaInstaller.Event.Hook, event: "dashboard:widgets", initial: %{priority: 50}
   use Gettext, backend: MishkaCmsCore.Gettext
   import Phoenix.Component
-  require Ash.Query
 
+  alias MishkaBlog.Dashboard.Scope
   alias MishkaCmsCore.Dashboard.Widget
   alias MishkaCmsCore.Localized
 
@@ -55,22 +55,20 @@ defmodule MishkaBlog.Dashboard.Widgets.RecentPosts do
   end
 
   @doc """
-  Loads this widget's data off the dashboard render (in a Task), scoped to the viewer and sized by
+  Loads this widget's data off the dashboard render (in a Task), read as the viewer and sized by
   their own "Posts to show" setting. Called as `load/1` (a direct call, no dashboard) it uses the
   declared default.
   """
   def load(user, config \\ %{}) do
     count = Map.get(config, @count.key, @count.default)
-    scope = Widget.scope(user)
 
-    %{results: posts} =
+    posts =
       MishkaBlog.BlogPost
-      |> Ash.Query.for_read(:master_read, %{}, authorize?: false)
-      |> scope_filter(scope)
+      |> Scope.query(user)
       |> Ash.Query.sort(inserted_at: :desc)
       |> Ash.Query.select([:id, :title, :excerpt, :status, :featured, :reading_time_minutes])
-      |> Ash.Query.load([:view_count, :comment_count, authors(scope)])
-      |> Ash.read!(page: [limit: count], actor: user, tenant: scope, authorize?: false)
+      |> Ash.Query.load([:view_count, :comment_count, authors(Widget.scope(user))])
+      |> Scope.list(count)
 
     %{posts: posts, count: count}
   end
@@ -151,9 +149,8 @@ defmodule MishkaBlog.Dashboard.Widgets.RecentPosts do
   defp views_hint,
     do: gettext("Page views are not recorded yet. Counting them is on our roadmap.")
 
-  defp scope_filter(query, nil), do: query
-  defp scope_filter(query, site_id), do: Ash.Query.filter(query, site_id == ^site_id)
-
+  # A master reads a post's bloggers through the bloggers' master read, a site's admin through
+  # their tenant read.
   defp authors(nil), do: :master_bloggers
   defp authors(_site_id), do: :tenant_bloggers
 
