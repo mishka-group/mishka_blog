@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_blog/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # This file contains the configuration for Credo and you are probably reading
 # this after creating it with `mix credo.gen.config`.
 #
@@ -83,8 +87,15 @@
             # You can customize the priority of any check
             # Priority values are: `low, normal, high, higher`
             #
+            # Tests name Ash errors and resources in full where they assert on them; lib aliases a
+            # module called more than twice.
             {Credo.Check.Design.AliasUsage,
-             [priority: :low, if_nested_deeper_than: 2, if_called_more_often_than: 0]},
+             [
+               priority: :low,
+               if_nested_deeper_than: 2,
+               if_called_more_often_than: 2,
+               files: %{excluded: ["test/"]}
+             ]},
             {Credo.Check.Design.TagFIXME, []},
             # You can also customize the exit_status of each check.
             # If you don't want TODO comments to cause `mix credo` to fail, just
@@ -131,7 +142,8 @@
             {Credo.Check.Refactor.MatchInCondition, []},
             {Credo.Check.Refactor.NegatedConditionsInUnless, []},
             {Credo.Check.Refactor.NegatedConditionsWithElse, []},
-            {Credo.Check.Refactor.Nesting, []},
+            # StreamData generators in the property tests are written as nested `bind` calls.
+            {Credo.Check.Refactor.Nesting, [files: %{excluded: [~r"_property_test\.exs$"]}]},
             {Credo.Check.Refactor.RedundantWithClauseResult, []},
             {Credo.Check.Refactor.RejectReject, []},
             {Credo.Check.Refactor.UnlessWithElse, []},
@@ -164,7 +176,14 @@
             {Credo.Check.Warning.UnusedTupleOperation, []},
             {Credo.Check.Warning.WrongTestFilename, []}
           ] ++
-            Enum.map(ExSlop.recommended_checks(), &{&1, []}) ++
+            Enum.map(ExSlop.recommended_checks(), fn
+              # Lists in tests hold a few items, so comparing `length/1` costs nothing there.
+              ExSlop.Check.Refactor.LengthComparison ->
+                {ExSlop.Check.Refactor.LengthComparison, [files: %{excluded: ["test/"]}]}
+
+              check ->
+                {check, []}
+            end) ++
             [
               {Jump.CredoChecks.AssertElementSelectorCanNeverFail, []},
               {Jump.CredoChecks.AssertReceiveTimeout, []},
