@@ -4,28 +4,29 @@
 
 defmodule MishkaBlog.Plugins.SitemapUrls do
   @moduledoc """
-  Adds the blog's posts, categories, bloggers and teams to a site's `/sitemap.xml`, through
-  the
+  Adds the blog's posts, categories, bloggers, teams and the tags that ask to be indexed to a
+  site's `/sitemap.xml`, through the
   `seo:sitemap:urls` mishka_installer hook `MishkaCmsCore.Runtime.Compilers.SitemapCompiler` fires
-  when it builds a site's sitemap. A post or a category written rebuilds its site's sitemap,
-  because those resources list `MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh`.
+  when it builds a site's sitemap. A post, a category, a tag, a blogger or a team written rebuilds its
+  site's sitemap, because those resources list
+  `MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh`.
 
   Core lists the blog's pages whose only capture is the language. `/:lang/blog/:slug` also holds a
   slug only this extension can fill, so core hands such a page over in the payload's `pages`, and
-  this fills it:
+  this fills it. A page is listed exactly when its own head lets a search engine index it, so every
+  row a visitor can open at an indexable address is listed, with or without posts:
 
     * a published post, at the post page, with `lastmod` its `updated_at` and `images` its
       `featured_image_url`, or none when it has no such image;
-    * a category holding a published post in its own language, at its page, with `lastmod` its
-      `updated_at`;
-    * a blogger with a published post, and a team one of whose members has one, at its page in
-      each language the page answers, with `lastmod` its `updated_at`.
-
-  A tag is never listed: its page says `noindex` (`MishkaBlog.Plugins.PageSeo`).
+    * an active category, at its page, with `lastmod` its `updated_at`;
+    * a blogger who is not archived, and an active team, at its page in each language the page
+      answers, with `lastmod` its `updated_at`;
+    * a tag only when its own `seo_tags` hold a robots meta that says `index`: a public tag's page
+      says `noindex` (`MishkaBlog.Plugins.PageSeo`) unless its own robots meta replaces that.
 
   Each row at its own language and slug, at the address the site's URL mode gives it
   (`MishkaCmsCore.Runtime.Languages.url/3`). A kind is listed only while `pages` holds its page —
-  the page whose `extra` says it shows that kind (`"blog:post"`, `"blog:category"`,
+  the page whose `extra` says it shows that kind (`"blog:post"`, `"blog:category"`, `"blog:tag"`,
   `"blog:author"`, `"blog:team"`), which every page `MishkaBlog.Provision` writes says — so a page
   switched off, closed to visitors or marked noindex lists nothing — and a row only in a
   language that page answers (`PageEditions.served_languages/2`), so no address here 404s. A row
@@ -46,7 +47,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
   require Ash.Query
 
-  alias MishkaBlog.{Blogger, BlogPost, Collection, Team}
+  alias MishkaBlog.{Blogger, BlogPost, Collection, Tag, Team}
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
   alias MishkaCmsCore.Runtime.{Languages, PageEditions, Seo}
 
@@ -57,7 +58,8 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
      [:slug, :language, :updated_at, :featured_image_url, :permissions, :seo_tags],
      [:effective_permissions]},
     {"blog:category", Collection, [:slug, :language, :updated_at, :permissions, :seo_tags],
-     [:effective_permissions]}
+     [:effective_permissions]},
+    {"blog:tag", Tag, [:slug, :language, :updated_at, :permissions, :seo_tags], []}
   ]
 
   # A blogger or a team is one row in every language, and opens with no permission of its own.
@@ -84,7 +86,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
           page ->
             resource
             |> rows(fields, loads, PageEditions.served_languages(page, site_id), site_id)
-            |> Stream.filter(&PageEditions.listed?(%{&1 | permissions: opens_with(&1)}))
+            |> Stream.filter(&indexed?/1)
             |> Stream.map(&entry(page, &1, site_id))
         end
       end)
@@ -108,7 +110,6 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
     resource
     |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site_id)
-    |> with_published_post(resource)
     |> Ash.Query.select([:slug, :updated_at])
     |> SitemapCompiler.stream_rows(actor: nil, tenant: site_id)
     |> Stream.flat_map(fn row ->
@@ -120,44 +121,37 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
     end)
   end
 
-  defp with_published_post(query, Blogger),
-    do: Ash.Query.filter(query, exists(tenant_posts, status == :published))
-
-  defp with_published_post(query, Team),
-    do:
-      Ash.Query.filter(
-        query,
-        exists(tenant_members, exists(tenant_posts, status == :published))
-      )
-
   defp rows(_resource, _fields, _loads, [], _site_id), do: []
 
   defp rows(resource, fields, loads, languages, site_id) do
     resource
     |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site_id)
     |> Ash.Query.filter(language in ^languages)
-    |> published(resource)
+    |> with_robots_meta(resource)
     |> Ash.Query.select(fields)
     |> Ash.Query.load(loads)
     |> SitemapCompiler.stream_rows(actor: nil, tenant: site_id)
   end
+
+  # Whether the page of `row` lets a search engine index it. A post or a category does unless it
+  # names a permission or its robots meta says `noindex`; a tag's page says `noindex` unless its own
+  # robots meta replaces that.
+  defp indexed?(%Tag{} = tag),
+    do: PageEditions.listed?(tag) and PageEditions.robots(tag.seo_tags) == :index
+
+  defp indexed?(row), do: PageEditions.listed?(%{row | permissions: opens_with(row)})
 
   defp opens_with(%{effective_permissions: permissions}) when is_list(permissions),
     do: permissions
 
   defp opens_with(row), do: row.permissions
 
-  # `:public_list` already holds a post to the published ones; a category is listed while a published
-  # post in its own language is filed under it — its page lists that language's alone, so
-  # `published_post_count`, which counts every language, would list a page that opens empty.
-  defp published(query, BlogPost), do: query
+  # A tag whose `seo_tags` are empty holds no robots meta to ask to be indexed by, so only the ones
+  # with some are read.
+  defp with_robots_meta(query, Tag),
+    do: Ash.Query.filter(query, fragment("cardinality(?) > 0", seo_tags))
 
-  defp published(query, _term) do
-    Ash.Query.filter(
-      query,
-      exists(tenant_posts, status == :published and language == parent(language))
-    )
-  end
+  defp with_robots_meta(query, _resource), do: query
 
   defp entry(page, %BlogPost{} = post, site_id) do
     %{

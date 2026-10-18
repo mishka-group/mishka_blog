@@ -36,7 +36,8 @@ defmodule MishkaBlog.Tag do
     authorizers: [Ash.Policy.Authorizer],
     notifiers: [
       Ash.Notifier.PubSub,
-      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
+      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
+      MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh
     ]
 
   import Phoenix.Component, only: [sigil_H: 2]

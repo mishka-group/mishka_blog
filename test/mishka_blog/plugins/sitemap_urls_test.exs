@@ -4,23 +4,27 @@
 
 defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   @moduledoc """
-  What the blog adds to a site's sitemap: every post, category and tag a visitor can open, at the
-  address the blog's own page answers it on, and nothing else.
+  What the blog adds to a site's sitemap: every post, category, blogger and team a visitor can open at
+  an address a search engine may index, and the tags that ask for it, at the address the blog's own
+  page answers it on, and nothing else.
 
-  Core hands the plugin the site's indexable pages (`MishkaCmsCore.Runtime.PageEditions.indexable/1`);
-  these tests hand it the same read, so a page switched off here is missing from it exactly as it is
-  from core's. Every status the generators could pick is pinned. What it returns is a stream, as
-  core reads it, so each test reads it to the end.
+  A row is listed exactly when the head of its page lets a search engine index it — the last
+  describe holds each kind's listing to the robots meta `MishkaBlog.Plugins.PageSeo` and core's head
+  write for it. Core hands the plugin the site's indexable pages
+  (`MishkaCmsCore.Runtime.PageEditions.indexable/1`); these tests hand it the same read, so a page
+  switched off here is missing from it exactly as it is from core's. Every status the generators
+  could pick is pinned. What it returns is a stream, as core reads it, so each test reads it to the
+  end.
   """
   use MishkaBlog.DataCase,
     async: false,
     parameterize: for(mode <- ~w(prefix_others prefix_all), do: %{mode: mode})
 
-  alias MishkaBlog.Plugins.SitemapUrls
+  alias MishkaBlog.Plugins.{PageSeo, SitemapUrls}
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Helpers
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
-  alias MishkaCmsCore.Runtime.PageEditions
+  alias MishkaCmsCore.Runtime.{Languages, PageEditions, Seo}
   alias MishkaCmsCore.Runtime.States.{AssetsState, SettingsState, SiteState}
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.EventHandler
@@ -108,33 +112,71 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   end
 
   describe "bloggers and teams" do
-    test "a blogger with a published post and that blogger's team are listed, once each", %{
-      site: site
-    } do
+    test "every blogger who is not archived and every active team is listed, with posts or without",
+         %{site: site} do
       record_page!(site, "/blog/author/:slug", "blog:author")
       record_page!(site, "/blog/team/:slug", "blog:team")
 
       writer = create_blogger!(site_id: site.id, slug: "shahryar")
-      create_blogger!(site_id: site.id, slug: "silent")
+      silent = create_blogger!(site_id: site.id, slug: "silent")
+      archived = create_blogger!(site_id: site.id, slug: "archived")
       team = create_team!(site_id: site.id, slug: "core", status: :active)
-      create_team!(site_id: site.id, slug: "empty", status: :active)
+      empty = create_team!(site_id: site.id, slug: "empty", status: :active)
+      create_team!(site_id: site.id, slug: "idle", status: :inactive)
+      create_team!(site_id: site.id, slug: "planned", status: :draft)
       create_team_member!(team_id: team.id, blogger_id: writer.id)
 
       post = post!(site, :published)
       create_post_blogger!(post_id: post.id, blogger_id: writer.id)
 
-      assert paths(site) == ["/blog/author/shahryar", "/blog/team/core"]
+      archived
+      |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id)
+      |> Ash.destroy!(authorize?: false)
 
       assert site |> urls() |> Map.new(&{&1.path, &1.lastmod}) == %{
                "/blog/author/shahryar" => writer.updated_at,
-               "/blog/team/core" => team.updated_at
+               "/blog/author/silent" => silent.updated_at,
+               "/blog/team/core" => team.updated_at,
+               "/blog/team/empty" => empty.updated_at
              }
+    end
+
+    test "a blogger with no post at all is listed", %{site: site} do
+      record_page!(site, "/blog/author/:slug", "blog:author")
+      create_blogger!(site_id: site.id, slug: "arian-alijani")
+
+      assert paths(site) == ["/blog/author/arian-alijani"]
+    end
+
+    test "each is listed in every language its page answers", %{site: site, mode: mode} do
+      item_page!(site, :author)
+      item_page!(site, :team)
+      create_blogger!(site_id: site.id, slug: "shahryar")
+      create_team!(site_id: site.id, slug: "core", status: :active)
+
+      assert paths(site) ==
+               Enum.sort([
+                 english(mode, "/blog/author/shahryar"),
+                 "/fa/blog/author/shahryar",
+                 english(mode, "/blog/team/core"),
+                 "/fa/blog/team/core"
+               ])
     end
 
     test "nothing is listed without their pages", %{site: site} do
       writer = create_blogger!(site_id: site.id)
+      create_team!(site_id: site.id, status: :active)
       post = post!(site, :published)
       create_post_blogger!(post_id: post.id, blogger_id: writer.id)
+
+      assert paths(site) == []
+    end
+
+    test "none is listed while their page is noindex or closed to visitors", %{site: site} do
+      item_page!(site, :author, seo_tags: robots("noindex, follow"))
+      item_page!(site, :team, permissions: ["members:read"])
+      create_blogger!(site_id: site.id)
+      create_team!(site_id: site.id, status: :active)
 
       assert paths(site) == []
     end
@@ -302,7 +344,7 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   end
 
   describe "categories and tags" do
-    test "a category holding a published post is listed, with its updated_at; a tag is not", %{
+    test "an active category is listed with its updated_at, with a published post or without", %{
       site: site,
       mode: mode
     } do
@@ -312,18 +354,17 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       english = post!(site, :published)
       persian = post!(site, :published, language: "fa")
 
-      category = create_collection!(site_id: site.id, status: :active, language: "en")
-      create_post_collection!(post_id: english.id, collection_id: category.id)
+      filled = create_collection!(site_id: site.id, status: :active, language: "en")
+      create_post_collection!(post_id: english.id, collection_id: filled.id)
+      empty = create_collection!(site_id: site.id, status: :active, language: "fa")
 
       tag = create_blog_tag!(site_id: site.id, language: "fa")
       create_post_tag!(post_id: persian.id, tag_id: tag.id)
 
-      assert urls(site) == [
-               %{
-                 path: english(mode, "/blog/category/#{category.slug}"),
-                 lastmod: category.updated_at
-               }
-             ]
+      assert site |> urls() |> Map.new(&{&1.path, &1.lastmod}) == %{
+               english(mode, "/blog/category/#{filled.slug}") => filled.updated_at,
+               "/fa/blog/category/#{empty.slug}" => empty.updated_at
+             }
     end
 
     test "one that names a permission, or whose own robots meta says noindex or none, is not", %{
@@ -331,87 +372,251 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       mode: mode
     } do
       item_page!(site, :category)
-      item_page!(site, :tag)
 
-      # A POST OF ITS OWN IN EACH CATEGORY. One post filed under all three would be filed under the
-      # locked one, which locks it — and the open category would then hold nothing a guest may open.
       [category | _hidden] =
-        for overrides <- [[], [permissions: ["members:read"]], [seo_tags: robots("noindex")]] do
-          category =
-            create_collection!([site_id: site.id, status: :active, language: "en"] ++ overrides)
-
-          create_post_collection!(post_id: post!(site, :published).id, collection_id: category.id)
-          category
+        for overrides <- [
+              [],
+              [permissions: ["members:read"]],
+              [seo_tags: robots("noindex")],
+              [seo_tags: robots("none")]
+            ] do
+          create_collection!([site_id: site.id, status: :active, language: "en"] ++ overrides)
         end
 
       assert paths(site) == [english(mode, "/blog/category/#{category.slug}")]
     end
 
-    # ITS PAGE LISTS ITS OWN LANGUAGE'S POSTS ALONE, so one whose published posts are all in another
-    # language opens on "nothing is published" — the rule the blog kit's `with_public_post` keeps.
-    # THE SITEMAP IS READ AS A GUEST, as a crawler reads the site: a category or a tag whose only
-    # published post is locked opens on "nothing is published" for them, so it is not listed.
-    test "one whose only published post is locked is not", %{site: site, mode: mode} do
+    # A CATEGORY'S POSTS DO NOT DECIDE IT. Its page opens on "nothing is published" for a guest when
+    # the posts filed under it are locked, in another language or drafts, and the head still says
+    # `index`, so it is listed.
+    test "one whose posts are locked, in another language or drafts is listed all the same", %{
+      site: site,
+      mode: mode
+    } do
       item_page!(site, :category)
-      item_page!(site, :tag)
 
-      locked = post!(site, :published, permissions: ["members:read"])
-      open = post!(site, :published)
+      posts = [
+        post!(site, :published, permissions: ["members:read"]),
+        post!(site, :published, language: "fa"),
+        post!(site, :draft)
+      ]
 
-      [listed, _hidden] =
-        for post <- [open, locked] do
+      categories =
+        for post <- posts do
           category = create_collection!(site_id: site.id, status: :active, language: "en")
           create_post_collection!(post_id: post.id, collection_id: category.id)
           category
         end
 
-      tag = create_blog_tag!(site_id: site.id, language: "en")
-      create_post_tag!(post_id: locked.id, tag_id: tag.id)
-
-      assert paths(site) == [english(mode, "/blog/category/#{listed.slug}")]
+      assert paths(site) ==
+               categories
+               |> Enum.map(&english(mode, "/blog/category/#{&1.slug}"))
+               |> Enum.sort()
     end
 
-    test "one whose only published post is in another language is not", %{site: site} do
+    test "a draft or inactive category and one in a language the site lacks are not", %{
+      site: site,
+      mode: mode
+    } do
       item_page!(site, :category)
+
+      open = create_collection!(site_id: site.id, status: :active, language: "en")
+      create_collection!(site_id: site.id, status: :draft, language: "en")
+      create_collection!(site_id: site.id, status: :archived, language: "en")
+      create_collection!(site_id: site.id, status: :active, language: "de")
+
+      assert paths(site) == [english(mode, "/blog/category/#{open.slug}")]
+    end
+
+    test "a tag is not listed: its page says noindex", %{site: site} do
       item_page!(site, :tag)
 
-      persian = post!(site, :published, language: "fa")
-
-      category = create_collection!(site_id: site.id, status: :active, language: "en")
-      create_post_collection!(post_id: persian.id, collection_id: category.id)
-
-      tag = create_blog_tag!(site_id: site.id, language: "en")
-      create_post_tag!(post_id: persian.id, tag_id: tag.id)
+      post = post!(site, :published)
+      plain = create_blog_tag!(site_id: site.id, language: "en")
+      described = create_blog_tag!(site_id: site.id, language: "en", seo_tags: description_meta())
+      create_post_tag!(post_id: post.id, tag_id: plain.id)
+      create_post_tag!(post_id: post.id, tag_id: described.id)
 
       assert urls(site) == []
     end
 
-    test "an empty one, one holding only a draft, a draft category and an unlisted language are not",
-         %{site: site} do
-      item_page!(site, :category)
+    # A TAG'S OWN ROBOTS META WINS IN ITS HEAD, so a tag that says `index` is a page a search engine
+    # may index, and is listed with its updated_at — unless it names a permission.
+    test "a tag whose own robots meta says index is listed; noindex, none and locked ones are not",
+         %{site: site, mode: mode} do
       item_page!(site, :tag)
 
-      published = post!(site, :published)
-      draft = post!(site, :draft)
+      indexed =
+        create_blog_tag!(site_id: site.id, language: "en", seo_tags: robots("index, follow"))
 
-      create_collection!(site_id: site.id, status: :active, language: "en")
-      create_blog_tag!(site_id: site.id, language: "en")
+      following = create_blog_tag!(site_id: site.id, language: "fa", seo_tags: robots("follow"))
 
-      for {status, language, post} <- [
-            {:active, "en", draft},
-            {:draft, "en", published},
-            {:active, "de", published}
+      for overrides <- [
+            [seo_tags: robots("noindex, follow")],
+            [seo_tags: robots("none")],
+            [seo_tags: robots("index, follow"), permissions: ["members:read"]],
+            [seo_tags: robots("index, follow"), language: "de"]
           ] do
-        category = create_collection!(site_id: site.id, status: status, language: language)
-        create_post_collection!(post_id: post.id, collection_id: category.id)
+        create_blog_tag!([site_id: site.id, language: "en"] ++ overrides)
       end
 
-      for {language, post} <- [{"en", draft}, {"de", published}] do
-        tag = create_blog_tag!(site_id: site.id, language: language)
-        create_post_tag!(post_id: post.id, tag_id: tag.id)
-      end
+      assert site |> urls() |> Map.new(&{&1.path, &1.lastmod}) == %{
+               english(mode, "/blog/tag/#{indexed.slug}") => indexed.updated_at,
+               "/fa/blog/tag/#{following.slug}" => following.updated_at
+             }
+    end
+  end
 
-      assert urls(site) == []
+  # EACH KIND'S LISTING IS HELD TO THE HEAD ITS PAGE WRITES. A row is listed exactly when the robots
+  # meta `MishkaBlog.Plugins.PageSeo` and core's head give its page lets a search engine index it and
+  # it opens with no permission — a locked page is one a crawler is sent away from, whatever it says.
+  describe "what is listed is what the head lets a search engine index" do
+    @host "blog.example.com"
+
+    defp base, do: Seo.base(@host)
+
+    defp description_meta,
+      do: [%{tag: "meta", attrs: %{"name" => "description"}, content: "A description"}]
+
+    # The head core builds for the page at `path` showing the row `slug` names, as
+    # `MishkaCmsWeb.RuntimeLive` builds it: whether its robots meta says index, and what it opens with.
+    defp head_of(site, path, record, slug) do
+      params = %{"slug" => slug}
+
+      given =
+        Seo.given(
+          %{title: "Blog", path: path, language: "en", seo: %{description: nil, schema: []}},
+          site_id: site.id,
+          url: base() <> Languages.url(path, params, site.id),
+          params: params,
+          record: record
+        )
+
+      {:reply, :halt, answered} = PageSeo.call(given)
+      head = answered |> Seo.accept(given) |> Seo.head(base: base())
+
+      directives =
+        for {"meta", attrs} <- head.tags,
+            {"name", "robots"} in attrs,
+            {"content", content} <- attrs,
+            directive <- String.split(content, [",", " "], trim: true),
+            do: directive
+
+      %{
+        indexed?: directives != [] and directives -- ["noindex", "none"] == directives,
+        head: head
+      }
+    end
+
+    defp says_index?(site, path, record, slug) do
+      %{indexed?: indexed?, head: head} = head_of(site, path, record, slug)
+      indexed? and head.permissions == []
+    end
+
+    # Every row of `rows` against the sitemap: listed when and only when its page says index, and at
+    # least one of each in the set so that neither side is vacuous.
+    defp assert_listed_as_indexed(site, path, record, rows) do
+      listed = MapSet.new(paths(site))
+
+      verdicts =
+        for row <- rows do
+          address = String.replace(path, ":slug", row.slug)
+          says = says_index?(site, path, record, row.slug)
+
+          assert MapSet.member?(listed, address) == says,
+                 "#{record} #{row.slug} is #{if says, do: "indexable", else: "not indexable"} but " <>
+                   "#{if MapSet.member?(listed, address), do: "listed", else: "not listed"}"
+
+          says
+        end
+
+      assert true in verdicts and false in verdicts
+    end
+
+    test "posts", %{site: site} do
+      record_page!(site, "/blog/:slug", "blog:post")
+
+      rows =
+        for overrides <- [
+              [],
+              [seo_tags: robots("index, follow")],
+              [seo_tags: robots("noindex, follow")],
+              [seo_tags: robots("none")],
+              [permissions: ["members:read"]],
+              [seo_tags: robots("index"), permissions: ["members:read"]]
+            ],
+            do: post!(site, :published, overrides)
+
+      assert_listed_as_indexed(site, "/blog/:slug", "blog:post", rows)
+    end
+
+    test "categories, with posts and without", %{site: site} do
+      record_page!(site, "/blog/category/:slug", "blog:category")
+
+      rows =
+        for overrides <- [
+              [],
+              [seo_tags: robots("index, follow")],
+              [seo_tags: robots("noindex, follow")],
+              [seo_tags: robots("none")],
+              [permissions: ["members:read"]]
+            ] do
+          create_collection!([site_id: site.id, status: :active, language: "en"] ++ overrides)
+        end
+
+      filed = post!(site, :published)
+      create_post_collection!(post_id: filed.id, collection_id: hd(rows).id)
+
+      assert_listed_as_indexed(site, "/blog/category/:slug", "blog:category", rows)
+    end
+
+    test "tags, whatever they hold", %{site: site} do
+      record_page!(site, "/blog/tag/:slug", "blog:tag")
+
+      rows =
+        for overrides <- [
+              [],
+              [seo_tags: description_meta()],
+              [seo_tags: robots("index, follow")],
+              [seo_tags: robots("noindex, follow")],
+              [seo_tags: robots("none")],
+              [permissions: ["members:read"]],
+              [seo_tags: robots("index, follow"), permissions: ["members:read"]]
+            ] do
+          create_blog_tag!([site_id: site.id, language: "en"] ++ overrides)
+        end
+
+      assert_listed_as_indexed(site, "/blog/tag/:slug", "blog:tag", rows)
+    end
+
+    test "bloggers, with posts and without", %{site: site} do
+      record_page!(site, "/blog/author/:slug", "blog:author")
+
+      writer = create_blogger!(site_id: site.id)
+      silent = create_blogger!(site_id: site.id)
+      create_post_blogger!(post_id: post!(site, :published).id, blogger_id: writer.id)
+
+      listed = MapSet.new(paths(site))
+
+      for blogger <- [writer, silent] do
+        assert says_index?(site, "/blog/author/:slug", "blog:author", blogger.slug)
+        assert MapSet.member?(listed, "/blog/author/#{blogger.slug}")
+      end
+    end
+
+    test "teams, with members and without", %{site: site} do
+      record_page!(site, "/blog/team/:slug", "blog:team")
+
+      crew = create_team!(site_id: site.id, status: :active)
+      empty = create_team!(site_id: site.id, status: :active)
+      create_team_member!(team_id: crew.id, blogger_id: create_blogger!(site_id: site.id).id)
+
+      listed = MapSet.new(paths(site))
+
+      for team <- [crew, empty] do
+        assert says_index?(site, "/blog/team/:slug", "blog:team", team.slug)
+        assert MapSet.member?(listed, "/blog/team/#{team.slug}")
+      end
     end
   end
 

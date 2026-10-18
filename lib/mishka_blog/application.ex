@@ -50,9 +50,10 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.Installer
   ]
 
-  # Adds the blog's posts, categories and tags to each site's sitemap (a `seo:sitemap:urls` plugin),
-  # names them as kinds of record a page can show (a `runtime:page:records` plugin), and gives each
-  # its own head on the page that shows it (a `runtime:page:seo` plugin).
+  # Adds the blog's posts, categories, tags, bloggers and teams to each site's sitemap (a
+  # `seo:sitemap:urls` plugin), names them as kinds of record a page can show (a
+  # `runtime:page:records` plugin), and gives each its own head on the page that shows it (a
+  # `runtime:page:seo` plugin).
   @seo_plugins [
     MishkaBlog.Plugins.SitemapUrls,
     MishkaBlog.Plugins.PageRecords,
