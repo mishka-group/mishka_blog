@@ -24,12 +24,15 @@ defmodule MishkaBlog.ProvisionTest do
 
   alias MishkaBlog.Plugins.Installer
   alias MishkaBlog.Provision
-  alias MishkaCmsCore.Install.Extensions
+  alias MishkaCmsCore.Install
+  alias MishkaCmsCore.Install.{Bootstrap, Extensions}
   alias MishkaCmsCore.Runtime.Component
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Page
+  alias MishkaCmsCore.Runtime.ExtensionProvision
   alias MishkaCmsCore.Runtime.PageProvision
   alias MishkaCmsCore.Runtime.Snippet
+  alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaInstaller.Event.EventHandler
 
   require Ash.Query
@@ -776,14 +779,19 @@ defmodule MishkaBlog.ProvisionTest do
       assert Extensions.installed?(site.id, :mishka_blog)
     end
 
-    # THE SCREEN GETS A FIXED MESSAGE, never the exception's own text; the log has the detail.
+    # THE SCREEN GETS A FIXED MESSAGE, never the exception's own text; the log has the detail. An
+    # admin of another site holds every name the install asks for, so the refusal is the
+    # provision's own check of whose site it is, which raises after the plugin's permission gate.
     test "a failed install reports the fixed message and logs the exception", %{site: site} do
-      refused = create_user_with_permissions!(["admin:dashboard:blog"], site_id: site.id)
+      elsewhere =
+        create_site!(name: "elsewhere#{System.unique_integer([:positive])}", active: true)
+
+      tenant = create_user_with_permissions!(["admin:dashboard:*"], site_id: elsewhere.id)
 
       log =
         capture_log(fn ->
           assert {:error, {:extension_failed, message}} =
-                   Extensions.install(site.id, "mishka_blog", %{}, refused)
+                   Extensions.install(site.id, "mishka_blog", %{}, tenant)
 
           assert message ==
                    "The install did not finish. Press Install again; details are in the server log."
@@ -792,8 +800,9 @@ defmodule MishkaBlog.ProvisionTest do
         end)
 
       assert log =~ "[MishkaBlog] install on #{site.id} failed:"
-      assert log =~ "admin:dashboard:runtime:component"
+      assert log =~ "a site admin may only provision their own site"
       refute Extensions.installed?(site.id, :mishka_blog)
+      assert components(site) == []
     end
 
     test "is offered by the installer's own registry, with the label it declared" do
@@ -814,6 +823,108 @@ defmodule MishkaBlog.ProvisionTest do
       assert components(site) == []
       assert pages(site) == []
       assert snippets(site) == []
+    end
+  end
+
+  # WHO MAY ASK. A request with nobody behind it is the install wizard's own run, made before there
+  # is a user, and it is answered only until the CMS is installed. After that it is refused like an
+  # actor holding nothing, and nothing is written.
+  describe "who may ask for an install" do
+    setup do
+      :persistent_term.erase(:mishka_installed)
+      on_exit(fn -> :persistent_term.erase(:mishka_installed) end)
+
+      listening!()
+    end
+
+    test "a request with nobody behind it installs while the CMS is not installed yet", %{
+      site: site
+    } do
+      refute Install.installed?()
+
+      assert {:ok, report} = Extensions.install(site.id, "mishka_blog")
+
+      assert report.pages != []
+      assert length(components(site)) == length(Provision.component_names())
+      assert Extensions.installed?(site.id, :mishka_blog)
+    end
+
+    test "a request with nobody behind it is refused once the CMS is installed, and writes nothing",
+         %{site: site} do
+      Install.mark_installed!()
+      names = Enum.map(Provision.manifest().permissions, &elem(&1, 0))
+
+      assert {:error, {:extension_failed, message}} = Extensions.install(site.id, "mishka_blog")
+
+      for name <- ExtensionProvision.required(Provision.manifest()) do
+        assert message =~ name
+      end
+
+      refute Extensions.installed?(site.id, :mishka_blog)
+      assert components(site) == []
+      assert pages(site) == []
+      assert snippets(site) == []
+      assert stored_permissions(names) == []
+    end
+
+    for {who, master?} <- [{"a master", true}, {"a site admin", false}] do
+      @master? master?
+
+      test "#{who} holding every name installs once the CMS is installed", %{site: site} do
+        Install.mark_installed!()
+
+        admin =
+          create_user_with_permissions!(["*"], site_id: if(@master?, do: nil, else: site.id))
+
+        assert {:ok, report} = Extensions.install(site.id, "mishka_blog", %{}, admin)
+
+        assert report.pages != []
+        assert length(components(site)) == length(Provision.component_names())
+        assert Extensions.installed?(site.id, :mishka_blog)
+      end
+    end
+
+    for installed? <- [false, true] do
+      @installed? installed?
+
+      test "an actor holding none of what it writes is refused and nothing is written, #{if installed?, do: "after", else: "before"} the CMS is installed",
+           %{site: site} do
+        if @installed?, do: Install.mark_installed!()
+        weak = create_user_with_permissions!(["admin:dashboard:blog:post"], site_id: site.id)
+
+        assert {:error, {:extension_failed, message}} =
+                 Extensions.install(site.id, "mishka_blog", %{}, weak)
+
+        assert message =~ "needs these permissions"
+        assert message =~ "admin:dashboard:runtime:component"
+        refute Extensions.installed?(site.id, :mishka_blog)
+        assert components(site) == []
+        assert pages(site) == []
+      end
+    end
+
+    test "the install wizard sets the blog up with nobody behind the request, and the same request is refused after it",
+         %{site: site} do
+      assert {:ok, %{site: first}} =
+               Bootstrap.run(%{
+                 email: "owner-#{System.unique_integer([:positive])}@example.com",
+                 password: "Password123!",
+                 site_name: "Blog wizard",
+                 host: "wizard-#{System.unique_integer([:positive])}.example.com",
+                 extensions: ["mishka_blog"]
+               })
+
+      on_exit(fn -> SiteState.delete(first.id) end)
+
+      assert Install.installed?()
+      assert Extensions.installed?(first.id, :mishka_blog)
+      assert length(components(first)) == length(Provision.component_names())
+      assert Provision.page_paths() -- Enum.map(pages(first), & &1.path) == []
+
+      assert {:error, {:extension_failed, _message}} = Extensions.install(site.id, "mishka_blog")
+
+      refute Extensions.installed?(site.id, :mishka_blog)
+      assert components(site) == []
     end
   end
 

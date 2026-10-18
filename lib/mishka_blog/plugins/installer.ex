@@ -15,6 +15,11 @@ defmodule MishkaBlog.Plugins.Installer do
   listen for a site being created. A site added to a running CMS gets its own core content and
   nothing else until an admin asks for the blog from the Blog menu — which is the only honest
   default, because a site may be a landing page that will never have a blog.
+
+  The request's `:actor` is whoever pressed the button and must hold what
+  `MishkaCmsCore.Runtime.ExtensionProvision.required/1` names. A request with no actor is the
+  install wizard's own run and is answered only until the CMS is installed
+  (`MishkaCmsCore.Install.installed?/0`); after that it is refused like an actor holding nothing.
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext
@@ -36,6 +41,8 @@ defmodule MishkaBlog.Plugins.Installer do
   require Logger
 
   alias MishkaBlog.Provision
+  alias MishkaCmsCore.Install
+  alias MishkaCmsCore.Runtime.ExtensionProvision
 
   @key "mishka_blog"
 
@@ -66,10 +73,25 @@ defmodule MishkaBlog.Plugins.Installer do
 
     # THE ACTOR RIDES ON THE PAYLOAD, put there by whoever asked. The wizard sends none — it runs
     # before there is a user — and a dashboard sends the session's, so what this writes is written
-    # as them and the resource's own policy answers for it.
+    # as them and the resource's own policy answers for it. NOBODY IS ANSWERED ONLY WHILE THE CMS IS
+    # BEING INSTALLED: once it is, a request with no actor is refused like an actor holding nothing.
     actor = Map.get(payload, :actor)
 
-    {:reply, %{payload | reports: reports ++ [Provision.ensure!(site_id, answers, actor: actor)]}}
+    report =
+      case missing(actor) do
+        [] ->
+          Provision.ensure!(site_id, answers, actor: actor)
+
+        names ->
+          %{
+            error:
+              gettext("Setting the blog up needs these permissions: %{names}",
+                names: Enum.join(names, ", ")
+              )
+          }
+      end
+
+    {:reply, %{payload | reports: reports ++ [report]}}
   rescue
     error ->
       # THE RESCUE STAYS BECAUSE CORE OFFERS ONLY `ensure!/4`: the install writes through the
@@ -84,6 +106,14 @@ defmodule MishkaBlog.Plugins.Installer do
   end
 
   def call(payload), do: {:reply, payload}
+
+  defp missing(nil) do
+    if Install.installed?(),
+      do: ExtensionProvision.missing(Provision.manifest(), nil),
+      else: []
+  end
+
+  defp missing(actor), do: ExtensionProvision.missing(Provision.manifest(), actor)
 
   # ANY OF THEM, not all. A site an admin has pruned still has this extension; a site that has never
   # had it has none of them.

@@ -42,6 +42,9 @@ children = [
   # `MishkaBlog.Plugins.SitemapUrlsTest` reads what this extension adds to a sitemap
   # the way core's build reads it, and the build keeps the sitemap it makes there.
   MishkaCmsCore.Runtime.States.AssetsState,
+  # WHAT THE INSTALL WIZARD'S RUN WRITES AS IT COMPILES THE NEW SITE: `Bootstrap.run/1`, which
+  # `MishkaBlog.ProvisionTest` drives, saves each layout it compiles here.
+  MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState,
   # THIS EXTENSION SHIPS COMPONENTS NOW, and a component is only a row until something compiles it.
   # `MishkaBlog.LiveComponentsRenderTest` renders the four out of the database for real — the same
   # lazy compile a visitor's first request triggers — and that needs the gate, the registry that

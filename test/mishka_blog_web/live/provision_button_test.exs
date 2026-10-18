@@ -497,6 +497,32 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       close(view)
     end
 
+    # THE PRESS CARRIES THE SIGNED-IN ADMIN TO THE INSTALLER, so the installed CMS answers it. The
+    # same install asked with nobody behind it is the install wizard's own, which an installed CMS
+    # no longer answers: it is refused like an actor holding nothing, and writes nothing.
+    test "is answered by the installed CMS, and the same install with nobody behind it is not", %{
+      conn: conn,
+      site: site,
+      admin: admin
+    } do
+      other = create_site!(name: "wizardless", host: "wizardless.test", active: true)
+
+      {:ok, view, _html} = live(log_in(conn, admin), "/admin/dashboard/blog")
+
+      html = view |> form("#blog-provision-form", %{"site_id" => site.id}) |> render_submit()
+
+      assert html =~ "Added"
+      assert length(paths(site)) == length(Provision.page_paths())
+
+      assert {:error, {:extension_failed, message}} =
+               MishkaCmsCore.Install.Extensions.install(other.id, "mishka_blog")
+
+      assert message =~ "needs these permissions"
+      assert paths(other) == []
+
+      close(view)
+    end
+
     # THE SECOND GATE, behind the button: a blog editor holds none of what `Page` and `Component`
     # ask for, so the run is refused by the provision's own check of the names it needs, before
     # its first write, and leaves nothing behind.
