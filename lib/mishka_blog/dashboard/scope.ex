@@ -78,7 +78,7 @@ defmodule MishkaBlog.Dashboard.Scope do
   `:all` needs an action whose pagination is optional: a site user's `:read`, or a master read that
   sets `required?: false`, such as `MishkaBlog.BlogPost`'s `:read_any`.
   """
-  @spec list(Ash.Query.t(), pos_integer() | :all) :: [Ash.Resource.record()]
+  @spec list(Ash.Query.t(), pos_integer() | :all) :: [struct()]
   def list(query, limit \\ :all)
 
   def list(query, :all) do
