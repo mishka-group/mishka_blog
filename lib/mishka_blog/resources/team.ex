@@ -49,6 +49,7 @@ defmodule MishkaBlog.Team do
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
+  alias Ash.Error.Query.NotFound
   require Ash.Query
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -1449,7 +1450,7 @@ defmodule MishkaBlog.Team do
           {:error, _reason} ->
             Ash.Query.add_error(
               query,
-              Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)
+              NotFound.exception(resource: MishkaBlog.Team)
             )
         end
       end
@@ -1515,7 +1516,17 @@ defmodule MishkaBlog.Team do
         Ash.get(MishkaBlog.Team, team_id, Ash.Scope.to_opts(context, action: :read))
         |> case do
           {:ok, team} when not is_nil(team) ->
-            if !is_nil(team.archived_at) do
+            if is_nil(team.archived_at) do
+              tenant = team.site_id
+
+              team
+              |> Ash.Changeset.for_update(
+                :restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: tenant)
+              )
+              |> Ash.update()
+            else
               {:error,
                Ash.Error.Invalid.exception(
                  errors: [
@@ -1529,20 +1540,10 @@ defmodule MishkaBlog.Team do
                    )
                  ]
                )}
-            else
-              tenant = team.site_id
-
-              team
-              |> Ash.Changeset.for_update(
-                :restore_version,
-                %{version_id: version_id},
-                Ash.Scope.to_opts(context, tenant: tenant)
-              )
-              |> Ash.update()
             end
 
           _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)}
+            {:error, NotFound.exception(resource: MishkaBlog.Team)}
         end
       end
     end
@@ -1601,7 +1602,7 @@ defmodule MishkaBlog.Team do
             |> Ash.update()
 
           _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.Team)}
+            {:error, NotFound.exception(resource: MishkaBlog.Team)}
         end
       end
     end

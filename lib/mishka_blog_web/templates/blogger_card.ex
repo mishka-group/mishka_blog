@@ -4,7 +4,7 @@
 
 defmodule MishkaBlogWeb.Templates.BloggerCard do
   @moduledoc """
-  The bloggers grid: one card per blogger, as many to a row as the viewport can hold.
+  The bloggers grid: one card per blogger, in as many columns as fit the screen.
 
   Declared only by `MishkaBlog.Blogger`, and it reads that record directly rather than by column
   position — a profile card is a specific shape (an avatar beside its actions, a name over its role

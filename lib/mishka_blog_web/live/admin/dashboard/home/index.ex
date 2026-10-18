@@ -490,7 +490,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   @spec day_label(Date.t()) :: String.t()
   def day_label(date), do: Localized.date(date, :MMMEd)
 
-  @doc "The calendar's column heads, Sunday first, e.g. `[\"Sun\", \"Mon\", …]`."
+  @doc ~s(The calendar's column heads, Sunday first, e.g. `["Sun", "Mon", …]`.)
   @spec weekday_labels() :: [String.t()]
   def weekday_labels, do: Enum.map(0..6, &Localized.date(Date.add(@a_sunday, &1), :E))
 

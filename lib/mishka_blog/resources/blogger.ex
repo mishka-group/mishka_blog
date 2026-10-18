@@ -1543,7 +1543,17 @@ defmodule MishkaBlog.Blogger do
         Ash.get(MishkaBlog.Blogger, blogger_id, Ash.Scope.to_opts(context, action: :read))
         |> case do
           {:ok, blogger} when not is_nil(blogger) ->
-            if !is_nil(blogger.archived_at) do
+            if is_nil(blogger.archived_at) do
+              tenant = blogger.site_id
+
+              blogger
+              |> Ash.Changeset.for_update(
+                :restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: tenant)
+              )
+              |> Ash.update()
+            else
               {:error,
                Ash.Error.Invalid.exception(
                  errors: [
@@ -1557,16 +1567,6 @@ defmodule MishkaBlog.Blogger do
                    )
                  ]
                )}
-            else
-              tenant = blogger.site_id
-
-              blogger
-              |> Ash.Changeset.for_update(
-                :restore_version,
-                %{version_id: version_id},
-                Ash.Scope.to_opts(context, tenant: tenant)
-              )
-              |> Ash.update()
             end
 
           _ ->
@@ -1618,7 +1618,15 @@ defmodule MishkaBlog.Blogger do
         )
         |> case do
           {:ok, blogger} when not is_nil(blogger) ->
-            if !is_nil(blogger.archived_at) do
+            if is_nil(blogger.archived_at) do
+              blogger
+              |> Ash.Changeset.for_update(
+                :master_restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: nil)
+              )
+              |> Ash.update()
+            else
               {:error,
                Ash.Error.Invalid.exception(
                  errors: [
@@ -1632,14 +1640,6 @@ defmodule MishkaBlog.Blogger do
                    )
                  ]
                )}
-            else
-              blogger
-              |> Ash.Changeset.for_update(
-                :master_restore_version,
-                %{version_id: version_id},
-                Ash.Scope.to_opts(context, tenant: nil)
-              )
-              |> Ash.update()
             end
 
           _ ->

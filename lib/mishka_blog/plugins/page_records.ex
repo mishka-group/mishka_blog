@@ -16,7 +16,7 @@ defmodule MishkaBlog.Plugins.PageRecords do
   use Gettext, backend: MishkaCmsCore.Gettext
   use MishkaInstaller.Event.Hook, event: "runtime:page:records", initial: %{priority: 50}
 
-  alias MishkaBlog.{BlogPost, Blogger, Collection, Tag, Team}
+  alias MishkaBlog.{Blogger, BlogPost, Collection, Tag, Team}
   alias MishkaCmsCore.Runtime.Languages
 
   @samples 8

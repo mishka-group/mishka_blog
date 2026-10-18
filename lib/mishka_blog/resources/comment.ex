@@ -381,7 +381,6 @@ defmodule MishkaBlog.Comment do
       end
 
       filters do
-        # TODO: we need to change it with search LIKE by author email
         filter :search, :text do
           fields [:content]
 

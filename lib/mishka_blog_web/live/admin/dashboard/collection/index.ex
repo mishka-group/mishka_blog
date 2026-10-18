@@ -3,6 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule MishkaBlogWeb.Live.Admin.Dashboard.Collection.Index do
+  @moduledoc """
+  The collections grid: a Gervaz table drawn as `MishkaBlogWeb.Templates.CollectionCard`, its
+  create/edit form, a modal that edits one language edition of a collection, and the version history
+  of one collection, which switches between its language editions.
+
+  The page decodes the URL state, forwards PubSub broadcasts into the table component and closes the
+  modals over the `gervaz:exec-js` bridge. The version history is
+  `MishkaBlogWeb.Live.Admin.Dashboard.VersionsModal`.
+
+  See `MishkaBlog.Collection` for the table, filter and row-action definitions.
+  """
   use MishkaCmsCore.ExtensionLiveView
 
   import MishkaBlogWeb.Live.Admin.Dashboard.VersionsModal, only: [open_modal: 2, close_modal: 2]

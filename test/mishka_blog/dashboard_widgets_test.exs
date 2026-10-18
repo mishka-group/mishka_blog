@@ -21,11 +21,11 @@ defmodule MishkaBlog.Dashboard.WidgetsTest do
   alias MishkaCmsCore.Dashboard.Widget
 
   alias MishkaBlog.Dashboard.Widgets.{
-    RecentPosts,
-    DraftsScheduled,
+    Bloggers,
     CommentsModeration,
-    TopPosts,
-    Bloggers
+    DraftsScheduled,
+    RecentPosts,
+    TopPosts
   }
 
   @widgets [

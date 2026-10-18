@@ -42,6 +42,7 @@ defmodule MishkaBlog.BlogPost do
 
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
+  alias Ash.Error.Query.NotFound
   require Ash.Query
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -2318,7 +2319,7 @@ defmodule MishkaBlog.BlogPost do
           {:error, _reason} ->
             Ash.Query.add_error(
               query,
-              Ash.Error.Query.NotFound.exception(resource: MishkaBlog.BlogPost)
+              NotFound.exception(resource: MishkaBlog.BlogPost)
             )
         end
       end
@@ -2353,7 +2354,7 @@ defmodule MishkaBlog.BlogPost do
           {:error, _reason} ->
             Ash.Query.add_error(
               query,
-              Ash.Error.Query.NotFound.exception(resource: MishkaBlog.BlogPost)
+              NotFound.exception(resource: MishkaBlog.BlogPost)
             )
         end
       end
@@ -2403,7 +2404,17 @@ defmodule MishkaBlog.BlogPost do
         Ash.get(MishkaBlog.BlogPost, post_id, Ash.Scope.to_opts(context, action: :read))
         |> case do
           {:ok, post} when not is_nil(post) ->
-            if !is_nil(post.archived_at) do
+            if is_nil(post.archived_at) do
+              tenant = post.site_id
+
+              post
+              |> Ash.Changeset.for_update(
+                :restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: tenant)
+              )
+              |> Ash.update()
+            else
               {:error,
                Ash.Error.Invalid.exception(
                  errors: [
@@ -2417,20 +2428,10 @@ defmodule MishkaBlog.BlogPost do
                    )
                  ]
                )}
-            else
-              tenant = post.site_id
-
-              post
-              |> Ash.Changeset.for_update(
-                :restore_version,
-                %{version_id: version_id},
-                Ash.Scope.to_opts(context, tenant: tenant)
-              )
-              |> Ash.update()
             end
 
           _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.BlogPost)}
+            {:error, NotFound.exception(resource: MishkaBlog.BlogPost)}
         end
       end
     end
@@ -2483,7 +2484,15 @@ defmodule MishkaBlog.BlogPost do
         )
         |> case do
           {:ok, post} when not is_nil(post) ->
-            if !is_nil(post.archived_at) do
+            if is_nil(post.archived_at) do
+              post
+              |> Ash.Changeset.for_update(
+                :master_restore_version,
+                %{version_id: version_id},
+                Ash.Scope.to_opts(context, tenant: nil)
+              )
+              |> Ash.update()
+            else
               {:error,
                Ash.Error.Invalid.exception(
                  errors: [
@@ -2497,18 +2506,10 @@ defmodule MishkaBlog.BlogPost do
                    )
                  ]
                )}
-            else
-              post
-              |> Ash.Changeset.for_update(
-                :master_restore_version,
-                %{version_id: version_id},
-                Ash.Scope.to_opts(context, tenant: nil)
-              )
-              |> Ash.update()
             end
 
           _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaBlog.BlogPost)}
+            {:error, NotFound.exception(resource: MishkaBlog.BlogPost)}
         end
       end
     end

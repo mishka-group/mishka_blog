@@ -13,10 +13,10 @@ defmodule MishkaBlog.Test.FiltersTest do
 
   if Code.ensure_loaded?(MishkaBlog) do
     alias MishkaBlog.Test.Plugins.{
-      BlogPostRenderContent,
-      BlogPostQueryPublished,
-      BlogCommentBeforeCreatePublic,
       BlogBloggerQueryPublicBySlug,
+      BlogCommentBeforeCreatePublic,
+      BlogPostQueryPublished,
+      BlogPostRenderContent,
       BlogTeamQueryPublicList
     }
 

@@ -18,9 +18,9 @@ defmodule MishkaBlog.SiteLinksTest do
   require Ash.Query
 
   alias MishkaBlog.{
-    BlogPost,
     Blogger,
     BloggerFollower,
+    BlogPost,
     Collection,
     Comment,
     CommentVote,

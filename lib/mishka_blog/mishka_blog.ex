@@ -3,6 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule MishkaBlog do
+  @moduledoc """
+  The blog's Ash domain: posts, collections, tags, bloggers and teams with their followers, comments,
+  ratings, bookmarks and views, and auto posting, and the JSON:API routes that serve them to a
+  master, to a site's admin and to a visitor.
+  """
   use Ash.Domain,
     otp_app: :mishka_blog,
     validate_config_inclusion?: false,

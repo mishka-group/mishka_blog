@@ -18,8 +18,8 @@ defmodule MishkaBlog.SiteBoundaryTest do
 
   alias MishkaBlog.{
     AutoPosting,
-    BlogPost,
     Blogger,
+    BlogPost,
     Collection,
     Comment,
     CommentVote,

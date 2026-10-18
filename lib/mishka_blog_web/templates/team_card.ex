@@ -4,7 +4,7 @@
 
 defmodule MishkaBlogWeb.Templates.TeamCard do
   @moduledoc """
-  The teams grid: one card per editorial team, as many to a row as the viewport can hold.
+  The teams grid: one card per editorial team, in as many columns as fit the screen.
 
   Declared only by `MishkaBlog.Team`, and it reads that record directly rather than by column
   position. Same shape as `MishkaBlogWeb.Templates.BloggerCard` — a tile beside its actions, a name

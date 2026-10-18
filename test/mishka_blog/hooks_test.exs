@@ -17,12 +17,12 @@ defmodule MishkaBlog.Test.HooksTest do
     alias MishkaInstaller.Event.{Event, EventHandler}
 
     alias MishkaBlog.Test.Plugins.{
-      BlogPostAfterCreate,
-      BlogCommentAfterCreate,
       BlogBloggerAfterCreate,
+      BlogCommentAfterCreate,
+      BlogPostAfterCreate,
       BlogPostRatingAfterCreate,
-      BlogTeamAfterCreate,
-      BlogPostRatingAfterRemove
+      BlogPostRatingAfterRemove,
+      BlogTeamAfterCreate
     }
 
     @probes [

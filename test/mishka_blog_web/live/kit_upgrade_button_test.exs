@@ -23,6 +23,7 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
 
   alias MishkaBlog.Plugins.ShareCardTargets
   alias MishkaBlog.Provision
+  alias MishkaBlog.Test.VersionHelpers
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.{Component, ExtensionProvision}
   alias MishkaCmsCore.Runtime.Handlers.UiKitUpgrade
@@ -32,7 +33,6 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Workers.{ShareCardPlanWorker, ShareCardRefreshWorker}
   alias MishkaInstaller.Event.{Event, EventHandler}
-  alias MishkaBlog.Test.VersionHelpers
 
   require Ash.Query
 

@@ -4,7 +4,7 @@
 
 defmodule MishkaBlogWeb.Templates.CollectionCard do
   @moduledoc """
-  The collections grid: one card per collection, as many to a row as the viewport can hold.
+  The collections grid: one card per collection, in as many columns as fit the screen.
 
   Declared only by `MishkaBlog.Collection`, and it reads that record directly rather than by column
   position — a card is a specific shape (a folder tile beside its actions, a title over its blurb, and a
