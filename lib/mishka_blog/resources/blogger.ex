@@ -1464,10 +1464,7 @@ defmodule MishkaBlog.Blogger do
         blogger_id = Ash.Query.get_argument(query, :blogger_id)
 
         # First verify the blogger belongs to the tenant
-        case Ash.get(MishkaBlog.Blogger, blogger_id,
-               tenant: context.tenant,
-               authorize?: false
-             ) do
+        case Ash.get(MishkaBlog.Blogger, blogger_id, Ash.Scope.to_opts(context)) do
           {:ok, _blogger} ->
             query
             |> Ash.Query.filter(id == ^blogger_id)

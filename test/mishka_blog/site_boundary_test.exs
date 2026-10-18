@@ -1393,6 +1393,42 @@ defmodule MishkaBlog.SiteBoundaryTest do
     end
   end
 
+  describe "Blogger :list_versions" do
+    defp list_versions(blogger, opts) do
+      Blogger
+      |> Ash.Query.for_read(:list_versions, %{blogger_id: blogger.id}, opts)
+      |> Ash.read()
+      |> case do
+        {:ok, %{results: results}} -> {:ok, results}
+        other -> other
+      end
+    end
+
+    test "a site's admin lists the versions of its own site's blogger", ctx do
+      blogger = create_blogger!(site_id: ctx.site_a.id)
+
+      assert {:ok, [listed]} =
+               list_versions(blogger, actor: ctx.admin_a, tenant: ctx.site_a.id)
+
+      assert listed.id == blogger.id
+      assert [_ | _] = listed.sorted_versions
+    end
+
+    test "a site's admin naming another site cannot list its blogger's versions", ctx do
+      theirs = create_blogger!(site_id: ctx.site_b.id)
+
+      result = list_versions(theirs, actor: ctx.admin_a, tenant: ctx.site_b.id)
+
+      refute match?({:ok, [_ | _]}, result)
+    end
+
+    test "a blogger of another site lists nothing", ctx do
+      theirs = create_blogger!(site_id: ctx.site_b.id)
+
+      assert {:ok, []} = list_versions(theirs, actor: ctx.admin_a, tenant: ctx.site_a.id)
+    end
+  end
+
   describe "Blogger :comment_author" do
     test "a site user holding * cannot read it directly", ctx do
       blogger_b = create_blogger!(site_id: ctx.site_b.id)

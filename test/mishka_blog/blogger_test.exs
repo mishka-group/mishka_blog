@@ -781,8 +781,11 @@ defmodule MishkaBlog.Test.BloggerTest do
 
         result =
           Blogger
-          |> Ash.Query.for_read(:list_versions, %{blogger_id: blogger.id}, tenant: site.id)
-          |> Ash.read!(authorize?: false)
+          |> Ash.Query.for_read(:list_versions, %{blogger_id: blogger.id},
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.read!()
 
         assert length(result.results) == 1
         blogger_data = List.first(result.results)
@@ -803,8 +806,11 @@ defmodule MishkaBlog.Test.BloggerTest do
 
         result =
           Blogger
-          |> Ash.Query.for_read(:list_versions, %{blogger_id: blogger.id}, tenant: site1.id)
-          |> Ash.read!(authorize?: false)
+          |> Ash.Query.for_read(:list_versions, %{blogger_id: blogger.id},
+            tenant: site1.id,
+            authorize?: false
+          )
+          |> Ash.read!()
 
         assert result.results == []
       end
