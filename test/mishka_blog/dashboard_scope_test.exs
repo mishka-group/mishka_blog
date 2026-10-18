@@ -354,6 +354,8 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
     end
   end
 
+  # It reads the dashboard sources, which is the check: no application code runs.
+  # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
   test "no dashboard read skips the policies" do
     files = Path.wildcard(Path.expand("../../lib/mishka_blog/dashboard/**/*.ex", __DIR__))
 

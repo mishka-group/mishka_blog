@@ -504,14 +504,9 @@ defmodule MishkaBlog.Test.BlogPostPropertyTest do
 
         assert changeset.valid?
         # Test that defaults would be applied
-        assert changeset.attributes[:status] == :draft or
-                 changeset.attributes[:status] in [:archived, :draft]
-
-        assert changeset.attributes[:language] == "en" or
-                 is_binary(changeset.attributes[:language])
-
-        assert changeset.attributes[:featured] == false or
-                 is_boolean(changeset.attributes[:featured])
+        assert changeset.attributes[:status] == :draft
+        assert changeset.attributes[:language] == "en"
+        assert changeset.attributes[:featured] == false
       end
     end
 

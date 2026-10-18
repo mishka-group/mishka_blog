@@ -20,6 +20,7 @@ defmodule MishkaBlogWeb.Test.DashboardTest do
   import Phoenix.LiveViewTest
   import MishkaBlog.Test.Factory
 
+  alias MishkaBlogWeb.Live.Admin.Dashboard.Home.Index, as: HomeIndex
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaGervaz.Form.Web.State
@@ -416,7 +417,26 @@ defmodule MishkaBlogWeb.Test.DashboardTest do
   end
 
   describe "the calendar and the comments link take only valid input" do
-    defp assigns(view), do: :sys.get_state(view.pid).socket.assigns
+    defp open_calendar(view) do
+      view |> element("#toggle-calendar-btn") |> render_click()
+      render_async(view, 5_000)
+      view
+    end
+
+    defp shown_days(view), do: calendar_days(view, "")
+
+    defp selected_days(view), do: calendar_days(view, "[aria-pressed=true]")
+
+    defp calendar_days(view, filter) do
+      view
+      |> render_async(5_000)
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#blog-calendar button[phx-click=select_day]#{filter}")
+      |> LazyHTML.attribute("phx-value-date")
+      |> Enum.map(&Date.from_iso8601!/1)
+    end
+
+    defp shown_month(view), do: view |> shown_days() |> hd()
 
     defp open_blog(conn, path, email) do
       {:ok, view, _html} = conn |> log_in(create_admin(email)) |> live(path)
@@ -425,42 +445,55 @@ defmodule MishkaBlogWeb.Test.DashboardTest do
     end
 
     test "shift_month moves one month for -1 and 1 and ignores any other step", %{conn: conn} do
-      view = open_blog(conn, "/admin/dashboard/blog", "calstep@example.com")
-      month = assigns(view).month
+      view =
+        conn
+        |> open_blog("/admin/dashboard/blog", "calstep@example.com")
+        |> open_calendar()
+
+      month = shown_month(view)
+      assert month == Date.beginning_of_month(month)
 
       for step <- ["abc", "99999999", "0", "2", "-2", "1.5", ""] do
         render_click(view, "shift_month", %{"step" => step})
-        assert assigns(view).month == month, "step #{inspect(step)} moved the calendar"
+        assert shown_month(view) == month, "step #{inspect(step)} moved the calendar"
       end
 
       render_click(view, "shift_month", %{})
       render_click(view, "shift_month", %{"step" => ["1"]})
-      assert assigns(view).month == month
+      assert shown_month(view) == month
 
       render_click(view, "shift_month", %{"step" => "1"})
-      assert assigns(view).month == Date.add(month, Date.days_in_month(month))
+      assert shown_month(view) == Date.add(month, Date.days_in_month(month))
 
       render_click(view, "shift_month", %{"step" => "-1"})
-      assert assigns(view).month == month
+      assert shown_month(view) == month
 
       close(view)
     end
 
     test "select_day takes an ISO date and ignores anything else", %{conn: conn} do
-      view = open_blog(conn, "/admin/dashboard/blog", "calday@example.com")
-      selected = assigns(view).selected_date
+      view =
+        conn
+        |> open_blog("/admin/dashboard/blog", "calday@example.com")
+        |> open_calendar()
+
+      assert [selected] = selected_days(view)
 
       for date <- ["junk", "2026-13-45", "2026-02-30", ""] do
         render_click(view, "select_day", %{"date" => date})
-        assert assigns(view).selected_date == selected, "date #{inspect(date)} was taken"
+        assert selected_days(view) == [selected], "date #{inspect(date)} was taken"
       end
 
       render_click(view, "select_day", %{})
       render_click(view, "select_day", %{"date" => %{"a" => "1"}})
-      assert assigns(view).selected_date == selected
+      assert selected_days(view) == [selected]
+
+      other = view |> shown_days() |> Enum.find(&(&1 != selected))
+      render_click(view, "select_day", %{"date" => Date.to_iso8601(other)})
+      assert selected_days(view) == [other]
 
       render_click(view, "select_day", %{"date" => "2026-03-14"})
-      assert assigns(view).selected_date == ~D[2026-03-14]
+      assert has_element?(view, "#blog-calendar", HomeIndex.day_label(~D[2026-03-14]))
 
       close(view)
     end

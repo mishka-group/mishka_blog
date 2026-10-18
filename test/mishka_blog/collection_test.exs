@@ -21,7 +21,7 @@ defmodule MishkaBlog.Test.CollectionTest do
 
       test "uses UUID v7 for primary keys" do
         collection = create_collection!()
-        assert is_binary(collection.id)
+        assert {:ok, _} = Ecto.UUID.cast(collection.id)
         assert String.length(collection.id) == 36
       end
 
@@ -101,7 +101,7 @@ defmodule MishkaBlog.Test.CollectionTest do
 
         collection = create_collection!(name: "Master Collection", site_id: site.id)
 
-        assert collection.language_group_id != nil
+        assert {:ok, _} = Ecto.UUID.cast(collection.language_group_id)
       end
 
       test "defaults status to draft" do
@@ -420,7 +420,7 @@ defmodule MishkaBlog.Test.CollectionTest do
           |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id, authorize?: false)
           |> Ash.destroy!(return_destroyed?: true)
 
-        assert archived.archived_at != nil
+        assert %DateTime{} = archived.archived_at
         assert archived.status == :archived
 
         # Should not appear in normal reads
@@ -490,7 +490,7 @@ defmodule MishkaBlog.Test.CollectionTest do
           )
 
         assert fetched.id == collection.id
-        assert fetched.archived_at != nil
+        assert %DateTime{} = fetched.archived_at
       end
 
       test "master_unarchive restores collection" do
@@ -1466,7 +1466,6 @@ defmodule MishkaBlog.Test.CollectionTest do
           |> Ash.read_one!(authorize?: false)
 
         assert result.id == collection.id
-        assert is_list(result.sorted_versions)
         assert length(result.sorted_versions) == 5
       end
 
@@ -1498,7 +1497,6 @@ defmodule MishkaBlog.Test.CollectionTest do
           |> Ash.read_one!(authorize?: false)
 
         assert result.id == collection.id
-        assert is_list(result.sorted_versions)
         assert length(result.sorted_versions) == 3
       end
     end
@@ -1532,7 +1530,6 @@ defmodule MishkaBlog.Test.CollectionTest do
         assert length(result.results) == 1
         collection_data = List.first(result.results)
         assert collection_data.id == collection.id
-        assert is_list(collection_data.sorted_versions)
         assert length(collection_data.sorted_versions) == 3
       end
 
@@ -1562,7 +1559,6 @@ defmodule MishkaBlog.Test.CollectionTest do
 
         assert length(result.results) == 1
         collection_data = List.first(result.results)
-        assert is_list(collection_data.sorted_versions)
         assert length(collection_data.sorted_versions) == 3
       end
 
@@ -1894,7 +1890,7 @@ defmodule MishkaBlog.Test.CollectionTest do
           |> Ash.Query.set_tenant(site.id)
           |> Ash.read_one!(authorize?: false)
 
-        assert result.latest_version != nil
+        assert %Collection.Version{} = result.latest_version
         assert result.latest_version.changes["description"] == "Third"
       end
 

@@ -405,10 +405,10 @@ defmodule MishkaBlog.KitTest do
         assert "mount" in names,
                "#{component["name"]} has no mount/1, so it starts with no state"
 
-        assert component["template"] =~ "phx-target={@myself}" or
-                 component["template"] =~ "target={@myself}" or
-                 component["template"] =~ "patch=" or
-                 component["template"] =~ "navigate=",
+        assert Enum.any?(
+                 ["phx-target={@myself}", "target={@myself}", "patch=", "navigate="],
+                 &(component["template"] =~ &1)
+               ),
                "#{component["name"]} neither answers its own events nor navigates"
       end
     end

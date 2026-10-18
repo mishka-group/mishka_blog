@@ -305,7 +305,6 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert collection1.id in ids
@@ -424,7 +423,6 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) == 2
       end
 
@@ -460,7 +458,6 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) == 2
       end
     end
@@ -888,7 +885,6 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert active1.id in ids
@@ -1259,7 +1255,6 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
         assert body["data"]["attributes"]["name"] == "Original Name"
 
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) == 4
       end
 
@@ -1296,7 +1291,6 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
         assert body["data"]["id"] == collection.id
 
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) == 3
       end
 
@@ -1353,11 +1347,9 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
         assert body["data"]["attributes"]["version_count"] == 6
 
         latest_version = body["data"]["attributes"]["latest_version"]
-        assert is_map(latest_version)
-        assert latest_version["changes"]["description"] == "Version 4"
+        assert %{"changes" => %{"description" => "Version 4"}} = latest_version
 
         recent_versions = body["data"]["attributes"]["recent_versions"]
-        assert is_list(recent_versions)
         assert length(recent_versions) == 6
 
         descriptions = Enum.map(recent_versions, & &1["changes"]["description"])
@@ -1472,12 +1464,10 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) == 1
 
         collection_data = List.first(body["data"])
         sorted_versions = collection_data["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) == 4
       end
 
@@ -1509,7 +1499,6 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) == 1
 
         collection_data = List.first(body["data"])
@@ -1687,7 +1676,8 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
         # Preview returns the version's data
-        assert is_map(body["data"])
+        assert body["data"]["id"] == collection.id
+        assert body["data"]["attributes"]["description"] == "V0"
       end
 
       test "tenant admin can preview their collection's version", %{
@@ -1722,7 +1712,8 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_map(body["data"])
+        assert body["data"]["id"] == collection.id
+        assert body["data"]["attributes"]["description"] == "Orig"
       end
     end
   end

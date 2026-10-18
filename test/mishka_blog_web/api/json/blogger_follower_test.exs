@@ -240,7 +240,6 @@ defmodule MishkaBlogWeb.Api.Json.BloggerFollowerTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) == 2
 
         blogger_ids = Enum.map(body["data"], fn follow -> follow["attributes"]["blogger_id"] end)
@@ -348,7 +347,6 @@ defmodule MishkaBlogWeb.Api.Json.BloggerFollowerTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         # Verify we get 2 follow records for blogger1
         assert length(body["data"]) == 2
         # Verify each record is a blogger_follower type

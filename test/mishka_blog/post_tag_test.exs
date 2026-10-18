@@ -45,7 +45,7 @@ defmodule MishkaBlog.Test.PostTagTest do
 
         assert assignment.post_id == post.id
         assert assignment.tag_id == tag.id
-        assert assignment.inserted_at != nil
+        assert %DateTime{} = assignment.inserted_at
       end
 
       test "upsert prevents duplicate assignments" do
@@ -97,8 +97,7 @@ defmodule MishkaBlog.Test.PostTagTest do
 
         assignment = create_post_tag!(post_id: post.id, tag_id: tag.id)
 
-        assert assignment.inserted_at != nil
-        assert is_struct(assignment.inserted_at, DateTime)
+        assert %DateTime{} = assignment.inserted_at
       end
     end
 

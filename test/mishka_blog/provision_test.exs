@@ -112,6 +112,7 @@ defmodule MishkaBlog.ProvisionTest do
 
   # Both spellings, for the reason `ComponentCompiler.declared_keys/1` takes both: a declaration is a
   # map that has been through JSON and through Ash's own casting.
+  # credo:disable-for-next-line ExSlop.Check.Warning.DualKeyAccess
   defp attr_name(attr), do: to_string(attr["name"] || attr[:name])
 
   # THE BLOG'S OWN WORDS ARE TRANSLATABLE. Its headings and its header's links ask `t/1` for their
@@ -120,7 +121,7 @@ defmodule MishkaBlog.ProvisionTest do
   describe "the blog's words" do
     test "every heading and header link asks t/1, none is written in English", %{site: site} do
       Provision.ensure!(site)
-      templates = site |> pages() |> Enum.map(& &1.template) |> Enum.join("\n")
+      templates = site |> pages() |> Enum.map_join("\n", & &1.template)
 
       for word <- [
             "Categories",

@@ -309,9 +309,14 @@ defmodule MishkaBlogWeb.Test.BloggerMasterProfileLiveTest do
       assert has_element?(view, "#blogger-versions-modal [phx-click=restore_version]")
       refute render(view) =~ "the.master@example.com"
 
-      versions = :sys.get_state(view.pid).socket.assigns.versions
-      assert Enum.count(versions, &(&1.user_id == ctx.master.id)) == 2
-      assert Enum.all?(versions, &withheld?(&1.user))
+      authors =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#blogger-versions [id$='-author']")
+        |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+      assert authors == ["Master", "Master"]
     end
 
     test "the admin dashboard names the master by its profile, never by its account", ctx do

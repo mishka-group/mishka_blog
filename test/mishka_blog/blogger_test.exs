@@ -20,7 +20,7 @@ defmodule MishkaBlog.Test.BloggerTest do
 
       test "uses UUID v7 for primary keys" do
         blogger = create_blogger!()
-        assert is_binary(blogger.id)
+        assert {:ok, _} = Ecto.UUID.cast(blogger.id)
         assert String.length(blogger.id) == 36
       end
 
@@ -285,7 +285,7 @@ defmodule MishkaBlog.Test.BloggerTest do
           |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id, authorize?: false)
           |> Ash.destroy!(return_destroyed?: true)
 
-        assert archived.archived_at != nil
+        assert %DateTime{} = archived.archived_at
 
         # Should not appear in normal reads
         bloggers =
@@ -690,7 +690,6 @@ defmodule MishkaBlog.Test.BloggerTest do
           |> Ash.read_one!(authorize?: false)
 
         assert result.id == blogger.id
-        assert is_list(result.sorted_versions)
         assert length(result.sorted_versions) >= 3
       end
 
@@ -1210,7 +1209,6 @@ defmodule MishkaBlog.Test.BloggerTest do
           |> Ash.get!(blogger.id, tenant: site.id, authorize?: false)
           |> Ash.load!(:latest_version, authorize?: false)
 
-        assert not is_nil(loaded.latest_version)
         assert is_struct(loaded.latest_version, Blogger.Version)
       end
 
@@ -1236,7 +1234,6 @@ defmodule MishkaBlog.Test.BloggerTest do
           |> Ash.get!(blogger.id, tenant: site.id, authorize?: false)
           |> Ash.load!(:recent_versions, authorize?: false)
 
-        assert is_list(loaded.recent_versions)
         assert length(loaded.recent_versions) <= 10
         assert length(loaded.recent_versions) >= 5
       end

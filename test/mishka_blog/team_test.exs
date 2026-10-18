@@ -66,7 +66,7 @@ defmodule MishkaBlog.Test.TeamTest do
           |> Ash.destroy!(return_destroyed?: true)
 
         assert archived.status == :inactive
-        assert archived.archived_at != nil
+        assert %DateTime{} = archived.archived_at
       end
 
       test "unarchive sets status to active" do
@@ -680,7 +680,7 @@ defmodule MishkaBlog.Test.TeamTest do
           )
 
         assert fetched.id == team.id
-        assert fetched.archived_at != nil
+        assert %DateTime{} = fetched.archived_at
       end
 
       test "master_unarchive restores team" do
@@ -841,7 +841,7 @@ defmodule MishkaBlog.Test.TeamTest do
 
       test "uses UUID v7 for primary keys" do
         team = create_team!()
-        assert is_binary(team.id)
+        assert {:ok, _} = Ecto.UUID.cast(team.id)
         assert String.length(team.id) == 36
       end
 
@@ -1251,8 +1251,7 @@ defmodule MishkaBlog.Test.TeamTest do
           |> Ash.read_one!(authorize?: false)
 
         assert result.id == team.id
-        assert is_list(result.sorted_versions)
-        assert length(result.sorted_versions) > 0
+        assert [_ | _] = result.sorted_versions
       end
 
       test "respects versions_limit argument" do
@@ -1303,7 +1302,7 @@ defmodule MishkaBlog.Test.TeamTest do
           |> Ash.read_one!(authorize?: false)
 
         assert result.id == team.id
-        assert is_list(result.sorted_versions)
+        assert [_ | _] = result.sorted_versions
       end
     end
 
@@ -1341,8 +1340,7 @@ defmodule MishkaBlog.Test.TeamTest do
 
         first_team = List.first(teams)
         assert first_team.id == team.id
-        assert is_list(first_team.sorted_versions)
-        assert length(first_team.sorted_versions) > 0
+        assert [_ | _] = first_team.sorted_versions
       end
 
       test "returns error for team from different tenant" do
@@ -1387,7 +1385,7 @@ defmodule MishkaBlog.Test.TeamTest do
 
         first_team = List.first(teams)
         assert first_team.id == team.id
-        assert is_list(first_team.sorted_versions)
+        assert [_ | _] = first_team.sorted_versions
       end
     end
 
@@ -1422,7 +1420,7 @@ defmodule MishkaBlog.Test.TeamTest do
           |> Ash.read!(authorize?: false)
 
         first_version = List.first(versions)
-        assert not is_nil(first_version)
+        assert %Team.Version{} = first_version
 
         # Restore to first version
         restored =
@@ -1775,7 +1773,6 @@ defmodule MishkaBlog.Test.TeamTest do
           |> Ash.get!(team.id, tenant: site.id, authorize?: false)
           |> Ash.load!(:latest_version, authorize?: false)
 
-        assert not is_nil(loaded.latest_version)
         assert is_struct(loaded.latest_version, Team.Version)
       end
 
@@ -1799,7 +1796,6 @@ defmodule MishkaBlog.Test.TeamTest do
           |> Ash.get!(team.id, tenant: site.id, authorize?: false)
           |> Ash.load!(:recent_versions, authorize?: false)
 
-        assert is_list(loaded.recent_versions)
         assert length(loaded.recent_versions) <= 10
         assert length(loaded.recent_versions) >= 5
       end

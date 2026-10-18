@@ -19,7 +19,7 @@ defmodule MishkaBlog.Test.TagTest do
 
       test "uses UUID v7 for primary keys" do
         tag = create_blog_tag!()
-        assert is_binary(tag.id)
+        assert {:ok, _} = Ecto.UUID.cast(tag.id)
         assert String.length(tag.id) == 36
       end
 
@@ -52,7 +52,7 @@ defmodule MishkaBlog.Test.TagTest do
         assert tag.slug == "programming"
         assert tag.language == "en"
         assert tag.site_id == site.id
-        assert tag.language_group_id != nil
+        assert {:ok, _} = Ecto.UUID.cast(tag.language_group_id)
       end
 
       test "auto-generates slug from input" do
@@ -116,7 +116,7 @@ defmodule MishkaBlog.Test.TagTest do
           )
           |> Ash.create!()
 
-        assert tag.language_group_id != nil
+        assert {:ok, _} = Ecto.UUID.cast(tag.language_group_id)
       end
 
       test "accepts optional description" do
@@ -586,7 +586,7 @@ defmodule MishkaBlog.Test.TagTest do
           )
 
         assert fetched.id == tag.id
-        assert fetched.archived_at != nil
+        assert %DateTime{} = fetched.archived_at
       end
 
       test "unarchive restores tag" do
@@ -764,7 +764,8 @@ defmodule MishkaBlog.Test.TagTest do
 
         # Changeset should be valid and relationship should be configured
         assert changeset.valid?
-        assert changeset.relationships[:tenant_posts] != nil
+        post_id = post.id
+        assert %{tenant_posts: [{[%{id: ^post_id}], _opts}]} = changeset.relationships
       end
 
       test "remove_post action exists and accepts post_id" do
@@ -914,8 +915,7 @@ defmodule MishkaBlog.Test.TagTest do
           |> Ash.read_one!(authorize?: false)
 
         assert result.id == tag.id
-        assert is_list(result.sorted_versions)
-        assert length(result.sorted_versions) > 0
+        assert [_ | _] = result.sorted_versions
       end
 
       test "respects versions_limit argument" do
@@ -968,8 +968,7 @@ defmodule MishkaBlog.Test.TagTest do
           |> Ash.read_one!(authorize?: false)
 
         assert result.id == tag.id
-        assert is_list(result.sorted_versions)
-        assert length(result.sorted_versions) > 0
+        assert [_ | _] = result.sorted_versions
       end
     end
 
@@ -1008,8 +1007,7 @@ defmodule MishkaBlog.Test.TagTest do
 
         first_tag = List.first(tags)
         assert first_tag.id == tag.id
-        assert is_list(first_tag.sorted_versions)
-        assert length(first_tag.sorted_versions) > 0
+        assert [_ | _] = first_tag.sorted_versions
       end
 
       test "returns error for tag from different tenant" do
@@ -1056,7 +1054,7 @@ defmodule MishkaBlog.Test.TagTest do
 
         first_tag = List.first(tags)
         assert first_tag.id == tag.id
-        assert is_list(first_tag.sorted_versions)
+        assert [_ | _] = first_tag.sorted_versions
       end
     end
 
@@ -1091,7 +1089,7 @@ defmodule MishkaBlog.Test.TagTest do
           |> Ash.read!(authorize?: false)
 
         first_version = List.first(versions)
-        assert not is_nil(first_version)
+        assert %Tag.Version{} = first_version
 
         # Restore to first version
         restored =
@@ -1451,7 +1449,6 @@ defmodule MishkaBlog.Test.TagTest do
           |> Ash.get!(tag.id, tenant: site.id, authorize?: false)
           |> Ash.load!(:latest_version, authorize?: false)
 
-        assert not is_nil(loaded.latest_version)
         assert is_struct(loaded.latest_version, Tag.Version)
       end
 
@@ -1476,7 +1473,6 @@ defmodule MishkaBlog.Test.TagTest do
           |> Ash.get!(tag.id, tenant: site.id, authorize?: false)
           |> Ash.load!(:recent_versions, authorize?: false)
 
-        assert is_list(loaded.recent_versions)
         assert length(loaded.recent_versions) <= 10
         assert length(loaded.recent_versions) >= 5
       end

@@ -22,7 +22,7 @@ defmodule MishkaBlog.Test.CommentTest do
         post = create_blog_post!(site_id: site.id)
         comment = create_comment!(post_id: post.id, content: "Test comment")
 
-        assert is_binary(comment.id)
+        assert {:ok, _} = Ecto.UUID.cast(comment.id)
         assert String.length(comment.id) == 36
       end
 
@@ -49,8 +49,8 @@ defmodule MishkaBlog.Test.CommentTest do
         assert comment.post_id == post.id
         assert comment.content == "This is a test comment"
         assert comment.status == :pending
-        assert comment.inserted_at != nil
-        assert comment.updated_at != nil
+        assert %DateTime{} = comment.inserted_at
+        assert %DateTime{} = comment.updated_at
       end
 
       test "creates comment with authenticated user" do
@@ -532,7 +532,7 @@ defmodule MishkaBlog.Test.CommentTest do
           Ash.get!(Comment, comment.id, action: :get_archived, tenant: site.id, authorize?: false)
 
         assert archived_comment.id == comment.id
-        assert archived_comment.archived_at != nil
+        assert %DateTime{} = archived_comment.archived_at
       end
 
       test "cannot archive already archived comment" do
@@ -1222,7 +1222,7 @@ defmodule MishkaBlog.Test.CommentTest do
         fetched = Ash.get!(Comment, comment.id, action: :master_get_archived, authorize?: false)
 
         assert fetched.id == comment.id
-        assert fetched.archived_at != nil
+        assert %DateTime{} = fetched.archived_at
       end
     end
 

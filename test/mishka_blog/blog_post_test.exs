@@ -19,7 +19,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
 
       test "uses UUID v7 for primary keys" do
         blog_post = create_blog_post!()
-        assert is_binary(blog_post.id)
+        assert {:ok, _} = Ecto.UUID.cast(blog_post.id)
         assert String.length(blog_post.id) == 36
       end
 
@@ -102,7 +102,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
         site = create_site!()
         blog_post = create_blog_post!(title: "Master Post", site_id: site.id)
 
-        assert blog_post.language_group_id != nil
+        assert {:ok, _} = Ecto.UUID.cast(blog_post.language_group_id)
       end
 
       test "defaults status to draft" do
@@ -475,7 +475,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.update!()
 
         assert published.status == :published
-        assert published.published_at != nil
+        assert %DateTime{} = published.published_at
       end
 
       test "master_publish publishes a post" do
@@ -488,7 +488,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.update()
 
         assert published.status == :published
-        assert published.published_at != nil
+        assert %DateTime{} = published.published_at
       end
 
       test "unpublish action reverts to draft" do
@@ -542,7 +542,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id, authorize?: false)
           |> Ash.destroy!(return_destroyed?: true)
 
-        assert archived.archived_at != nil
+        assert %DateTime{} = archived.archived_at
         assert archived.status == :archived
 
         # Should not appear in normal reads
@@ -612,7 +612,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           )
 
         assert fetched.id == blog_post.id
-        assert fetched.archived_at != nil
+        assert %DateTime{} = fetched.archived_at
       end
 
       test "master_unarchive restores blog post" do
@@ -1619,8 +1619,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.read_one!(authorize?: false)
 
         assert result.id == post.id
-        assert is_list(result.sorted_versions)
-        assert length(result.sorted_versions) > 0
+        assert [_ | _] = result.sorted_versions
       end
 
       test "respects versions_limit argument" do
@@ -1673,7 +1672,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.read_one!(authorize?: false)
 
         assert result.id == post.id
-        assert is_list(result.sorted_versions)
+        assert [_ | _] = result.sorted_versions
       end
     end
 
@@ -1712,8 +1711,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
 
         first_post = List.first(posts)
         assert first_post.id == post.id
-        assert is_list(first_post.sorted_versions)
-        assert length(first_post.sorted_versions) > 0
+        assert [_ | _] = first_post.sorted_versions
       end
 
       test "returns error for post from different tenant" do
@@ -1759,7 +1757,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
 
         first_post = List.first(posts)
         assert first_post.id == post.id
-        assert is_list(first_post.sorted_versions)
+        assert [_ | _] = first_post.sorted_versions
       end
     end
 
@@ -1795,7 +1793,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.read!(authorize?: false)
 
         first_version = List.first(versions)
-        assert not is_nil(first_version)
+        assert %BlogPost.Version{} = first_version
 
         # Restore to first version
         restored =
@@ -2145,7 +2143,6 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.get!(post.id, tenant: site.id, authorize?: false)
           |> Ash.load!(:latest_version, authorize?: false)
 
-        assert not is_nil(loaded.latest_version)
         assert is_struct(loaded.latest_version, BlogPost.Version)
       end
 
@@ -2170,7 +2167,6 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.get!(post.id, tenant: site.id, authorize?: false)
           |> Ash.load!(:recent_versions, authorize?: false)
 
-        assert is_list(loaded.recent_versions)
         assert length(loaded.recent_versions) <= 10
         assert length(loaded.recent_versions) >= 5
       end

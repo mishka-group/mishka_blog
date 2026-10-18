@@ -1369,7 +1369,6 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
 
         ids = Enum.map(body["data"], & &1["id"])
         assert active1.id in ids
@@ -1539,7 +1538,6 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         assert body["data"]["attributes"]["name"] == "Team with Members"
 
         # Verify included members (should be limited to 10)
-        assert is_list(body["included"])
         member_records = Enum.filter(body["included"], fn inc -> inc["type"] == "blogger" end)
         assert length(member_records) == 10
 
@@ -1697,7 +1695,7 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         body = Jason.decode!(response.resp_body)
         assert body["data"]["id"] == team.id
         # No included data expected
-        assert is_nil(body["included"]) or body["included"] == []
+        refute Map.has_key?(body, "included")
       end
 
       test "can include nested relationships with pagination", %{
@@ -1730,7 +1728,6 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         body = Jason.decode!(response.resp_body)
 
         # Verify included data contains both bloggers and users
-        assert is_list(body["included"])
         blogger_records = Enum.filter(body["included"], fn inc -> inc["type"] == "blogger" end)
         user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
 
@@ -1784,7 +1781,6 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         assert body["data"]["attributes"]["name"] == "Public Team"
 
         # Verify included data contains both bloggers and users
-        assert is_list(body["included"])
         blogger_records = Enum.filter(body["included"], fn inc -> inc["type"] == "blogger" end)
         user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
 
@@ -2275,7 +2271,6 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
 
         # Check sorted_versions in attributes
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) == 3
       end
 
@@ -2350,7 +2345,6 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         assert response1.status == 200
         body1 = Jason.decode!(response1.resp_body)
         sorted_versions1 = body1["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions1)
         assert length(sorted_versions1) == 2
 
         # Get site2 team with versions
@@ -2365,7 +2359,6 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         assert response2.status == 200
         body2 = Jason.decode!(response2.resp_body)
         sorted_versions2 = body2["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions2)
         assert length(sorted_versions2) == 1
       end
     end
@@ -2438,12 +2431,10 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
 
         # Check latest_version calculation
         latest_version = body["data"]["attributes"]["latest_version"]
-        assert is_map(latest_version)
-        assert latest_version["changes"]["description"] == "Desc 5"
+        assert %{"changes" => %{"description" => "Desc 5"}} = latest_version
 
         # Check recent_versions calculation (should return up to 10)
         recent_versions = body["data"]["attributes"]["recent_versions"]
-        assert is_list(recent_versions)
         assert length(recent_versions) == 5
 
         # Verify they're sorted descending (newest first)
@@ -2616,13 +2607,11 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         body = Jason.decode!(response.resp_body)
 
         # Returns 1 team with versions loaded
-        assert is_list(body["data"])
         assert length(body["data"]) == 1
 
         # Check the versions inside the team
         team_data = List.first(body["data"])
         sorted_versions = team_data["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) == 4
       end
 
@@ -2686,13 +2675,11 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) == 1
 
         # Check the versions inside the team
         team_data = List.first(body["data"])
         sorted_versions = team_data["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) == 2
       end
     end

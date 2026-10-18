@@ -15,7 +15,7 @@ defmodule MishkaBlog.Test.TeamMemberTest do
 
     test "resource has UUID primary key" do
       team_member = create_team_member!()
-      assert is_binary(team_member.id)
+      assert {:ok, _} = Ecto.UUID.cast(team_member.id)
       assert String.length(team_member.id) == 36
     end
 
@@ -245,7 +245,7 @@ defmodule MishkaBlog.Test.TeamMemberTest do
       identities = Ash.Resource.Info.identities(TeamMember)
       unique_identity = Enum.find(identities, &(&1.name == :unique_team_member))
 
-      assert unique_identity
+      assert %Ash.Resource.Identity{name: :unique_team_member} = unique_identity
       assert unique_identity.keys == [:team_id, :blogger_id]
     end
 

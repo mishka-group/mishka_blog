@@ -338,7 +338,7 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
 
         # Verify tag is archived
         archived_tag = Ash.get!(MishkaBlog.Tag, tag.id, action: :master_get, authorize?: false)
-        refute is_nil(archived_tag.archived_at)
+        assert %DateTime{} = archived_tag.archived_at
       end
 
       test "GET /archived - lists archived tags (master_archived)", %{
@@ -560,7 +560,7 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
         archived_tag =
           Ash.get!(MishkaBlog.Tag, tag.id, tenant: site.id, action: :archived, authorize?: false)
 
-        refute is_nil(archived_tag.archived_at)
+        assert %DateTime{} = archived_tag.archived_at
       end
 
       test "requires authentication for tenant routes", %{site: site} do
@@ -1067,7 +1067,6 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
 
         # Check sorted_versions in attributes
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) >= 3
       end
 
@@ -1128,7 +1127,6 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
         assert response1.status == 200
         body1 = Jason.decode!(response1.resp_body)
         sorted_versions1 = body1["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions1)
         assert length(sorted_versions1) >= 2
 
         # Get site2 tag with versions
@@ -1143,8 +1141,7 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
         assert response2.status == 200
         body2 = Jason.decode!(response2.resp_body)
         sorted_versions2 = body2["data"]["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions2)
-        assert length(sorted_versions2) >= 1
+        assert [_ | _] = sorted_versions2
       end
     end
 
@@ -1214,12 +1211,10 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
 
         # Check latest_version calculation
         latest_version = body["data"]["attributes"]["latest_version"]
-        assert is_map(latest_version)
-        assert latest_version["changes"]["description"] == "Desc 5"
+        assert %{"changes" => %{"description" => "Desc 5"}} = latest_version
 
         # Check recent_versions calculation (should return up to 10)
         recent_versions = body["data"]["attributes"]["recent_versions"]
-        assert is_list(recent_versions)
         assert length(recent_versions) >= 5
 
         # Verify they're sorted descending (newest first)
@@ -1372,13 +1367,11 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
         body = Jason.decode!(response.resp_body)
 
         # Returns 1 tag with versions loaded
-        assert is_list(body["data"])
         assert length(body["data"]) == 1
 
         # Check the versions inside the tag
         tag_data = List.first(body["data"])
         sorted_versions = tag_data["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) >= 4
       end
 
@@ -1438,13 +1431,11 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
 
         assert response.status == 200
         body = Jason.decode!(response.resp_body)
-        assert is_list(body["data"])
         assert length(body["data"]) == 1
 
         # Check the versions inside the tag
         tag_data = List.first(body["data"])
         sorted_versions = tag_data["attributes"]["sorted_versions"]
-        assert is_list(sorted_versions)
         assert length(sorted_versions) >= 2
       end
     end
