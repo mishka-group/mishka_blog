@@ -187,7 +187,7 @@ defmodule MishkaBlog.Tag do
 
     version_extensions authorizers: [Ash.Policy.Authorizer]
 
-    mixin {MishkaBlog.Resources.Mixins.TagPaperTrailMixin, :postgres, []}
+    mixin {MishkaBlog.Resources.Mixins.PaperTrailMixin, :postgres, ["mishka_blog_tag_versions"]}
   end
 
   # JSON API configuration for REST endpoints

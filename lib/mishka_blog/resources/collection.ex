@@ -206,7 +206,8 @@ defmodule MishkaBlog.Collection do
 
     version_extensions authorizers: [Ash.Policy.Authorizer]
 
-    mixin {MishkaBlog.Resources.Mixins.CollectionPaperTrailMixin, :postgres, []}
+    mixin {MishkaBlog.Resources.Mixins.PaperTrailMixin, :postgres,
+           ["mishka_blog_collection_versions"]}
   end
 
   # JSON API configuration for REST endpoints

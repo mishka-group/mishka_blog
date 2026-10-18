@@ -170,7 +170,8 @@ defmodule MishkaBlog.AutoPosting do
 
     version_extensions authorizers: [Ash.Policy.Authorizer]
 
-    mixin {MishkaBlog.Resources.Mixins.AutoPostingPaperTrailMixin, :postgres, []}
+    mixin {MishkaBlog.Resources.Mixins.PaperTrailMixin, :postgres,
+           ["mishka_blog_auto_posting_versions"]}
   end
 
   # JSON API configuration for REST endpoints
