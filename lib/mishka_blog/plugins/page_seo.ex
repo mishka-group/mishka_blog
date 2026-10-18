@@ -60,8 +60,9 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   The tag the `slug` capture names in the page's language: its name and description, its own
   `seo_tags`, a `CollectionPage` and a `BreadcrumbList`, Home → Blog → the tag. A public tag says
-  `robots` `noindex, follow`, unless its own `seo_tags` hold a `robots`. `vars` —
-  `tag.name`, `tag.description`, `tag.url`. Its share card says "Tag" above the name.
+  `robots` `noindex, follow`, unless its own `seo_tags` hold a `robots`; the sitemap lists exactly the
+  tags that say `index` (`MishkaBlog.Plugins.SitemapUrls`). `vars` — `tag.name`, `tag.description`,
+  `tag.url`. Its share card says "Tag" above the name.
 
   ## A blogger, `"blog:author"`
 

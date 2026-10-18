@@ -34,7 +34,11 @@ defmodule MishkaBlog.Blogger do
       GuardedStruct.AshResource
     ],
     authorizers: [Ash.Policy.Authorizer],
-    notifiers: [Ash.Notifier.PubSub, MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook]
+    notifiers: [
+      Ash.Notifier.PubSub,
+      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
+      MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh
+    ]
 
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaCmsCore.CoreComponents, only: [icon: 1]

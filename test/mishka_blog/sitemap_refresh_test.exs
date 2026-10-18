@@ -4,10 +4,9 @@
 
 defmodule MishkaBlog.SitemapRefreshTest do
   @moduledoc """
-  A write of a blog post or category schedules its site's sitemap job, tenant and master alike: the
-  two list `MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh`. A tag is in no sitemap, and
-  its write schedules nothing. What the job builds is pinned in core, and what the blog adds to it
-  in `MishkaBlog.Plugins.SitemapUrlsTest`.
+  A write of a blog post, category, tag, blogger or team schedules its site's sitemap job, tenant and
+  master alike: the five list `MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh`. What the
+  job builds is pinned in core, and what the blog adds to it in `MishkaBlog.Plugins.SitemapUrlsTest`.
 
   `MishkaCmsCore.Runtime.Compilers.SitemapCompiler.schedule/1` enqueues nothing under the
   `:env_test?` flag, so setup switches it off once every row a test writes exists. `async: false` —
@@ -30,7 +29,9 @@ defmodule MishkaBlog.SitemapRefreshTest do
       published: create_blog_post!(site_id: site.id, status: :published),
       other_post: create_blog_post!(site_id: other.id, status: :published),
       collection: create_collection!(site_id: site.id),
-      tag: create_blog_tag!(site_id: site.id)
+      tag: create_blog_tag!(site_id: site.id),
+      blogger: create_blogger!(site_id: site.id),
+      team: create_team!(site_id: site.id)
     }
 
     Application.put_env(:mishka_cms_core, :env_test?, false)
@@ -125,19 +126,51 @@ defmodule MishkaBlog.SitemapRefreshTest do
     end
   end
 
-  describe "a category and a tag" do
+  describe "a category, a tag, a blogger and a team" do
     test "a category updated gives its site's job", %{site: site, collection: collection} do
       update!(collection, :update, %{name: "Renamed category"}, tenant: site.id)
 
       assert [_job] = sitemap_jobs(site)
     end
 
-    test "a tag updated or archived gives no job", %{site: site, tag: tag} do
+    test "a tag updated or archived gives its site's job", %{site: site, tag: tag} do
       tag
       |> update!(:update, %{name: "Renamed tag"}, tenant: site.id)
       |> archive!(site)
 
-      assert sitemap_jobs(site) == []
+      assert [_job] = sitemap_jobs(site)
+    end
+
+    test "a blogger created, updated or archived gives its site's job", %{
+      site: site,
+      other: other,
+      blogger: blogger
+    } do
+      create_blogger!(site_id: site.id)
+      assert [_job] = sitemap_jobs(site)
+
+      blogger
+      |> update!(:update, %{display_name: "Renamed blogger"}, tenant: site.id)
+      |> archive!(site)
+
+      assert [_job] = sitemap_jobs(site)
+      assert sitemap_jobs(other) == []
+    end
+
+    test "a team created, updated or archived gives its site's job", %{
+      site: site,
+      other: other,
+      team: team
+    } do
+      create_team!(site_id: site.id, status: :active)
+      assert [_job] = sitemap_jobs(site)
+
+      team
+      |> update!(:update, %{name: "Renamed team"}, tenant: site.id)
+      |> archive!(site)
+
+      assert [_job] = sitemap_jobs(site)
+      assert sitemap_jobs(other) == []
     end
   end
 end
