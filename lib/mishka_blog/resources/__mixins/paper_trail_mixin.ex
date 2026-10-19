@@ -46,6 +46,7 @@ defmodule MishkaBlog.Resources.Mixins.PaperTrailMixin do
         custom_indexes do
           index [:version_inserted_at]
           index [:version_inserted_at], all_tenants?: true
+          index [:version_source_id], all_tenants?: true
         end
       end
 

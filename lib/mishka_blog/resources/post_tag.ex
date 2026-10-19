@@ -43,6 +43,10 @@ defmodule MishkaBlog.PostTag do
     references do
       reference :post, on_delete: :delete
     end
+
+    custom_indexes do
+      index [:tag_id]
+    end
   end
 
   actions do
