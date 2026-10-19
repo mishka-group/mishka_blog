@@ -35,6 +35,10 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
   category is too, as its page asks for that category's
   (`MishkaBlog.Resources.Calculations.EffectivePermissions`).
 
+  A kind whose page names permissions lists nothing: the build reads as a guest, and a guest is
+  shown no post, category, tag, blogger or team whose page is closed to them
+  (`MishkaBlog.Resources.Preparations.OpenToActor`).
+
   The addresses follow the payload's `urls` as a stream, and nothing is read while the hook runs:
   the build reads the rows as it reads the stream, through `:public_list` as the blog's pages read
   them, on the payload's site, as a guest — a build has nobody signed in behind it, and a crawler is

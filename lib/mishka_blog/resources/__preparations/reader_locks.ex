@@ -24,6 +24,17 @@ defmodule MishkaBlog.Resources.Preparations.ReaderLocks do
   no operator that tests each element of an array against a list of names and patterns. Everything
   else is an Ash expression.
 
+  ## The page that serves a record
+
+  A record is also kept from a reader the runtime page that serves its address is locked to. The
+  pages are those of the site that show the kind of record (`page_open/3`: `extra["record"]` is
+  `"blog:post"`, `"blog:category"`, `"blog:tag"`, `"blog:author"` or `"blog:team"`), active and not
+  archived, and the kind opens for the reader when no page shows it or when one of them names no
+  permission or names one the reader holds, as the page itself lets them in. It is a subquery of the
+  read that does not depend on the row, so the database runs it once for the statement and no read
+  is made beforehand; a site that locks no page opens every kind. The fragment names the table and
+  the columns of the pages, which `MishkaBlog.ReaderLocksTest` keeps to the resource's.
+
   ## Records that inherit
 
   A post opens with its own lock, else with those of the categories it is filed under, each as the
@@ -71,6 +82,16 @@ defmodule MishkaBlog.Resources.Preparations.ReaderLocks do
   end
 
   @doc """
+  Whether the runtime page that serves a record of `record` (`"blog:post"`, `"blog:category"`,
+  `"blog:tag"`, `"blog:author"` or `"blog:team"`) is open to the reader, in `site` (see `site/1`):
+  true when no page shows the kind, or when a page that does names no permission or one the reader
+  holds.
+  """
+  @spec page_open(t(), String.t(), Ash.Expr.t()) :: Ash.Expr.t()
+  def page_open(%__MODULE__{exact: exact, patterns: patterns}, record, site),
+    do: open_page(exact, patterns, site, record)
+
+  @doc """
   Whether a record whose lock is its `permissions` opens for the reader: it names nothing, or names
   something the reader holds.
   """
@@ -86,11 +107,12 @@ defmodule MishkaBlog.Resources.Preparations.ReaderLocks do
   @spec post(t(), Ash.Expr.t()) :: Ash.Expr.t()
   def post(%__MODULE__{} = reader, site) do
     Ash.Expr.expr(
-      if is_nil(permissions) or permissions == [] do
-        not (^locked_post(site)) or ^opened_post(reader, site)
-      else
-        ^holds(reader)
-      end
+      ^page_open(reader, "blog:post", site) and
+        if is_nil(permissions) or permissions == [] do
+          not (^locked_post(site)) or ^opened_post(reader, site)
+        else
+          ^holds(reader)
+        end
     )
   end
 
@@ -99,8 +121,12 @@ defmodule MishkaBlog.Resources.Preparations.ReaderLocks do
   those of the nearest category above it that does.
   """
   @spec category(t(), Ash.Expr.t()) :: Ash.Expr.t()
-  def category(%__MODULE__{} = reader, site),
-    do: Ash.Expr.expr(not (^locked_category(site)) or ^opened_category(reader, site))
+  def category(%__MODULE__{} = reader, site) do
+    Ash.Expr.expr(
+      ^page_open(reader, "blog:category", site) and
+        (not (^locked_category(site)) or ^opened_category(reader, site))
+    )
+  end
 
   @doc """
   Whether a comment opens for the reader, in `site`: whoever may open its post. A comment whose post
@@ -198,6 +224,35 @@ defmodule MishkaBlog.Resources.Preparations.ReaderLocks do
     end
   end
 
+  # Whether a page of the site that shows a kind of record is open to the reader, true when none
+  # shows it. `permissions` is NULL or empty for a page that names none.
+  @pages_open """
+  COALESCE((
+    SELECT bool_or(
+      pg.permissions IS NULL OR pg.permissions = '{}' OR EXISTS (
+        SELECT 1 FROM unnest(pg.permissions) AS held
+        WHERE held NOT LIKE 'admin:api:%' AND (held = ANY(?) OR held ~ ANY(?))
+      )
+    )
+    FROM pages pg
+    WHERE pg.site_id = ? AND pg.active AND pg.archived_at IS NULL AND pg.extra->>'record' = ?
+  ), true)
+  """
+
+  defmacrop pages_open(exact, patterns, site, record) do
+    quote do
+      Ash.Expr.expr(
+        fragment(
+          unquote(@pages_open),
+          type(^unquote(exact), {:array, :string}),
+          type(^unquote(patterns), {:array, :string}),
+          ^unquote(site),
+          type(^unquote(record), :string)
+        )
+      )
+    end
+  end
+
   defmacrop holds_lock(exact, patterns) do
     sql = String.replace(@matches, "%LOCK%", "?")
     permissions = Macro.var(:permissions, nil)
@@ -213,6 +268,8 @@ defmodule MishkaBlog.Resources.Preparations.ReaderLocks do
       )
     end
   end
+
+  defp open_page(exact, patterns, site, record), do: pages_open(exact, patterns, site, record)
 
   defp locked_category(site), do: in_locked_categories(site)
 

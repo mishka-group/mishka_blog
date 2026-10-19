@@ -45,6 +45,87 @@ defmodule MishkaBlog.ReaderLocksTest do
 
       assert [:post_id, :collection_id] --
                Enum.map(Ash.Resource.Info.attributes(MishkaBlog.PostCollection), & &1.name) == []
+
+      assert AshPostgres.DataLayer.Info.table(MishkaCmsCore.Runtime.Page) == "pages"
+
+      assert [:id, :site_id, :extra, :permissions, :active, :archived_at] --
+               Enum.map(Ash.Resource.Info.attributes(MishkaCmsCore.Runtime.Page), & &1.name) == []
+    end
+  end
+
+  describe "a lock on a page" do
+    setup do
+      site = create_site!(active: true)
+      post = create_blog_post!(site_id: site.id, status: :published, language: "en")
+
+      kinds =
+        for {lock, index} <- Enum.with_index([nil, [] | Enum.take(lock(), 25)]), into: %{} do
+          kind = "kind-#{index}"
+
+          create_page!(
+            site_id: site.id,
+            path: "/kind-#{index}/:slug",
+            extra: %{"record" => kind},
+            permissions: lock
+          )
+
+          {kind, lock}
+        end
+
+      %{site: site, post: post, kinds: kinds}
+    end
+
+    defp page_opens?(site, post, reader, kind) do
+      BlogPost
+      |> Ash.Query.for_read(:read, %{}, tenant: site.id, authorize?: false)
+      |> Ash.Query.filter(
+        id == ^post.id and ^ReaderLocks.page_open(reader, kind, ReaderLocks.site(site.id))
+      )
+      |> Ash.read!(page: false)
+      |> Kernel.!=([])
+    end
+
+    property "opens for the reader the checker opens it for", ctx do
+      %{site: site, post: post, kinds: kinds} = ctx
+
+      check all(held <- StreamData.list_of(name(), max_length: 5), max_runs: 100) do
+        reader = ReaderLocks.of(actor(held))
+
+        for {kind, lock} <- kinds do
+          assert page_opens?(site, post, reader, kind) == OpenToActor.opens?(lock, actor(held)),
+                 "#{inspect(lock)} for #{inspect(held)}"
+        end
+      end
+    end
+
+    test "opens for every reader when no page shows the kind", %{site: site, post: post} do
+      for held <- [nil, actor([]), actor(["members:read"])] do
+        assert page_opens?(site, post, ReaderLocks.of(held), "blog:post")
+      end
+    end
+
+    test "is closed to a reader holding nothing by the only page that shows the kind, and open to " <>
+           "one holding any of its names",
+         %{site: site, post: post} do
+      create_page!(
+        site_id: site.id,
+        path: "/blog/:slug",
+        extra: %{"record" => "blog:post"},
+        permissions: ["members:read", "staff:*"]
+      )
+
+      for {held, expected} <- [
+            {nil, false},
+            {actor([]), false},
+            {actor(["others:read"]), false},
+            {actor(["members:read"]), true},
+            {actor(["staff:x"]), false},
+            {actor(["staff:*"]), true},
+            {actor(["*"]), true}
+          ] do
+        assert page_opens?(site, post, ReaderLocks.of(held), "blog:post") == expected,
+               inspect(held)
+      end
     end
   end
 

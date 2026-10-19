@@ -38,7 +38,9 @@ defmodule MishkaBlog.Kit do
   Every read is the public action's, with the visitor the page hands down as `current_user` as its
   actor — `nil` for a guest — so a post, a category or a tag locked to permissions the visitor does
   not hold is left out by the same rules the record's own page keeps
-  (`MishkaBlog.Resources.Preparations.OpenToActor`). No component reads as the system.
+  (`MishkaBlog.Resources.Preparations.OpenToActor`), and so is a record whose page, `/blog/:slug`
+  or whichever path the page was given, is locked to permissions the visitor does not hold. No
+  component reads as the system.
 
   ### The stylesheet
 

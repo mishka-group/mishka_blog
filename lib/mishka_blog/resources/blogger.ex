@@ -1241,6 +1241,7 @@ defmodule MishkaBlog.Blogger do
 
     read :public_list do
       description "Public endpoint to list all active (non-archived) bloggers (no authentication required)"
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :blogger}
       prepare MishkaCmsCore.Runtime.Resources.Preparations.PluginQueryHook
       filter expr(is_nil(archived_at))
 
@@ -1262,12 +1263,14 @@ defmodule MishkaBlog.Blogger do
 
     read :public_get do
       description "Public endpoint to get a single active (non-archived) blogger by ID (no authentication required)"
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :blogger}
       filter expr(is_nil(archived_at))
       get? true
     end
 
     read :public_by_slug do
       description "Public endpoint to get a blogger by slug (no authentication required)"
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :blogger}
       prepare MishkaCmsCore.Runtime.Resources.Preparations.PluginQueryHook
       argument :slug, :string, allow_nil?: false
       filter expr(slug == ^arg(:slug) and is_nil(archived_at))
