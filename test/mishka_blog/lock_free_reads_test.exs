@@ -301,7 +301,7 @@ defmodule MishkaBlog.LockFreeReadsTest do
                ids_of([open])
 
       for post <- [in_members, in_team] do
-        assert {:error, %Ash.Error.Forbidden{}} =
+        assert {:ok, nil} =
                  BlogPost
                  |> read_query(:public_get, site, nil)
                  |> Ash.Query.filter(id == ^post.id)
@@ -344,7 +344,7 @@ defmodule MishkaBlog.LockFreeReadsTest do
 
         assert Ash.read!(read_query(BlogPost, :public_list, site, actor), page: @page).count == 1
 
-        assert {:error, %Ash.Error.Forbidden{}} =
+        assert {:ok, nil} =
                  BlogPost
                  |> read_query(:public_get, site, actor)
                  |> Ash.Query.filter(id == ^locked.id)
@@ -395,7 +395,7 @@ defmodule MishkaBlog.LockFreeReadsTest do
       assert ids(Ash.read!(read_query(Tag, :public_list, site, member), page: @page)) ==
                ids_of([open, locked])
 
-      assert {:error, %Ash.Error.Forbidden{}} =
+      assert {:ok, nil} =
                Tag
                |> read_query(:public_get, site, nil)
                |> Ash.Query.filter(id == ^locked.id)
@@ -922,7 +922,7 @@ defmodule MishkaBlog.LockFreeReadsTest do
       )
     end
 
-    # Each record asked for by itself is the record, or forbidden.
+    # Each record asked for by itself is the record, or not found.
     defp check_records!(site, data, rules, who, where, opens?) do
       %{published: published, lock_of_post_id: lock_of_post_id, by_id: by_id} = rules
 
@@ -937,7 +937,7 @@ defmodule MishkaBlog.LockFreeReadsTest do
           do: assert({:ok, %{id: _}} = outcome, "#{inspect(resource)} by itself, #{where}"),
           else:
             assert(
-              {:error, %Ash.Error.Forbidden{}} = outcome,
+              {:ok, nil} = outcome,
               "#{inspect(resource)} by itself, #{where}"
             )
       end

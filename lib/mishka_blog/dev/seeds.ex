@@ -333,7 +333,7 @@ defmodule MishkaBlog.Dev.Seeds do
     # A LOCKED AND AN UNLISTED EXAMPLE OF EACH KIND, so every site has a record to try a page's
     # permissions and its robots meta on. The post "Members only: the release checklist", the
     # category "Members only" and the tag "Staff only" name `admin:dashboard:blog:post`: signed out,
-    # their pages send you to sign in; `viewer@<site>.test` gets a 404; `writer@<site>.test`, which
+    # their pages are a 404, as they are for `viewer@<site>.test`; `writer@<site>.test`, which
     # holds that permission, opens them. The post "Kept out of search engines", the category "Ideas in
     # progress" and the tag "Unlisted" open for everyone, but their robots meta says `noindex`, so the
     # sitemap leaves them out — as it leaves out the locked three.
