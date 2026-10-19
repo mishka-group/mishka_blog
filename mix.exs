@@ -5,17 +5,25 @@
 defmodule MishkaBlog.MixProject do
   use Mix.Project
 
+  @version "0.0.1"
+  @source_url "https://github.com/mishka-group/mishka_blog"
+
   def project do
     [
       app: :mishka_blog,
-      version: "0.0.1",
-      elixir: "~> 1.18",
+      name: "Mishka Blog",
+      version: @version,
+      elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       consolidate_protocols: Mix.env() != :dev,
       aliases: aliases(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      package: package()
+      description: description(),
+      package: package(),
+      homepage_url: "https://mishka.tools/cms/extensions/blog",
+      source_url: @source_url,
+      docs: [main: "readme", extras: ["README.md"], source_url: @source_url]
     ]
   end
 
@@ -71,6 +79,10 @@ defmodule MishkaBlog.MixProject do
     ]
   end
 
+  defp description() do
+    "A multi-author blog engine for Mishka CMS, built with Elixir and Phoenix LiveView."
+  end
+
   # `priv/cms_ui_kits` AND NOTHING ELSE UNDER `priv`. The bundle is the extension's live components —
   # `MishkaBlog.Kit.bundle_path/0` reads it out of `:code.priv_dir/1`, so leaving it behind pointed a
   # hex install at a file that does not exist and gave that site no blog components at all. The rest
@@ -80,7 +92,15 @@ defmodule MishkaBlog.MixProject do
   defp package() do
     [
       licenses: ["Apache-2.0"],
-      files: ~w(lib priv/cms_ui_kits .formatter.exs mix.exs LICENSE README*)
+      maintainers: ["Shahryar Tavakkoli"],
+      files: ~w(lib priv/cms_ui_kits .formatter.exs mix.exs LICENSE README*),
+      links: %{
+        "Mishka Blog" => "https://mishka.tools/cms/extensions/blog",
+        "Official document" => "https://mishka.tools/cms/extensions/blog/docs",
+        "GitHub" => @source_url,
+        "Sponsor" => "https://github.com/sponsors/mishka-group",
+        "Contributors" => "#{@source_url}/graphs/contributors"
+      }
     ]
   end
 
