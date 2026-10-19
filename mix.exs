@@ -23,7 +23,12 @@ defmodule MishkaBlog.MixProject do
       package: package(),
       homepage_url: "https://mishka.tools/cms/extensions/blog",
       source_url: @source_url,
-      docs: [main: "readme", extras: ["README.md"], source_url: @source_url]
+      docs: [
+        main: "readme",
+        source_ref: "v#{@version}",
+        extras: ["README.md"],
+        source_url: @source_url
+      ]
     ]
   end
 
