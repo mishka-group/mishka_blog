@@ -8,7 +8,8 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   record whose lock names permissions opens only for a reader holding one of them
   (`AccessPermissions.match?/3`), and never for a visitor who is not signed in. A list leaves out,
   in its own query, every record the reader may not open, so its pages and its count are of what
-  the reader sees; asking for one of them by itself is refused as forbidden.
+  the reader sees; asking for one of them by itself finds nothing, as an id nothing is stored at
+  does.
 
       prepare {OpenToActor, kind: :post}
 
@@ -34,7 +35,7 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
     * a comment (`:comment`) — by its post's.
 
   A record asked for by itself (`get?`) is read with whether it opens for the reader beside it, and
-  is refused as forbidden when it does not.
+  is left out of the result when it does not, so it is not found.
 
   IN A READ OF CATEGORIES OR TAGS, what is counted, sorted by or asked of their posts is of the posts
   the reader may open: an aggregate over them, such as `published_post_count`, in a list or asked for
@@ -112,12 +113,9 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   defp opens(:tag, reader, _site), do: ReaderLocks.opens(reader)
   defp opens(:comment, reader, site), do: ReaderLocks.comment(reader, site)
 
-  # A record that does not open for the reader is refused for the whole read, the way a page is.
-  defp admit(_query, records) do
-    if Enum.all?(records, &(&1.calculations[:open_to_reader?] == true)),
-      do: {:ok, records},
-      else: {:error, Ash.Error.Forbidden.exception([])}
-  end
+  # A record that does not open for the reader is not in the result, the way a page is not found.
+  defp admit(_query, records),
+    do: {:ok, Enum.filter(records, &(&1.calculations[:open_to_reader?] == true))}
 
   defp counted(query, kind, site_id, reader) when kind in [:category, :tag],
     do: to_open_posts(query, ReaderLocks.post(reader, ReaderLocks.site(site_id)))

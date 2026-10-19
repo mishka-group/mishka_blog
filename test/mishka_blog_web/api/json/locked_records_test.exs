@@ -6,7 +6,8 @@ defmodule MishkaBlogWeb.Api.Json.LockedRecordsTest do
   @moduledoc """
   The public JSON API keeps a locked post, category or tag, and the comments of a locked post, to
   whoever its page opens for (`MishkaBlog.Resources.Preparations.OpenToActor`): a list leaves out
-  what its caller may not open, and asking for one of them is refused as forbidden. A locked post
+  what its caller may not open, and asking for one of them is answered as an id nothing is stored
+  at is: a 404 `not_found`, never a 403. A locked post
   takes a comment, a rating or a bookmark, and its comments a vote, from no one else
   (`MishkaBlog.Resources.Validations.OpenToActor`). A post opens
   with its own permissions, else its categories'; a category with its own, else its nearest parent
@@ -75,34 +76,34 @@ defmodule MishkaBlogWeb.Api.Json.LockedRecordsTest do
                ids_of([posts.open, posts.own, posts.in_members, posts.in_guides])
     end
 
-    test "one post by itself is forbidden to whoever may not open it", %{posts: posts} = ctx do
+    test "one post by itself is not found to whoever may not open it", %{posts: posts} = ctx do
       for post <- [posts.own, posts.in_members, posts.in_guides, posts.own_wins] do
-        assert fetch("#{@posts}/#{post.id}", nil).status == 403
-        assert fetch("#{@posts}/#{post.id}", ctx.nobody).status == 403
+        assert_not_found(@posts, post.id, nil)
+        assert_not_found(@posts, post.id, ctx.nobody)
       end
 
       assert fetch("#{@posts}/#{posts.in_guides.id}", ctx.member).status == 200
-      assert fetch("#{@posts}/#{posts.own_wins.id}", ctx.member).status == 403
+      assert_not_found(@posts, posts.own_wins.id, ctx.member)
       assert fetch("#{@posts}/#{posts.open.id}", nil).status == 200
     end
   end
 
   describe "categories and tags" do
-    test "a locked category, and one under it, are left out and forbidden alone", ctx do
+    test "a locked category, and one under it, are left out and not found alone", ctx do
       assert ids(fetch(@categories, nil)) == ids_of([ctx.open])
       assert ids(fetch(@categories, ctx.member)) == ids_of([ctx.members, ctx.guides, ctx.open])
 
-      assert fetch("#{@categories}/#{ctx.guides.id}", nil).status == 403
+      assert_not_found(@categories, ctx.guides.id, nil)
       assert fetch("#{@categories}/#{ctx.guides.id}", ctx.member).status == 200
     end
 
-    test "a locked tag is left out and forbidden alone, and locks no post", %{site: site} = ctx do
+    test "a locked tag is left out and not found alone, and locks no post", %{site: site} = ctx do
       locked = create_blog_tag!(site_id: site.id, language: "en", permissions: ["members:read"])
       open = create_blog_tag!(site_id: site.id, language: "en")
       create_post_tag!(post_id: ctx.posts.open.id, tag_id: locked.id)
 
       assert ids(fetch(@tags, nil)) == ids_of([open])
-      assert fetch("#{@tags}/#{locked.id}", nil).status == 403
+      assert_not_found(@tags, locked.id, nil)
       assert fetch("#{@tags}/#{locked.id}", ctx.member).status == 200
       assert fetch("#{@posts}/#{ctx.posts.open.id}", nil).status == 200
     end
@@ -275,6 +276,21 @@ defmodule MishkaBlogWeb.Api.Json.LockedRecordsTest do
   end
 
   defp fetch(path, token), do: make_api_request(path, %{}, method: :get, headers: bearer(token))
+
+  # A record the reader may not open answers what an id nothing is stored at answers: a 404
+  # `not_found`, with nothing to tell the two apart.
+  defp assert_not_found(collection, id, token) do
+    refused = fetch("#{collection}/#{id}", token)
+    missing = fetch("#{collection}/#{Ash.UUID.generate()}", token)
+
+    assert error_of(refused) == error_of(missing)
+    assert error_of(refused)["code"] == "not_found"
+  end
+
+  defp error_of(%{status: 404, resp_body: body}) do
+    assert [error] = Jason.decode!(body)["errors"]
+    Map.take(error, ["status", "code", "title"])
+  end
 
   defp comment(post, token) do
     make_api_request(
