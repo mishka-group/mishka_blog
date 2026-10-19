@@ -2002,6 +2002,12 @@ defmodule MishkaBlog.Collection do
       description "Child collections nested under this collection"
     end
 
+    has_many :locked_collections, MishkaBlog.Collection do
+      no_attributes? true
+      filter expr(not is_nil(permissions) and permissions != [])
+      description "The collections of the site that name permissions of their own"
+    end
+
     has_many :language_variants, MishkaBlog.Collection do
       public? true
       destination_attribute :language_group_id
@@ -2065,6 +2071,8 @@ defmodule MishkaBlog.Collection do
   end
 
   calculations do
+    calculate :collections_locked?, :boolean, expr(exists(locked_collections, true))
+
     # Who may open the category: its own permissions, else its nearest parent's.
     calculate :effective_permissions,
               {:array, :string},

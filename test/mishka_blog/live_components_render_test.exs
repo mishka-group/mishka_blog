@@ -518,6 +518,131 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     end
   end
 
+  # THE BLOG'S LOCK SCENARIOS, one table: what each of a guest, a user without the permission and a
+  # user with it sees, in the list, among the categories, asking for the post by itself and under it.
+  # The permission of a page that serves the blog is the runtime's, asked before any block draws, and
+  # is held to its own test in the application that serves one.
+  describe "the lock scenarios" do
+    setup %{site: site} do
+      %{
+        readers: [
+          guest: nil,
+          user: create_user_with_permissions!([], site_id: site.id),
+          member: create_user_with_permissions!(["members:read"], site_id: site.id)
+        ]
+      }
+    end
+
+    # What `reader` sees of the site: the titles listed, the categories, and for each post whether it
+    # is drawn when asked for by itself and whether its comment is.
+    defp seen(site, reader, posts) do
+      as = if reader, do: %{current_user: reader}, else: %{}
+      {:ok, list, _html} = mount_page(site, "blog-post-list", Map.merge(%{per_page: 10}, as))
+
+      {:ok, categories, _html} =
+        mount_page(site, "blog-category-list", Map.merge(%{hide_empty: false}, as))
+
+      %{
+        listed: list |> titles() |> Enum.sort(),
+        categories: categories |> text_of(~s([data-role="blog-category-name"])) |> Enum.sort(),
+        asked_for:
+          for post <- posts, into: %{} do
+            {:ok, detail, _html} =
+              mount_page(site, "blog-post-detail", Map.merge(%{slug: post.slug}, as))
+
+            {post.title, text_of(detail, ~s([data-role="blog-detail-title"])) != []}
+          end,
+        commented:
+          for post <- posts, into: %{} do
+            {:ok, comments, _html} =
+              mount_page(site, "blog-post-comments", Map.merge(%{slug: post.slug}, as))
+
+            {post.title, text_of(comments, ~s([data-role="blog-comment-body"])) != []}
+          end
+      }
+    end
+
+    test "a locked post: seen by a user who holds the permission, and by nobody else",
+         %{site: site, readers: readers} do
+      [open, locked] = publish!(site, ["Open", "Locked"])
+      shelf = category!(site, name: "Shelf", slug: "shelf")
+      categorize!(open, shelf)
+      categorize!(locked, shelf)
+
+      locked
+      |> Ash.Changeset.for_update(:master_update, %{permissions: ["members:read"]},
+        authorize?: false
+      )
+      |> Ash.update!()
+
+      for post <- [open, locked], do: comment!(site, post, content: "On #{post.title}")
+      posts = [open, locked]
+
+      assert seen(site, readers[:guest], posts) == %{
+               listed: ["Open"],
+               categories: ["Shelf"],
+               asked_for: %{"Open" => true, "Locked" => false},
+               commented: %{"Open" => true, "Locked" => false}
+             }
+
+      assert seen(site, readers[:user], posts) == seen(site, readers[:guest], posts)
+
+      assert seen(site, readers[:member], posts) == %{
+               listed: ["Locked", "Open"],
+               categories: ["Shelf"],
+               asked_for: %{"Open" => true, "Locked" => true},
+               commented: %{"Open" => true, "Locked" => true}
+             }
+    end
+
+    test "a locked category: its posts are seen by a user who holds the permission, and by nobody else",
+         %{site: site, readers: readers} do
+      [open, behind] = publish!(site, ["Open", "Behind"])
+      members = category!(site, name: "Members", slug: "members", permissions: ["members:read"])
+      shelf = category!(site, name: "Shelf", slug: "shelf")
+      categorize!(open, shelf)
+      categorize!(behind, members)
+
+      for post <- [open, behind], do: comment!(site, post, content: "On #{post.title}")
+      posts = [open, behind]
+
+      assert seen(site, readers[:guest], posts) == %{
+               listed: ["Open"],
+               categories: ["Shelf"],
+               asked_for: %{"Open" => true, "Behind" => false},
+               commented: %{"Open" => true, "Behind" => false}
+             }
+
+      assert seen(site, readers[:user], posts) == seen(site, readers[:guest], posts)
+
+      assert seen(site, readers[:member], posts) == %{
+               listed: ["Behind", "Open"],
+               categories: ["Members", "Shelf"],
+               asked_for: %{"Open" => true, "Behind" => true},
+               commented: %{"Open" => true, "Behind" => true}
+             }
+    end
+
+    test "nothing locked: seen by everybody", %{site: site, readers: readers} do
+      [first, second] = publish!(site, ["First", "Second"])
+      shelf = category!(site, name: "Shelf", slug: "shelf")
+      categorize!(first, shelf)
+      categorize!(second, shelf)
+
+      for post <- [first, second], do: comment!(site, post, content: "On #{post.title}")
+      posts = [first, second]
+
+      everything = %{
+        listed: ["First", "Second"],
+        categories: ["Shelf"],
+        asked_for: %{"First" => true, "Second" => true},
+        commented: %{"First" => true, "Second" => true}
+      }
+
+      for {_name, reader} <- readers, do: assert(seen(site, reader, posts) == everything)
+    end
+  end
+
   describe "blog-post-list" do
     test "shows the site's published posts, newest first", %{site: site} do
       publish!(site, ["First", "Second", "Third"])
@@ -1121,10 +1246,10 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           render_async(view, @async)
         end)
 
-      # One load reads the posts that name a lock of their own — what the list is kept to for its
-      # visitor — then the page of rows and its count: three per render, two renders.
-      assert Enum.count(asked, &String.contains?(&1, "mishka_blog_posts")) == 6,
-             "a load is the locked posts, the page of rows and its count, once for each render"
+      # One load reads the page of rows and its count, nothing being locked on the site: two per
+      # render, two renders.
+      assert Enum.count(asked, &String.contains?(&1, "mishka_blog_posts")) == 4,
+             "a load is the page of rows and its count, once for each render"
     end
 
     # EVERY BLOCK ON THE PAGE ANSWERS IN THE SAME FIRST PAINT.
