@@ -1165,6 +1165,7 @@ defmodule MishkaBlog.Team do
 
     read :public_list do
       description "Public endpoint to list all active teams (no authentication required)"
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :team}
       prepare MishkaCmsCore.Runtime.Resources.Preparations.PluginQueryHook
       filter expr(status == :active)
       pagination offset?: true, default_limit: 20, max_page_size: 100, countable: true
@@ -1174,6 +1175,7 @@ defmodule MishkaBlog.Team do
 
     read :public_get do
       description "Public endpoint to get a single active team by ID (no authentication required)"
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :team}
       get? true
       filter expr(status == :active)
 
@@ -1182,6 +1184,7 @@ defmodule MishkaBlog.Team do
 
     read :public_by_slug do
       description "Public endpoint to get a team by slug (no authentication required)"
+      prepare {MishkaBlog.Resources.Preparations.OpenToActor, kind: :team}
       prepare MishkaCmsCore.Runtime.Resources.Preparations.PluginQueryHook
       argument :slug, :string, allow_nil?: false
       filter expr(slug == ^arg(:slug) and status == :active)

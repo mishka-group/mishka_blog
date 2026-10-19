@@ -24,6 +24,14 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   A read made with `authorize?: false` is the system's — the lock a page's head hands its gate, the
   components a site's stylesheet has to carry — and is not filtered.
 
+  A record is also left out when the runtime page that serves its address is locked to permissions
+  the reader does not hold: while every page that shows a post, a category, a tag, a blogger or a
+  team (`/blog/:slug`, whatever path the page was given) is, no record of that kind is read, counted
+  or listed for the reader, a comment of such a post included, and one asked for alone is not found.
+  The pages are read in the statement of the read itself
+  (`MishkaBlog.Resources.Preparations.ReaderLocks`), from the `pages` table, for the JSON:API and
+  GraphQL as for a page of the site.
+
   WHAT A READ IS KEPT TO is a filter on the read itself, built from the names the reader holds
   (`MishkaBlog.Resources.Preparations.ReaderLocks`), so the database answers it beside the rows
   and nothing is read beforehand, whether anything is locked or not:
@@ -44,7 +52,8 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
 
   ## Options
 
-  * `:kind` - Required. `:post`, `:category`, `:tag` or `:comment`.
+  * `:kind` - Required. `:post`, `:category`, `:tag`, `:comment`, `:blogger` or `:team`. The last two
+    are left out only by the page that serves them: they carry no lock of their own.
   """
   use Ash.Resource.Preparation
 
@@ -57,9 +66,9 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
 
   @impl true
   def init(opts) do
-    if opts[:kind] in [:post, :category, :tag, :comment],
+    if opts[:kind] in [:post, :category, :tag, :comment, :blogger, :team],
       do: {:ok, opts},
-      else: {:error, "kind is one of :post, :category, :tag or :comment"}
+      else: {:error, "kind is one of :post, :category, :tag, :comment, :blogger or :team"}
   end
 
   @impl true
@@ -81,6 +90,13 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
 
   defp reader(%{authorize?: false}), do: :system
   defp reader(%{actor: actor}), do: {:reader, actor}
+
+  # A blogger or a team opens with no lock of its own; only the page that serves it can close it.
+  defp keep(query, kind, reader) when kind in [:blogger, :team] do
+    on_site(query, fn query, site_id ->
+      Ash.Query.filter(query, ^opens(kind, reader, ReaderLocks.site(site_id)))
+    end)
+  end
 
   defp keep(%{action: %{get?: true}} = query, kind, reader) do
     query
@@ -110,8 +126,16 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
 
   defp opens(:post, reader, site), do: ReaderLocks.post(reader, site)
   defp opens(:category, reader, site), do: ReaderLocks.category(reader, site)
-  defp opens(:tag, reader, _site), do: ReaderLocks.opens(reader)
+
+  defp opens(:tag, reader, site),
+    do:
+      Ash.Expr.expr(
+        ^ReaderLocks.page_open(reader, "blog:tag", site) and ^ReaderLocks.opens(reader)
+      )
+
   defp opens(:comment, reader, site), do: ReaderLocks.comment(reader, site)
+  defp opens(:blogger, reader, site), do: ReaderLocks.page_open(reader, "blog:author", site)
+  defp opens(:team, reader, site), do: ReaderLocks.page_open(reader, "blog:team", site)
 
   # A record that does not open for the reader is not in the result, the way a page is not found.
   defp admit(_query, records),
