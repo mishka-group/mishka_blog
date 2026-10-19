@@ -43,6 +43,10 @@ defmodule MishkaBlog.PostCollection do
     references do
       reference :post, on_delete: :delete
     end
+
+    custom_indexes do
+      index [:collection_id]
+    end
   end
 
   actions do

@@ -47,6 +47,10 @@ defmodule MishkaBlog.TeamMember do
       reference :team, on_delete: :delete
       reference :blogger, on_delete: :delete
     end
+
+    custom_indexes do
+      index [:blogger_id]
+    end
   end
 
   guardedstruct do
