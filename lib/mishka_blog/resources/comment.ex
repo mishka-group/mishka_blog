@@ -1748,6 +1748,18 @@ defmodule MishkaBlog.Comment do
       description "Child comments replying to this comment"
     end
 
+    has_many :locked_posts, MishkaBlog.BlogPost do
+      no_attributes? true
+      filter expr(not is_nil(permissions) and permissions != [])
+      description "The posts of the site that name permissions of their own"
+    end
+
+    has_many :locked_collections, MishkaBlog.Collection do
+      no_attributes? true
+      filter expr(not is_nil(permissions) and permissions != [])
+      description "The collections of the site that name permissions of their own"
+    end
+
     has_many :votes, MishkaBlog.CommentVote do
       public? true
       destination_attribute :comment_id
@@ -1756,6 +1768,10 @@ defmodule MishkaBlog.Comment do
   end
 
   calculations do
+    calculate :locks_apply?,
+              :boolean,
+              expr(exists(locked_posts, true) or exists(locked_collections, true))
+
     # Who may reach the comment: whoever may open its post.
     calculate :effective_permissions,
               {:array, :string},

@@ -2951,6 +2951,12 @@ defmodule MishkaBlog.BlogPost do
       filter expr(not is_nil(type(^actor(:id), :uuid)) and is_nil(type(^actor(:site_id), :uuid)))
     end
 
+    has_many :locked_collections, MishkaBlog.Collection do
+      no_attributes? true
+      filter expr(not is_nil(permissions) and permissions != [])
+      description "The collections of the site that name permissions of their own"
+    end
+
     has_many :bookmarks, MishkaBlog.PostBookmark do
       public? true
       destination_attribute :post_id
@@ -2981,6 +2987,8 @@ defmodule MishkaBlog.BlogPost do
   end
 
   calculations do
+    calculate :collections_locked?, :boolean, expr(exists(locked_collections, true))
+
     # THE DATE A POST IS LISTED BY — the one its card and its row show
     # (`MishkaBlogWeb.Templates.PostCard.date_label/1`): a scheduled post's due date, else when it was
     # published, else when it was written. The admin list sorts by it, so the order is the order of the

@@ -19,6 +19,11 @@ defmodule MishkaBlog.Resources.Calculations.EffectivePermissions do
   not open the posts filed under it. A deleted one counts no more. The categories are read only
   for the records that name nothing themselves, one read per site for the whole batch.
 
+  A record that names nothing opens with none, and reads nothing, while no category of its site
+  names any (for a comment, while no post or category does): `collections_locked?` and
+  `locks_apply?`, calculations of the resources, are loaded with the record, for the site the read
+  runs for.
+
       calculate :effective_permissions, {:array, :string}, {EffectivePermissions, kind: :post}
   """
   use Ash.Resource.Calculation
@@ -30,39 +35,65 @@ defmodule MishkaBlog.Resources.Calculations.EffectivePermissions do
   @impl true
   def load(_query, opts, _context) do
     case opts[:kind] do
-      :collection -> [:id, :site_id, :permissions, :parent_collection_id]
-      :post -> [:id, :site_id, :permissions]
-      :comment -> [:site_id, :post_id]
+      :collection -> [:id, :site_id, :permissions, :parent_collection_id, :collections_locked?]
+      :post -> [:id, :site_id, :permissions, :collections_locked?]
+      :comment -> [:site_id, :post_id, :locks_apply?]
     end
   end
 
   @impl true
-  def calculate(records, opts, _context) do
-    open = Enum.reject(records, &own?/1)
+  def calculate(records, opts, context) do
+    kind = opts[:kind]
+    unsettled = Enum.filter(records, &(settled(kind, &1, context) == :unsettled))
+    found = found(kind, unsettled)
 
-    case opts[:kind] do
-      :comment ->
-        posts = post_locks(records)
-        Enum.map(records, &Map.get(posts, &1.post_id, []))
+    Enum.map(records, fn record ->
+      case settled(kind, record, context) do
+        {:ok, permissions} -> permissions
+        :unsettled -> permissions(kind, record, found)
+      end
+    end)
+  end
 
-      :collection ->
-        trees = trees(Enum.filter(open, & &1.parent_collection_id))
+  # What a record opens with when nothing but the record itself and its site's locks say so: its own
+  # permissions when it names some, none when no category of its site (and, for a comment, no post)
+  # names any. The locks are read in the same query as the record, under the site the query runs for,
+  # so they are trusted only for a record of that site.
+  defp settled(kind, %{permissions: [_ | _] = own}, _context) when kind != :comment,
+    do: {:ok, own}
 
-        Enum.map(records, fn collection ->
-          inherited(
-            collection.permissions,
-            collection.parent_collection_id,
-            Map.get(trees, collection.site_id, %{})
-          )
-        end)
-
-      :post ->
-        filed = filed_under(open)
-        trees = trees(Enum.filter(open, &Map.has_key?(filed, &1.id)))
-
-        Enum.map(records, &post_permissions(&1, filed, trees))
+  defp settled(kind, record, context) do
+    case {Map.get(record, flag(kind)), record.site_id} do
+      {false, site_id} when is_binary(site_id) and site_id == context.tenant -> {:ok, []}
+      _locked_or_unknown -> :unsettled
     end
   end
+
+  defp flag(:comment), do: :locks_apply?
+  defp flag(_kind), do: :collections_locked?
+
+  # Everything the records that are not settled need to be worked out, read once for the batch.
+  defp found(:comment, comments), do: post_locks(comments)
+
+  defp found(:collection, collections),
+    do: trees(Enum.filter(collections, & &1.parent_collection_id))
+
+  defp found(:post, posts) do
+    filed = filed_under(posts)
+    {filed, trees(Enum.filter(posts, &Map.has_key?(filed, &1.id)))}
+  end
+
+  defp permissions(:comment, comment, posts), do: Map.get(posts, comment.post_id, [])
+
+  defp permissions(:collection, collection, trees) do
+    inherited(
+      collection.permissions,
+      collection.parent_collection_id,
+      Map.get(trees, collection.site_id, %{})
+    )
+  end
+
+  defp permissions(:post, post, {filed, trees}), do: post_permissions(post, filed, trees)
 
   defp post_permissions(%{permissions: [_ | _] = own}, _filed, _trees), do: own
 
@@ -89,9 +120,6 @@ defmodule MishkaBlog.Resources.Calculations.EffectivePermissions do
     end)
     |> Map.new()
   end
-
-  defp own?(%{permissions: [_ | _]}), do: true
-  defp own?(_record), do: false
 
   # Each post's categories, by the post's id.
   defp filed_under([]), do: %{}
