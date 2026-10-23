@@ -603,6 +603,8 @@ defmodule MishkaBlog.ProvisionTest do
       report = Provision.ensure!(site)
 
       assert %{components: [], pages: [], snippets: []} = report
+
+      assert %{upgraded_pages: [], upgraded_components: [], components_waiting: []} = report
       assert Enum.map(report.skipped_pages, & &1.path) == Provision.page_paths()
 
       assert length(components(site)) == length(Provision.component_names())
@@ -941,6 +943,7 @@ defmodule MishkaBlog.ProvisionTest do
       report = Provision.ensure!(site)
 
       assert Enum.sort(report.upgraded_components) == Enum.sort(Provision.component_names())
+      assert report.components_waiting == []
 
       for component <- components(site) do
         assert component.extra["ui_kit_version"] == Provision.bundle_version()
@@ -948,7 +951,7 @@ defmodule MishkaBlog.ProvisionTest do
         refute component.description =~ "3.9.0"
       end
 
-      assert Provision.ensure!(site).upgraded_components == []
+      assert %{upgraded_components: [], components_waiting: []} = Provision.ensure!(site)
     end
 
     test "are left where they are when an admin edited them, and the rest still move", %{
@@ -967,6 +970,7 @@ defmodule MishkaBlog.ProvisionTest do
       report = Provision.ensure!(site)
 
       assert "blog-post-list" not in report.upgraded_components
+      assert report.components_waiting == ["blog-post-list"]
 
       assert Enum.sort(report.upgraded_components) ==
                Enum.sort(Provision.component_names() -- ["blog-post-list"])
@@ -976,6 +980,30 @@ defmodule MishkaBlog.ProvisionTest do
       assert kept.extra["ui_kit_version"] == "3.9.0"
     end
 
+    # A ROW WRITTEN BEFORE THE KIT WAS STAMPED says nothing of what it was installed from, so an edit
+    # cannot be told from the original and the row waits for the admin's choice.
+    test "are left where they are when nothing says what they were installed from", %{
+      site: site
+    } do
+      row = component(site, "blog-tag-cloud")
+      unstamped = Map.drop(row.extra, ["ui_kit", "ui_kit_version", "ui_kit_digest"])
+
+      Ash.update!(row, %{extra: unstamped},
+        action: :master_update,
+        authorize?: false,
+        tenant: site.id
+      )
+
+      report = Provision.ensure!(site)
+
+      assert report.components_waiting == ["blog-tag-cloud"]
+      assert "blog-tag-cloud" not in report.upgraded_components
+      assert component(site, "blog-tag-cloud").extra == unstamped
+
+      # and it keeps waiting, named by every run, until the admin chooses it
+      assert Provision.ensure!(site).components_waiting == ["blog-tag-cloud"]
+    end
+
     test "are left where they are when an admin archived them", %{site: site} do
       archived = component(site, "blog-tag-cloud")
       :ok = Ash.destroy!(archived, action: :master_destroy, authorize?: false, tenant: site.id)
@@ -983,6 +1011,7 @@ defmodule MishkaBlog.ProvisionTest do
       report = Provision.ensure!(site)
 
       assert "blog-tag-cloud" not in report.upgraded_components
+      assert report.components_waiting == []
       assert "blog-tag-cloud" in Enum.map(archived_components(site), & &1.name)
       assert "blog-tag-cloud" not in Enum.map(components(site), & &1.name)
     end

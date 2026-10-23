@@ -64,8 +64,9 @@ defmodule MishkaBlog.Provision do
       pieces they declare), and their names are in the report's `upgraded_components`. A component
       that carries an edit, or no fingerprint of what it was installed from (a row written before
       the kit was stamped), stays where it is and is left to that card, where the admin chooses it
-      by name. What this does NOT do is what `MishkaBlog.Kit.install!/1` does: upsert every
-      component the bundle ships over whatever is there, the dev seed's own call.
+      by name; the report names those in `components_waiting`. What this does NOT do is what
+      `MishkaBlog.Kit.install!/1` does: upsert every component the bundle ships over whatever is
+      there, the dev seed's own call.
 
   What a site that was set up months ago does about every OTHER page having moved on since is
   `MishkaCmsCore.Runtime.PageSamples`, behind the same card as the component update: it offers each
@@ -219,9 +220,13 @@ defmodule MishkaBlog.Provision do
   @package %{page_code: :package}
 
   @typedoc """
-  `MishkaCmsCore.Runtime.ExtensionProvision.report/0`, and the two things this extension upgrades
-  besides: `upgraded_pages`, the paths of the sample pages that took this release's template, and
-  `upgraded_components`, the names of the components brought forward to the bundle.
+  `MishkaCmsCore.Runtime.ExtensionProvision.report/0`, and what this extension upgrades besides,
+  each always a list, empty when there is nothing to name:
+
+    * `upgraded_pages`, the paths of the sample pages that took this release's template;
+    * `upgraded_components`, the names of the components brought forward to the bundle;
+    * `components_waiting`, the names of the components left on the older kit because a site edited
+      them, or because nothing says what they were installed from.
   """
   @type report :: %{
           version: String.t() | nil,
@@ -234,7 +239,8 @@ defmodule MishkaBlog.Provision do
           upgraded: StarterContent.upgraded(),
           adopted_pages: [String.t()],
           upgraded_pages: [String.t()],
-          upgraded_components: [String.t()]
+          upgraded_components: [String.t()],
+          components_waiting: [String.t()]
         }
 
   # THE BLOG'S OWN AREAS, created when the blog is installed — with its components and its pages,
@@ -273,14 +279,17 @@ defmodule MishkaBlog.Provision do
   @doc """
   Gives `site` everything the blog ships and it is missing, and returns what happened as
   `%{permissions: names, components: names, pages: paths, snippets: names, renamed_pages: renamed,
-  skipped_pages: held, upgraded_pages: paths, upgraded_components: names}` (and what
-  `MishkaCmsCore.Runtime.ExtensionProvision.ensure!/4` adds) — `permissions` empty once any site has
-  installed it, the next three empty on a site that already has it all, `renamed_pages`
-  naming every sample page written under a name of its own because the one it asked for was taken,
-  and `skipped_pages` naming every one something already there holds, so the caller can say which
-  rather than leave it to the logs. `upgraded_pages` and `upgraded_components` are the rows an
-  earlier release wrote that nobody edited, which now hold this release's (see "Idempotent" above);
-  both are empty once they have, and on a run that finds nothing behind.
+  skipped_pages: held, upgraded_pages: paths, upgraded_components: names,
+  components_waiting: names}`, and what `MishkaCmsCore.Runtime.ExtensionProvision.ensure!/4` adds.
+  `permissions` is empty once any site has installed it, the next three are empty on a site that
+  already has it all, `renamed_pages` names every sample page written under a name of its own
+  because the one it asked for was taken, and `skipped_pages` names every one something already
+  there holds, so the caller can say which rather than leave it to the logs.
+
+  `upgraded_pages` and `upgraded_components` are the rows an earlier release wrote that nobody
+  edited, which now hold this release's (see "Idempotent" above); both are empty once they have,
+  and on a run that finds nothing behind. `components_waiting` are the components that stay on the
+  older kit, an edited one or one with no stamp. All three are always in the report, as lists.
 
   Takes the site record the hook is handed, or its id. Raises when the site is not there, or when a
   write is refused for any reason but a page being taken.
@@ -306,10 +315,13 @@ defmodule MishkaBlog.Provision do
     # `ExtensionProvision` does: the theme the new markup is written in is brought up to date and
     # the pages with no layout are on `site-main` by now, which is what an old page is upgraded
     # beside.
-    components = upgrade_components(site_id, actor)
-    pages = upgrade_pages(site, actor)
+    {upgraded, waiting} = upgrade_components(site_id, actor)
 
-    Map.merge(report, %{upgraded_components: components, upgraded_pages: pages})
+    Map.merge(report, %{
+      upgraded_components: upgraded,
+      components_waiting: waiting,
+      upgraded_pages: upgrade_pages(site, actor)
+    })
   end
 
   defp site_id(%{id: site_id}), do: site_id
@@ -318,12 +330,13 @@ defmodule MishkaBlog.Provision do
   # THE COMPONENTS THAT ARE BEHIND THE BUNDLE AND ARE STILL WHAT THE KIT INSTALLED, which is the
   # "Update" button of the blog dashboard's kit card without the choice: a row with an edit, or with
   # nothing saying what it was installed from, is not in this group (`UiKitUpgrade`'s `:safe`), so
-  # taking them loses nothing. The pieces an updated component declares come with it.
+  # taking them loses nothing. The pieces an updated component declares come with it. Returns the
+  # names brought forward and the names that wait for the admin's choice.
   defp upgrade_components(site_id, actor) do
-    {:ok, %{updated: updated, added: added}} =
+    {:ok, %{updated: updated, added: added, left: left}} =
       UiKitUpgrade.upgrade!(Kit.bundle_path(), site_id, include: :safe, actor: actor)
 
-    updated ++ added
+    {updated ++ added, left}
   end
 
   # THE PAGES AN EARLIER RELEASE WROTE AND NOBODY EDITED take this release's template; see
