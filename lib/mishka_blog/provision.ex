@@ -65,15 +65,26 @@ defmodule MishkaBlog.Provision do
 
   Nine pattern pages in `/:lang` PATH mode, which is what seeded and starter content uses here:
 
-      /:lang/blog                  the featured strip, the paged list and the sidebar
+      /:lang/blog                  the search, the featured strip and the paged list
       /:lang/blog/:slug            one post, its comments and the sidebar
-      /:lang/blog/category/:slug   that category's posts
-      /:lang/blog/tag/:slug        that tag's posts
+      /:lang/blog/category/:slug   the same screen, narrowed to that category's posts
+      /:lang/blog/tag/:slug        the same screen, narrowed to that tag's posts
       /:lang/blog/categories       every category, as cards
       /:lang/blog/tags             the whole tag cloud
       /:lang/blog/author/:slug     one blogger, their teams and their posts
       /:lang/blog/team/:slug       one team, its members and their posts
       /:lang/blog/people           every team with its members, and the bloggers in none
+
+  ## What a page is drawn in
+
+  Every page is hung on the site's `site-main` layout — see `layout_id/1` — whose header and footer
+  are the site's own: the logo, the language switcher, the sign-in menu and the dark-mode switch.
+  A page therefore draws only what lies between them. The list pages begin with a bar of their own,
+  the blog's name and its four places (Posts, Categories, Tags and People), which `frame/2` writes
+  and which marks the one the reader is in; the colours, type and radii of everything below are the
+  tokens of the site's theme, with a `dark:` twin for each, and the screen is the design's: the
+  search box with its count, the featured strip, the row of categories above the cards, and the
+  pager that says which posts it shows.
 
   No static route in the host application's router answers any of them, which is the point of the
   `/:lang` prefix: `/mish-blog/*` is hand-written marketing the user keeps, and a runtime page
@@ -126,6 +137,9 @@ defmodule MishkaBlog.Provision do
   alias MishkaBlog.Kit
   alias MishkaCmsCore.Runtime.ExtensionProvision
   alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.Layout
+
+  require Ash.Query
 
   @snippet_name "Blog sidebar"
 
@@ -165,6 +179,10 @@ defmodule MishkaBlog.Provision do
   }
 
   @section "blog"
+
+  # THE LAYOUT `MishkaCmsCore.Install.StarterContent` gives a site: header, footer and the room
+  # between them.
+  @layout_name "site-main"
 
   @typedoc "See `MishkaCmsCore.Runtime.ExtensionProvision.report/0`."
   @type report :: ExtensionProvision.report()
@@ -286,7 +304,9 @@ defmodule MishkaBlog.Provision do
 
   # THE PAGES THEMSELVES, which is the one thing only this extension knows. `section` is put on by
   # `ExtensionProvision` from the manifest, so it cannot disagree with what the manifest declares.
-  defp page_attrs_for(%{name: site_name}) do
+  defp page_attrs_for(%{name: site_name} = site) do
+    layout_id = layout_id(site)
+
     Enum.map(page_definitions(), fn definition ->
       %{
         name: definition.name,
@@ -296,10 +316,33 @@ defmodule MishkaBlog.Provision do
         extra: shows(definition),
         format: :heex,
         template: definition.template.(site_name),
+        layout_id: layout_id,
         active: true
       }
     end)
   end
+
+  # THE PAGES HANG ON THE SITE'S OWN FRAME, the `site-main` layout, which is what draws the header
+  # with the logo, the language switcher and the sign-in menu and the footer around them — so a blog
+  # page is the page and nothing else, and the site's header is not drawn a second time inside it.
+  # `MishkaCmsCore.Install.StarterContent` writes the layout, and the install wizard runs it before
+  # the extensions' step, as do the dev seeds. A site that has none — one that started empty — gets
+  # `nil`, which is the page with no layout of its own, drawn in the application's frame as it
+  # always was.
+  defp layout_id(%{id: site_id}) when is_binary(site_id) do
+    Layout
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(name == ^@layout_name and site_id == ^site_id)
+    |> Ash.Query.select([:id])
+    |> Ash.read!(authorize?: false, page: [limit: 1])
+    |> Map.fetch!(:results)
+    |> case do
+      [%{id: id} | _rest] -> id
+      [] -> nil
+    end
+  end
+
+  defp layout_id(_site_without_an_id), do: nil
 
   # The kind of record a page shows, which `MishkaBlog.Plugins.PageSeo` answers for whatever path
   # the page is later given.
@@ -316,7 +359,8 @@ defmodule MishkaBlog.Provision do
         name: "Blog",
         title: "Blog",
         path: @blog,
-        description: "The blog's home: featured posts, the paged list and the sidebar",
+        description:
+          "The blog's home: the search, the featured posts and the paged list under the categories",
         template: &blog_home/1
       },
       %{
@@ -383,44 +427,16 @@ defmodule MishkaBlog.Provision do
     ]
   end
 
-  # THE STRIP IS ITS OWN BLOCK, NOT THE LIST WITH A SWITCH. Both read posts and they read different
-  # ones, so on this page they are two queries either way — and as two blocks they are also two
-  # loads: whichever comes back first is drawn, and a slow read of one leaves the other standing.
-  # An author can also take the strip to a page of its own, which a `featured_only` switch on the
-  # list could only imitate by carrying a pager, a sort button and a heading it does not want.
-  defp blog_home(site) do
-    chrome(
-      """
-      <.component
-        component_name="blog-featured-posts"
-        site="#{site}"
-        id="blog-featured"
-        current_user={assigns[:current_user]}
-        heading={t("Featured")}
-        limit={3}
-        show_excerpt={false}
-        language={@page.language}
-        post_base="#{@blog}"
-      />
+  # THE HOME PAGE, THE CATEGORY PAGE AND THE TAG PAGE ARE ONE SCREEN, as the design draws them: the
+  # title with its search box, the featured strip and the latest posts under a row of categories —
+  # and a category or a tag is that same screen with the list narrowed to it and the strip left out.
+  # What differs is which of the list's attributes names the filter, the address the pager and the
+  # search box write to, and the words a list that matched nothing says.
+  defp blog_home(site), do: index_screen(site, :everything)
 
-      <.component
-        component_name="blog-post-list"
-        site="#{site}"
-        id="blog-posts"
-        current_user={assigns[:current_user]}
-        heading={t("Latest posts")}
-        per_page={9}
-        show_sort={true}
-        show_total={true}
-        language={@page.language}
-        base={#{live_url(@blog)}}
-        params={Map.drop(@query_params, ["lang"])}
-        post_base="#{@blog}"
-      />
-      """,
-      sidebar(site, :nothing)
-    )
-  end
+  defp blog_category(site), do: index_screen(site, :category)
+
+  defp blog_tag(site), do: index_screen(site, :tag)
 
   # `language` ON THE COMMENTS AS WELL AS ON THE ARTICLE. Both resolve the same `:slug` capture, and
   # a block that resolved it by slug alone published the English article's conversation at
@@ -458,69 +474,28 @@ defmodule MishkaBlog.Provision do
     )
   end
 
-  defp blog_category(site) do
-    chrome(
-      """
-      <.component
-        component_name="blog-post-list"
-        site="#{site}"
-        id="blog-category-posts"
-        current_user={assigns[:current_user]}
-        heading={t("Category")}
-        per_page={9}
-        show_total={true}
-        language={@page.language}
-        collection={@query_params["slug"]}
-        base={#{live_url(@category, "slug")}}
-        params={Map.drop(@query_params, ["lang", "slug"])}
-        post_base="#{@blog}"
-        empty_text={t("Nothing is published in this category yet.")}
-      />
-      """,
-      sidebar(site, :category)
-    )
-  end
-
-  defp blog_tag(site) do
-    chrome(
-      """
-      <.component
-        component_name="blog-post-list"
-        site="#{site}"
-        id="blog-tag-posts"
-        current_user={assigns[:current_user]}
-        heading={t("Tag")}
-        per_page={9}
-        show_total={true}
-        language={@page.language}
-        tag={@query_params["slug"]}
-        base={#{live_url(@tag, "slug")}}
-        params={Map.drop(@query_params, ["lang", "slug"])}
-        post_base="#{@blog}"
-        empty_text={t("Nothing is published under this tag yet.")}
-      />
-      """,
-      sidebar(site, :tag)
-    )
-  end
-
   # `parent="all"`, where the sidebar's list keeps the default and shows the roots. This page is the
   # blog's index of categories and says so in its own description, so a category nested under another
   # one has to appear on it — the sidebar is a menu, and a menu that listed every child would be the
   # whole taxonomy in a 320px column.
   defp blog_categories(site) do
-    chrome("""
+    frame(:categories, """
     <.component
       component_name="blog-category-list"
       site="#{site}"
       id="blog-categories"
       current_user={assigns[:current_user]}
-      heading={t("Categories")}
       variant="cards"
+      masthead={true}
+      eyebrow={t("Browse")}
+      heading={t("Categories")}
       parent="all"
       limit={60}
+      posts_per_category={3}
       show_count={true}
       show_description={true}
+      count_text={t("posts")}
+      view_all_text={t("View all in")}
       language={@page.language}
       category_base="#{@category}"
       post_base="#{@blog}"
@@ -529,20 +504,22 @@ defmodule MishkaBlog.Provision do
   end
 
   defp blog_tags(site) do
-    chrome("""
-    <div class="rounded-[18px] border border-[#ecebe6] bg-white p-5 sm:p-7">
-      <.component
-        component_name="blog-tag-cloud"
-        site="#{site}"
-        id="blog-tags"
-        current_user={assigns[:current_user]}
-        heading={t("Tags")}
-        limit={100}
-        show_count={true}
-        language={@page.language}
-        tag_base="#{@tag}"
-      />
-    </div>
+    frame(:tags, """
+    <.component
+      component_name="blog-tag-cloud"
+      site="#{site}"
+      id="blog-tags"
+      current_user={assigns[:current_user]}
+      variant="cloud"
+      masthead={true}
+      eyebrow={t("Browse")}
+      heading={t("Tags")}
+      summary_text={t("topics · larger means more posts.")}
+      limit={100}
+      show_count={true}
+      language={@page.language}
+      tag_base="#{@tag}"
+    />
     """)
   end
 
@@ -805,4 +782,225 @@ defmodule MishkaBlog.Provision do
       line -> pad <> line
     end)
   end
+
+  # ---------------------------------------------------------------------------
+  # The list pages: the screen of the design, and the frame the blog's pages share
+  # ---------------------------------------------------------------------------
+
+  # HOW MANY POSTS THE FEATURED STRIP DRAWS, which is also how many the list under it leaves out so
+  # that no post is on the page twice.
+  @featured_strip 3
+
+  # THE STRIP IS ITS OWN BLOCK, NOT THE LIST WITH A SWITCH. Both read posts and they read different
+  # ones, so on this page they are two queries either way — and as two blocks they are also two
+  # loads: whichever comes back first is drawn, and a slow read of one leaves the other standing.
+  # An author can also take the strip to a page of its own, which a `featured_only` switch on the
+  # list could only imitate by carrying a pager, a sort button and a heading it does not want.
+  #
+  # NEITHER OF THEM IS DRAWN FOR A SEARCH OR A TAG, as in the design: what was asked for is the
+  # whole page then, and a strip of posts nobody asked about would push it down. The same two
+  # conditions decide the list's heading and whether it leaves the strip's posts out.
+  #
+  # `filter` IS WHAT NARROWS THE LIST, and it is the page that says so:
+  #
+  #   * `:everything` — nothing; `q` and `tag` in the query string do, when a reader sends them.
+  #   * `:category` — the `:slug` capture is a category. It is named by `collection`, which also
+  #     makes the list head itself with the category's name and description and mark its chip.
+  #   * `:tag` — the `:slug` capture is a tag, shown as the chip the design draws for one.
+  defp index_screen(site, filter) do
+    %{address: address, captured: captured} = index_address(filter)
+
+    frame(:posts, """
+    <section class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] items-end gap-8 pt-16 pb-10">
+      <div class="flex flex-col gap-3.5">
+        <span class="text-xs font-semibold tracking-[0.16em] text-subtle uppercase dark:text-subtle-dark">
+          {t("Journal")}
+        </span>
+        <h1 class="font-newsreader text-[clamp(44px,6vw,68px)] leading-none font-normal tracking-[-0.03em] text-balance">
+          {t("Notes, guides &")} <em class="text-brand dark:text-[#a9a2f7]">{t("long reads")}</em>.
+        </h1>
+        <p class="max-w-[480px] text-[17px] leading-[1.6] text-dim dark:text-dim-dark">
+          {t("Written by the team, in more than one language.")}
+        </p>
+      </div>
+
+      <.component
+        component_name="blog-post-search"
+        site="#{site}"
+        id="blog-search"
+        current_user={assigns[:current_user]}
+        variant="bar"
+        placeholder={t("Search posts…")}
+        count_text={t("posts")}
+        language={@page.language}
+        action={#{live_url(address, captured)}}
+        params={Map.drop(@query_params, ["lang", "slug"])}
+      />
+    </section>
+
+    #{featured_strip(site, filter)}
+    <.component
+      component_name="blog-post-list"
+      site="#{site}"
+      id="blog-posts"
+      current_user={assigns[:current_user]}
+    #{list_attributes(filter)}
+      per_page={9}
+      show_sort={true}
+      language={@page.language}
+      base={#{live_url(address, captured)}}
+      params={Map.drop(@query_params, #{dropped(filter)})}
+      post_base="#{@blog}"
+      chips_base="#{@category}"
+      all_href={#{live_url(@blog)}}
+      all_text={t("All")}
+      tagged_text={t("Tagged")}
+      clear_text={t("Clear filters")}
+      search_heading={t("Results")}
+      tag_heading={t("Tagged posts")}
+      no_match_text={t("No posts match.")}
+      featured_text={t("Featured")}
+      locked_text={t("Members")}
+      minutes_text={t("min")}
+      showing_text={t("Showing")}
+      of_text={t("of")}
+      search={@query_params["q"] || ""}
+    />
+    """)
+  end
+
+  # WHERE EACH VERSION OF THE SCREEN LIVES, and the capture its address ends in.
+  defp index_address(:everything), do: %{address: @blog, captured: nil}
+  defp index_address(:category), do: %{address: @category, captured: "slug"}
+  defp index_address(:tag), do: %{address: @tag, captured: "slug"}
+
+  # `slug` IS A CAPTURE, NOT SOMETHING A READER ASKED FOR, so it is not carried through the pager's
+  # links: `site_path/2` writes it into the path they are built on.
+  defp dropped(:everything), do: ~s|["lang"]|
+  defp dropped(_a_page_of_its_own), do: ~s|["lang", "slug"]|
+
+  # NO STRIP WHERE THE LIST IS NARROWED. A category's or a tag's page is the list of it alone.
+  defp featured_strip(_site, filter) when filter != :everything, do: ""
+
+  defp featured_strip(site, :everything) do
+    """
+    <.component
+      :if={#{unfiltered()}}
+      component_name="blog-featured-posts"
+      site="#{site}"
+      id="blog-featured"
+      current_user={assigns[:current_user]}
+      heading={""}
+      limit={#{@featured_strip}}
+      spaced={true}
+      empty_text={""}
+      language={@page.language}
+      post_base="#{@blog}"
+      featured_text={t("Featured")}
+      locked_text={t("Members")}
+      minutes_text={t("min")}
+      minutes_long_text={t("min read")}
+    />
+
+    """
+  end
+
+  # WHAT ONE VERSION OF THE LIST IS NARROWED BY, written the way the list's attributes name it.
+  defp list_attributes(:everything) do
+    """
+      heading={t("Latest posts")}
+      tag={@query_params["tag"] || ""}
+      exclude_featured={if(#{unfiltered()}, do: #{@featured_strip}, else: 0)}
+      clear_href={if(#{unfiltered()}, do: "", else: #{live_url(@blog)})}
+      empty_text={t("Nothing published yet.")}\
+    """
+  end
+
+  defp list_attributes(:category) do
+    """
+      heading={t("Category")}
+      collection={@query_params["slug"] || ""}
+      clear_href={#{live_url(@blog)}}
+      empty_text={t("Nothing is published in this category yet.")}\
+    """
+  end
+
+  defp list_attributes(:tag) do
+    """
+      heading={t("Tag")}
+      tag={@query_params["slug"] || ""}
+      show_filter_title={false}
+      clear_href={#{live_url(@blog)}}
+      empty_text={t("Nothing is published under this tag yet.")}\
+    """
+  end
+
+  # A READER HAS NOT SEARCHED AND HAS NOT FILTERED, in the one expression the strip and the list both
+  # ask. `||` and not a bare read, because the admin's Preview assigns no query at all.
+  defp unfiltered,
+    do: ~S'String.trim(@query_params["q"] || "") == "" and (@query_params["tag"] || "") == ""'
+
+  # THE FRAME OF A PAGE OF THE BLOG: what the site's header does not draw — the blog's own name and
+  # the four places in it — and then the page, in the column the design sets it in. The header
+  # itself, with the logo, the language switcher and the sign-in menu, and the footer are the site's
+  # own, drawn by its layout around this; see `layout_id/1`.
+  #
+  # `active` IS THE PLACE THE READER IS IN, one of `:posts`, `:categories`, `:tags` and `:people`.
+  # The tabs are written out in both of their looks rather than a class chosen from a hole in a
+  # string, which Tailwind would not find — see `main_class/1` for the same rule.
+  defp frame(active, body) do
+    """
+    <div class="border-b border-edge dark:border-edge-dark">
+      <div class="mx-auto flex w-full max-w-[1160px] flex-wrap items-center justify-between gap-4 px-8 py-3">
+        <.link
+          navigate={#{live_url(@blog)}}
+          class="font-newsreader text-[22px] text-fg italic no-underline dark:text-fg-dark"
+        >
+          {t("Blog")}
+        </.link>
+
+        <nav
+          data-role="blog-section-nav"
+          class="flex items-center gap-1 rounded-xl border border-edge bg-surface p-1 dark:border-edge-dark dark:bg-surface-dark"
+        >
+    #{indent(tabs(active), 6)}
+        </nav>
+      </div>
+    </div>
+
+    <div class="mx-auto w-full max-w-[1160px] px-8 pb-24">
+    #{indent(body, 2)}
+    </div>
+    """
+  end
+
+  defp tabs(active) do
+    Enum.map_join(
+      [
+        {:posts, @blog, "Posts"},
+        {:categories, @categories, "Categories"},
+        {:tags, @tags, "Tags"},
+        {:people, @people, "People"}
+      ],
+      "\n",
+      fn {place, address, label} ->
+        """
+        <.link
+          navigate={#{live_url(address)}}
+          class="#{tab_class(place == active)}"
+        >
+          {t("#{label}")}
+        </.link>
+        """
+      end
+    )
+  end
+
+  defp tab_class(true),
+    do:
+      "inline-flex h-8 items-center rounded-[9px] bg-[#eceafb] px-3.5 text-[13.5px] font-medium text-brand no-underline dark:bg-[#25223f] dark:text-[#a9a2f7]"
+
+  defp tab_class(false),
+    do:
+      "inline-flex h-8 items-center rounded-[9px] px-3.5 text-[13.5px] font-medium text-dim no-underline hover:text-fg dark:text-dim-dark dark:hover:text-fg-dark"
 end
