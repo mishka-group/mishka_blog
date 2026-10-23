@@ -1053,44 +1053,27 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert href == "/test-blog-post/#{post.slug}"
     end
 
-    # A TITLE IS A LINK AND DOES NOT LOOK LIKE ONE. It underlines on hover and nowhere else, so a
-    # card full of image and excerpt reads as though nothing on it is clickable. The footer carries
-    # a labelled action as well, pointing at whichever destination the page chose.
-    test "every card carries a visible read link", %{site: site} do
+    # THE WHOLE CARD IS THE LINK. The title is the one anchor on it, drawn over the card's whole area,
+    # so a card full of cover and summary is clickable anywhere and a reader on a screen reader still
+    # meets one link with the post's own title, not a second "Read".
+    test "every card is one link, drawn over the whole card", %{site: site} do
       [post | _rest] = publish!(site, ["A"])
 
       {:ok, view, _html} =
         mount_page(site, "blog-post-list", %{post_base: "/test-blog-posts/post"})
 
+      html = render_async(view, @async)
+
       [href] =
-        view
-        |> render_async(@async)
+        html
         |> LazyHTML.from_fragment()
-        |> LazyHTML.query(~s([data-role="blog-list-read"]))
+        |> LazyHTML.query(~s([data-role="blog-list-item"] a))
         |> Enum.map(&LazyHTML.attribute(&1, "href"))
         |> List.flatten()
 
       assert href == "/test-blog-posts/post/#{post.slug}"
-      assert text_of(view, ~s([data-role="blog-list-read"])) == ["Read →"]
-    end
-
-    test "and the read link follows the inline mode when that is what the page chose", %{
-      site: site
-    } do
-      publish!(site, ["A"])
-
-      {:ok, view, _html} = mount_page(site, "blog-post-list", %{base: "/here"})
-
-      [href] =
-        view
-        |> render_async(@async)
-        |> LazyHTML.from_fragment()
-        |> LazyHTML.query(~s([data-role="blog-list-read"]))
-        |> Enum.map(&LazyHTML.attribute(&1, "href"))
-        |> List.flatten()
-
-      assert href =~ "/here?"
-      assert href =~ "post="
+      assert html =~ "after:absolute after:inset-0"
+      assert text_of(view, ~s([data-role="blog-list-read"])) == []
     end
 
     test "and keep opening beside the list when none is", %{site: site} do
@@ -1246,10 +1229,11 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           render_async(view, @async)
         end)
 
-      # One load reads the page of rows and its count, nothing being locked on the site: two per
-      # render, two renders.
-      assert Enum.count(asked, &String.contains?(&1, "mishka_blog_posts")) == 4,
-             "a load is the page of rows and its count, once for each render"
+      # One load reads the page of rows and its count, nothing being locked on the site, and the two
+      # reads that bring the people who wrote them and the categories they are filed under, which
+      # the cards draw: four per render, two renders.
+      assert Enum.count(asked, &String.contains?(&1, "mishka_blog_posts")) == 8,
+             "a load is the page of rows, its count, its authors and its categories, once for each render"
     end
 
     # EVERY BLOCK ON THE PAGE ANSWERS IN THE SAME FIRST PAINT.
@@ -2120,7 +2104,8 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           last_text: "Akhar",
           total_text: "neveshte",
           newest_text: "Tazetarin",
-          read_text: "Bekhan",
+          showing_text: "Namayesh",
+          of_text: "az",
           base: "/here"
         })
 
@@ -2130,7 +2115,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert text_of(view, ~s([data-role="blog-list-last"])) == ["Akhar"]
       assert text_of(view, ~s([data-role="blog-list-total"])) == ["3 neveshte"]
       assert text_of(view, ~s([data-role="blog-list-sort"])) == ["Tazetarin"]
-      assert text_of(view, ~s([data-role="blog-list-read"])) == ["Bekhan →", "Bekhan →"]
+      assert text_of(view, ~s([data-role="blog-list-showing"])) == ["Namayesh 1–2 az 3"]
     end
   end
 
