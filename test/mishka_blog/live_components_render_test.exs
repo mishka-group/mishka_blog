@@ -1781,7 +1781,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert styles |> reached("list-disc") |> Enum.map(&LazyHTML.text/1) == ["Own item"]
       assert styles |> reached("list-decimal") |> Enum.map(&LazyHTML.text/1) == ["First step"]
 
-      assert styles |> reached("ml-5") |> Enum.map(&LazyHTML.text/1) == [
+      assert styles |> reached("ms-6") |> Enum.map(&LazyHTML.text/1) == [
                "Own item",
                "First step"
              ]
@@ -1816,7 +1816,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
 
       styles = styled(view)
 
-      assert styles |> reached("text-lg") |> Enum.map(&LazyHTML.text/1) == ["Own heading"]
+      assert styles |> reached("font-normal") |> Enum.map(&LazyHTML.text/1) == ["Own heading"]
       assert styles |> reached("list-disc") |> Enum.count() == 1
 
       assert styles |> reached("underline") |> Enum.flat_map(&LazyHTML.attribute(&1, "href")) ==
@@ -2657,7 +2657,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           category_base: "/blog/category"
         })
 
-      assert text_of(view, ~s([data-role="blog-detail-tag"])) == ["Elixir"]
+      assert text_of(view, ~s([data-role="blog-detail-tag"])) == ["#Elixir"]
       assert hrefs(view, ~s([data-role="blog-detail-tag"])) == ["/blog/tag/elixir"]
       assert text_of(view, ~s([data-role="blog-detail-category"])) == ["OTP"]
       assert hrefs(view, ~s([data-role="blog-detail-category"])) == ["/blog/category/otp"]
@@ -2914,11 +2914,11 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
                ["redirect"]
     end
 
-    # AND EACH ROW STILL ANSWERS TO ITS OWN NAME. The three rows under an article are one component
-    # drawn three times now, and a component that named only its words left nothing for a stylesheet
-    # or a test to address the row by — while the categories row, which sits directly under the
-    # body, also lost the wider gap that separated it from the text.
-    test "names each row under the article, and spaces the first of them", %{site: site} do
+    # AND EACH ROW STILL ANSWERS TO ITS OWN NAME. The three rows of an article are one component
+    # drawn three times, and a component that named only its words left nothing for a stylesheet
+    # or a test to address the row by. The categories are pills in the line of badges above the
+    # title, so their row has no box of its own; the tags and the languages are rows under the text.
+    test "names each row of the article, and draws the categories without a box", %{site: site} do
       [post] = publish!(site, ["Ours"])
       tag_post!(post, tag!(site, name: "Elixir", slug: "elixir"))
       categorize!(post, category!(site, name: "OTP", slug: "otp"))
@@ -2934,8 +2934,10 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert [categories] = attrs_of(view, ~s([data-role="blog-detail-categories"]), "class")
       assert [tags] = attrs_of(view, ~s([data-role="blog-detail-tags"]), "class")
 
-      assert categories =~ "mt-6", "the row under the article lost the gap above it"
-      assert tags =~ "mt-3"
+      assert categories =~ "contents",
+             "the categories got a box of their own, so they no longer sit in the line of badges"
+
+      assert tags =~ "gap-2"
     end
   end
 
@@ -3113,7 +3115,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           tag_base: "/:lang/blog/tag"
         })
 
-      assert text_of(view, ~s([data-role="blog-detail-tag"])) == ["اکسیر"]
+      assert text_of(view, ~s([data-role="blog-detail-tag"])) == ["#اکسیر"]
       assert hrefs(view, ~s([data-role="blog-detail-tag"])) == []
     end
   end
@@ -3170,9 +3172,9 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
              ) == []
     end
 
-    # THE BOX TO WRITE IN COMES FIRST, under the heading, and the conversation follows it, so a
-    # long thread never pushes it out of reach.
-    test "puts the box to write in above the conversation", %{site: site} do
+    # THE BOX TO WRITE IN COMES AFTER THE CONVERSATION, which is how the design draws the post page:
+    # the thread, then the empty line, then the box with its button.
+    test "puts the box to write in under the conversation", %{site: site} do
       [post] = publish!(site, ["Ours"])
       comment!(site, post, content: "First")
 
@@ -3183,7 +3185,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       {form_at, _} = :binary.match(html, ~s(data-role="blog-comments-form"))
       {list_at, _} = :binary.match(html, ~s(data-role="blog-comments-list"))
 
-      assert form_at < list_at
+      assert list_at < form_at
     end
 
     # `whitespace-pre-line` KEEPS EVERY LINE BREAK, the template's own too: text on a line of its own
@@ -3462,7 +3464,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           heading: "Comments"
         })
 
-      assert text_of(asked_in_english, ~s([data-role="blog-comments-heading"])) == ["Comments"]
+      assert labels(asked_in_english, ~s([data-role="blog-comments-heading"])) == ["Comments 0"]
     end
   end
 

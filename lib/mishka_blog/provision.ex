@@ -66,7 +66,7 @@ defmodule MishkaBlog.Provision do
   Nine pattern pages in `/:lang` PATH mode, which is what seeded and starter content uses here:
 
       /:lang/blog                  the featured strip, the paged list and the sidebar
-      /:lang/blog/:slug            one post, its comments and the sidebar
+      /:lang/blog/:slug            one post, its conversation and what to read next
       /:lang/blog/category/:slug   that category's posts
       /:lang/blog/tag/:slug        that tag's posts
       /:lang/blog/categories       every category, as cards
@@ -126,8 +126,17 @@ defmodule MishkaBlog.Provision do
   alias MishkaBlog.Kit
   alias MishkaCmsCore.Runtime.ExtensionProvision
   alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.Layout
+
+  require Ash.Query
 
   @snippet_name "Blog sidebar"
+
+  # THE LAYOUT THE SITE'S OWN PAGES HANG ON, which draws the header, the language switcher, the
+  # dark-mode toggle and the footer around whatever a page draws — `MishkaCmsCore.Install.StarterContent`
+  # writes it with the home page. A page of the blog draws only what the design shows between the two,
+  # so it is given this layout rather than a header of its own.
+  @layout "site-main"
 
   # THE BLOG'S ADDRESSES, WRITTEN ONCE. A page's path, the base a component builds links to it from
   # and the URL the chrome writes to reach it are all the same string — `/:lang/blog/:slug` is where
@@ -286,7 +295,9 @@ defmodule MishkaBlog.Provision do
 
   # THE PAGES THEMSELVES, which is the one thing only this extension knows. `section` is put on by
   # `ExtensionProvision` from the manifest, so it cannot disagree with what the manifest declares.
-  defp page_attrs_for(%{name: site_name}) do
+  defp page_attrs_for(%{id: site_id, name: site_name}) do
+    layout = hung_on(site_id)
+
     Enum.map(page_definitions(), fn definition ->
       %{
         name: definition.name,
@@ -298,7 +309,24 @@ defmodule MishkaBlog.Provision do
         template: definition.template.(site_name),
         active: true
       }
+      |> Map.merge(layout)
     end)
+  end
+
+  # `layout_id` WHERE THE SITE HAS THE LAYOUT, and no key at all where it has none: a site installed
+  # without starter content has no header, no footer and no theme for these pages to be drawn in, and
+  # a page with no layout is what it was before this — a page the admin can give one to. The layout is
+  # read for its id alone and nothing is written to it.
+  defp hung_on(site_id) do
+    Layout
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(name == ^@layout and site_id == ^site_id)
+    |> Ash.Query.select([:id])
+    |> Ash.read!(page: [limit: 1])
+    |> case do
+      %{results: [%{id: layout_id}]} -> %{layout_id: layout_id}
+      %{results: []} -> %{}
+    end
   end
 
   # The kind of record a page shows, which `MishkaBlog.Plugins.PageSeo` answers for whatever path
@@ -422,13 +450,18 @@ defmodule MishkaBlog.Provision do
     )
   end
 
-  # `language` ON THE COMMENTS AS WELL AS ON THE ARTICLE. Both resolve the same `:slug` capture, and
-  # a block that resolved it by slug alone published the English article's conversation at
-  # /fa/blog/<its slug> under a detail block correctly saying that post is not here — and offered a
-  # signed-in reader a box that writes onto the English post.
+  # THE DESIGN'S POST SCREEN, drawn in the `site-main` layout between its header and its footer — so
+  # nothing here is a header, a footer or a menu. Three blocks in one column, and the column is the
+  # design's: the article and its cover (`blog-post-detail`), the conversation under it in the width
+  # of the text (`blog-post-comments`), then what to read next (`blog-related-posts`).
+  #
+  # `language` ON THE COMMENTS AND THE NEXT READS AS WELL AS ON THE ARTICLE. All three resolve the
+  # same `:slug` capture, and a block that resolved it by slug alone published the English article's
+  # conversation at /fa/blog/<its slug> under a detail block correctly saying that post is not here —
+  # and offered a signed-in reader a box that writes onto the English post.
   defp blog_post(site) do
-    chrome(
-      """
+    """
+    <div class="mx-auto flex w-full max-w-[1160px] flex-col items-center px-8 pb-24 pt-12">
       <.component
         component_name="blog-post-detail"
         site="#{site}"
@@ -440,22 +473,37 @@ defmodule MishkaBlog.Provision do
         post_base="#{@blog}"
         category_base="#{@category}"
         tag_base="#{@tag}"
+        author_base="#{@author}"
       />
 
-      <div class="rounded-[18px] border border-[#ecebe6] bg-white p-5 sm:p-7">
+      <div class="mt-[46px] w-full max-w-[680px]">
         <.component
           component_name="blog-post-comments"
           site="#{site}"
           id="blog-post-comments"
+          heading={t("Comments")}
           params={@query_params}
           post_param="slug"
           language={@page.language}
           current_user={assigns[:current_user]}
         />
       </div>
-      """,
-      sidebar(site, :post)
-    )
+
+      <div class="mt-20 w-full">
+        <.component
+          component_name="blog-related-posts"
+          site="#{site}"
+          id="blog-post-related"
+          current_user={assigns[:current_user]}
+          params={@query_params}
+          post_param="slug"
+          heading={t("Keep reading")}
+          language={@page.language}
+          post_base="#{@blog}"
+        />
+      </div>
+    </div>
+    """
   end
 
   defp blog_category(site) do
