@@ -290,7 +290,7 @@ defmodule MishkaBlog.Resources.Preparations.ReaderLocks do
 
   defp wildcard?(name), do: "*" in String.split(name, ":")
 
-  defp on_api?(name), do: String.starts_with?(name, "admin:api:")
+  defp on_api?(name), do: match?(["admin", "api", _segment | _], String.split(name, ":"))
 
   # `*` is any one segment, and the last segment, the rest of the name.
   defp pattern(name) do
