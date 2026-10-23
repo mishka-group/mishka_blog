@@ -1048,7 +1048,9 @@ defmodule MishkaBlog.Provision do
   end
 
   # A READER HAS NOT SEARCHED AND HAS NOT FILTERED, in the one expression the strip and the list both
-  # ask. `||` and not a bare read, because the admin's Preview assigns no query at all.
+  # ask. A `q` or a `tag` that is not text, `?q[a]=b`, is nothing asked, as the list reads it; and the
+  # admin's Preview assigns no query at all.
   defp unfiltered,
-    do: ~S'String.trim(@query_params["q"] || "") == "" and (@query_params["tag"] || "") == ""'
+    do:
+      ~S'Enum.all?([@query_params["q"], @query_params["tag"]], &(not is_binary(&1) or String.trim(&1) == ""))'
 end

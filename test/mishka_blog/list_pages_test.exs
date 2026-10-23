@@ -444,6 +444,24 @@ defmodule MishkaBlog.ListPagesTest do
       assert attrs(html, ~s(form[role="search"] input[type="hidden"]), "value") == ["testing"]
     end
 
+    # `?q[a]=b` ARRIVES AS A MAP and `?tag[]=x` AS A LIST. Neither is words or a tag, so the home is
+    # drawn as if nothing was asked, strip and all; the list's read raised on them.
+    test "reads a search or a tag that is not text as nothing asked", %{site: site} do
+      the_design!(site)
+      plain = render_page(site, "/:lang/blog")
+
+      for query <- [
+            %{"q" => %{"a" => "b"}, "tag" => %{"a" => "b"}},
+            %{"q" => ["x", "y"], "tag" => ["x"]}
+          ] do
+        html = render_page(site, "/:lang/blog", query)
+
+        assert titles(html) == titles(plain)
+        assert text(html, ~s([data-role="blog-list-heading"])) == ["Latest posts"]
+        assert count(html, ~s([data-role="blog-featured-items"])) == 1
+      end
+    end
+
     test "pages the posts at the page's own address, keeps the search and says which are shown",
          %{site: site} do
       for index <- 1..12 do
