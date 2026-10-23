@@ -530,20 +530,20 @@ defmodule MishkaBlog.PostPageTest do
       assert doc |> LazyHTML.query("footer, main") |> Enum.count() == 0
     end
 
-    # THE BLOG'S OWN BAR IS THE PAGE'S, the same one the lists draw: the blog's name and its four
-    # places, and a post is in Posts.
-    test "begins with the blog's bar, which marks Posts", %{site: site} do
+    # THE BLOG'S BAR IS THE LAYOUT'S, handed it by `MishkaBlog.Plugins.PageFrame`: the page begins
+    # with the article, in the layout's column, and holds no bar, container or width of its own.
+    test "begins with the article: the bar and the column are the layout's", %{site: site} do
       post = published!(site, "Plain page", slug: "plain-page")
-      doc = page_of(site, post.slug)
+      html = drawn(site, post.slug)
+      doc = LazyHTML.from_fragment(html)
 
-      assert texts(doc, "blog-section-nav") == ["Posts Categories Tags People"]
+      refute has_role?(doc, "blog-section-nav")
+      refute html =~ ~s(aria-current="page")
 
-      assert doc
-             |> LazyHTML.query(~s([data-role="blog-section-nav"] a[aria-current="page"]))
-             |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim())) == ["Posts"]
-
-      assert hrefs(doc, ~s([data-role="blog-section-nav"] a)) ==
-               ["/blog", "/blog/categories", "/blog/tags", "/blog/people"]
+      # it begins with a box that centres the article's own columns, and sets no width
+      assert html |> String.trim_leading() |> String.starts_with?(~s(<div class="flex w-full))
+      refute html =~ "mx-auto"
+      refute html =~ "max-w-[1160px]"
     end
 
     test "is styled with classes alone, never an inline style", %{site: site} do

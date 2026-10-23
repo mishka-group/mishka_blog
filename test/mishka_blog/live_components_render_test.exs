@@ -2658,17 +2658,19 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert text_of(view, ~s([data-role="blog-detail-author"])) == ["Ada Lovelace"]
     end
 
-    # ONLY THE TRANSLATIONS A READER CAN OPEN. `language_variants` is every row sharing the group,
-    # drafts included, so a link per variant would have published the unfinished ones.
-    test "lists the published translations and not the unfinished ones", %{site: site} do
+    # THE LANGUAGES OF A POST ARE THE HEADER'S, NOT THE ARTICLE'S. The layout's dropdown is the one
+    # switcher a page has, fed by `MishkaBlog.Plugins.PageFrame`, so the article draws no row of
+    # language pills under its text, whatever translations the post has.
+    test "draws no language pills of its own, whatever translations the post has", %{site: site} do
       [master] = publish!(site, ["Master"])
       translate!(site, master, "fa", "Tarjome")
-      translate!(site, master, "ru", "Perevod", :draft)
 
-      {:ok, view, _html} =
-        mount_page(site, "blog-post-detail", %{slug: master.slug, post_base: "/mish-blog/post"})
+      {:ok, view, html} =
+        mount_page(site, "blog-post-detail", %{slug: master.slug, post_base: "/:lang/blog"})
 
-      assert text_of(view, ~s([data-role="blog-detail-translation"])) == ["fa"]
+      refute has_element?(view, ~s([data-role="blog-detail-translations"]))
+      refute has_element?(view, ~s([data-role="blog-detail-translation"]))
+      refute html =~ "hreflang"
     end
 
     # A PERSIAN POST READ LEFT TO RIGHT is not a styling detail — punctuation lands on the wrong
@@ -2696,9 +2698,9 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert has_element?(ltr, ~s(article[data-role="blog-detail-article"][dir="auto"]))
     end
 
-    # A PART THE PAGE TURNED OFF COSTS NOTHING. The four extra reads ran whatever the switches said
-    # and only the markup consulted them, and `update/2` runs again on every re-render of the page
-    # around it — so a page drawing the body alone paid five queries for one, every single time.
+    # A PART THE PAGE TURNED OFF COSTS NOTHING. The extra reads ran whatever the switches said and
+    # only the markup consulted them, and `update/2` runs again on every re-render of the page
+    # around it — so a page drawing the body alone paid four queries for one, every single time.
     test "and reads nothing for the parts the page turned off", %{site: site} do
       [post] = publish!(site, ["Ours"])
       tag_post!(post, tag!(site, name: "Elixir", slug: "elixir"))
@@ -2711,8 +2713,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
               slug: post.slug,
               show_tags: false,
               show_categories: false,
-              show_authors: false,
-              show_translations: false
+              show_authors: false
             })
 
           render(view)
@@ -2812,49 +2813,6 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert text_of(view, ~s([data-role="blog-detail-title"])) == ["نوشته"]
     end
 
-    # THE ONE LINK THAT LEAVES THE PAGE'S OWN LANGUAGE. A base with the language written into it
-    # gets everything else right and this wrong: the Persian edition offered as /en/blog/<fa slug>,
-    # a path under English carrying hreflang="fa", answered by the English page, which does not have
-    # that post. Written as /:lang/blog, each link is filled with the language of the row it leads
-    # to.
-    #
-    # The site has to PUBLISH Persian for that link to lead anywhere: `:lang` only answers
-    # `site.languages`, so the link is offered on a site that lists `fa` and drawn as a word on one
-    # that does not — see the test below.
-    test "offers each translation under the path of its own language", %{site: site} do
-      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["en", "fa"], site_id: site.id)
-      [master] = publish!(site, ["Master"])
-      persian = translate!(site, master, "fa", "Tarjome")
-
-      {:ok, view, _html} =
-        mount_page(site, "blog-post-detail", %{
-          slug: master.slug,
-          language: "en",
-          post_base: "/:lang/blog"
-        })
-
-      assert hrefs(view, ~s([data-role="blog-detail-translation"])) == [
-               "/fa/blog/#{persian.slug}"
-             ]
-    end
-
-    test "and draws a translation the site does not publish as a word, not a link", %{site: site} do
-      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["en"], site_id: site.id)
-      [master] = publish!(site, ["Master"])
-      persian = translate!(site, master, "fa", "Tarjome")
-
-      {:ok, view, _html} =
-        mount_page(site, "blog-post-detail", %{
-          slug: master.slug,
-          language: "en",
-          post_base: "/:lang/blog"
-        })
-
-      assert hrefs(view, ~s([data-role="blog-detail-translation"])) == []
-      assert text_of(view, ~s([data-role="blog-detail-translation"])) == ["fa"]
-      refute render(view) =~ persian.slug
-    end
-
     test "and fills the same capture on a tag and a category from the row it links to", %{
       site: site
     } do
@@ -2875,44 +2833,19 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert hrefs(view, ~s([data-role="blog-detail-category"])) == ["/fa/blog/category/olgooha"]
     end
 
-    # AN EDITION OPENED BESIDE THIS ONE IS A PATCH, AND THAT IS NOT COSMETIC. `patch` keeps the page
-    # holding this block mounted — its list, its sidebar and everything each of them has read stay
-    # where they are — while `navigate` throws all of it away and mounts the page again. Both write
-    # the same `href`, so nothing but this attribute can tell them apart, which is exactly how the
-    # distinction was lost when the row became a component.
-    test "opens an edition beside this one with a patch, and its own page with a navigation", %{
-      site: site
-    } do
-      [master] = publish!(site, ["Master"])
-      translate!(site, master, "fa", "Tarjome")
-
-      {:ok, beside, _html} =
-        mount_page(site, "blog-post-detail", %{slug: master.slug, base: "/en/blog"})
-
-      assert attrs_of(beside, ~s([data-role="blog-detail-translation"]), "data-phx-link") ==
-               ["patch"]
-
-      {:ok, its_own_page, _html} =
-        mount_page(site, "blog-post-detail", %{slug: master.slug, post_base: "/en/blog"})
-
-      assert attrs_of(its_own_page, ~s([data-role="blog-detail-translation"]), "data-phx-link") ==
-               ["redirect"]
-    end
-
-    # AND EACH ROW STILL ANSWERS TO ITS OWN NAME. The three rows of an article are one component
-    # drawn three times, and a component that named only its words left nothing for a stylesheet
-    # or a test to address the row by. The categories are pills in the line of badges above the
-    # title, so their row has no box of its own; the tags and the languages are rows under the text.
+    # AND EACH ROW STILL ANSWERS TO ITS OWN NAME. The two rows of an article are one component
+    # drawn twice, and a component that named only its words left nothing for a stylesheet or a
+    # test to address the row by. The categories are pills in the line of badges above the title,
+    # so their row has no box of its own; the tags are a row under the text.
     test "names each row of the article, and draws the categories without a box", %{site: site} do
       [post] = publish!(site, ["Ours"])
       tag_post!(post, tag!(site, name: "Elixir", slug: "elixir"))
       categorize!(post, category!(site, name: "OTP", slug: "otp"))
-      translate!(site, post, "fa", "Tarjome")
 
       {:ok, view, _html} =
         mount_page(site, "blog-post-detail", %{slug: post.slug, post_base: "/en/blog"})
 
-      for role <- ~w(blog-detail-categories blog-detail-tags blog-detail-translations) do
+      for role <- ~w(blog-detail-categories blog-detail-tags) do
         assert has_element?(view, ~s([data-role="#{role}"])), "#{role} was not drawn"
       end
 
@@ -4017,7 +3950,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
         |> attrs_of(selector, "class")
         |> hd()
         |> String.split()
-        |> Enum.filter(&String.match?(&1, ~r/^(dark:)?(bg|text)-\[#[0-9a-f]+\]$/))
+        |> Enum.filter(&String.match?(&1, ~r/^(dark:)?(bg|text)-tint-[1-6](-ink)?(-dark)?$/))
         |> Enum.sort()
       end
 
@@ -4034,7 +3967,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       head =
         tint.(own_page, ~s([data-role="blog-author-card"] [data-role="blog-profile-initial"]))
 
-      assert length(card) == 4, "the tint is not the four classes the design's colours are"
+      assert length(card) == 4, "the tint is not the four classes of the theme's tokens"
       assert card == faces
       assert card == head
     end

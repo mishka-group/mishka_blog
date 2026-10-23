@@ -78,6 +78,12 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.ContentComponents
   ]
 
+  # Hands the `site-main` layout the blog's bar and the languages of the record a blog page shows
+  # (a `runtime:page:frame` plugin).
+  @frame_plugins [
+    MishkaBlog.Plugins.PageFrame
+  ]
+
   # Each code block of a post being written is lexed in a task of its own under this supervisor — see
   # `MishkaBlog.Resources.Changes.HighlightCode`.
   @highlight_supervisor {Task.Supervisor, name: MishkaBlog.HighlightSupervisor}
@@ -93,7 +99,8 @@ defmodule MishkaBlog.Application do
         @notify_plugins ++
         @settings_plugins ++
         @sidebar_menus ++
-        @provision_plugins ++ @seo_plugins ++ @share_card_plugins ++ @runtime_plugins
+        @provision_plugins ++
+        @seo_plugins ++ @share_card_plugins ++ @runtime_plugins ++ @frame_plugins
 
   @impl true
   def start(_type, _args) do

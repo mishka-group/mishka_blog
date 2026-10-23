@@ -31,6 +31,7 @@ Mishka Blog is an extension of [Mishka CMS](https://mishka.tools/cms), an open s
 - For readers: a 1 to 5 star rating for each post, bookmarks, follows for bloggers and teams, and a count of unique views.
 - An analytics page with daily views, the most-read posts, where readers came from and whether they were signed in, over a period you choose.
 - Seventeen page components (eleven blocks that run their own queries and six smaller pieces they draw with) and nine sample pages: the blog index, a post, a category, a tag, an author, a team, and the lists of categories, tags and people.
+- The sample pages hang on the site's `site-main` layout and draw nothing around themselves. The blog hands the layout its bar (Posts, Categories, Tags and People) and, for a post, a category, a tag, a blogger or a team, the languages that record is written in, each at its own address, which the header's language menu lists.
 - SEO for each record: its own head, `BlogPosting` and breadcrumb JSON-LD, `sitemap.xml` entries for posts, categories, bloggers and teams, and share cards.
 - A notification to the blog's admins when a post is published, and dashboard widgets for recent posts, top posts, drafts and scheduled posts, comments to moderate, and bloggers.
 - A JSON:API for admins at `/api/json/v1/master/admin/mishka-blog/…` and `/api/json/v1/tenant/admin/mishka-blog/…`, and one for readers at `/api/json/v1/user/mishka-blog/…` (published posts, comments, ratings, bookmarks, follows and votes), described in the CMS's OpenAPI spec.

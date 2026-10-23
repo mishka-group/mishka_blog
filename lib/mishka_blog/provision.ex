@@ -77,18 +77,20 @@ defmodule MishkaBlog.Provision do
 
   ## What a page is drawn in
 
-  Every page is hung on the site's `site-main` layout — see `layout_id/1` — whose header and footer
-  are the site's own: the logo, the language switcher, the sign-in menu and the dark-mode switch.
-  A page therefore draws only what lies between them. Every page begins with the same bar of its
-  own, the blog's name and its four places (Posts, Categories, Tags and People), which `frame/2`
-  writes and which marks the one the reader is in: a post is in Posts, a blogger and a team are in
-  People, as the design has them. The colours, type and radii of everything below are the tokens of
-  the site's theme, with a `dark:` twin for each, and the screens are the design's: the search box
-  with its count, the featured strip, the row of categories above the cards, the pager that says
-  which posts it shows, the article with its conversation and what to read next, and the people with
-  their posts. A site that skipped the starter content has neither the layout nor the theme tokens
-  the markup is written in (`bg-surface`, `text-dim`, `font-newsreader` and the rest), and these
-  pages are plain on it.
+  Every page is hung on the site's `site-main` layout (`MishkaCmsCore.Runtime.SiteLayout`), whose
+  header, bar and footer are the site's own: the logo, the language switcher, the sign-in menu and
+  the dark-mode switch; the blog's name with its four places (Posts, Categories, Tags and People),
+  which `MishkaBlog.Plugins.PageFrame` hands the layout; and the footer. A page therefore draws only
+  what lies between them, straight into the layout's column, with no container, width or side
+  padding of its own. The layout's header answers for the page's languages, which the same plugin
+  reads off the record a page shows.
+
+  The colours, type and radii of everything are the tokens of the site's theme, with a `dark:` twin
+  for each, and the screens are the design's: the search box with its count, the featured strip, the
+  row of categories above the cards, the pager that says which posts it shows, the article with its
+  conversation and what to read next, and the people with their posts. A site that skipped the
+  starter content has neither the layout nor the theme tokens the markup is written in
+  (`bg-surface`, `text-dim`, `font-newsreader` and the rest), and these pages are plain on it.
 
   No static route in the host application's router answers any of them, which is the point of the
   `/:lang` prefix: `/mish-blog/*` is hand-written marketing the user keeps, and a runtime page
@@ -116,9 +118,9 @@ defmodule MishkaBlog.Provision do
   will be reading in when they arrive, and builds the address the site's URL mode gives it
   (`site_path/2`, `MishkaCmsCore.Runtime.LiveViewHelpers`): `/blog/<slug>` in a first language the
   site leaves unprefixed, `/fa/blog/<slug>` in Persian. A base with the page's own language baked in
-  gets the language right for everything except the one link that matters most: the post's
-  translations row, where every other edition would be offered at a URL under the language the
-  reader is leaving.
+  would offer every other language's row under the language the reader is leaving. The languages of
+  a post itself are not a link of the page's: the layout's header lists them, from
+  `MishkaBlog.Plugins.PageFrame`, which gives each edition its own slug.
 
   `base`, where a page has one, is the pager's and stays a real URL — nothing appends a slug to it,
   and its `?page=2` has to be somewhere a reader could have typed.
@@ -139,18 +141,18 @@ defmodule MishkaBlog.Provision do
   """
 
   alias MishkaBlog.Kit
+  alias MishkaBlog.Plugins.PageFrame
   alias MishkaCmsCore.Runtime.ExtensionProvision
   alias MishkaCmsCore.Runtime.Languages
-  alias MishkaCmsCore.Runtime.Layout
-
-  require Ash.Query
+  alias MishkaCmsCore.Runtime.SiteLayout
+  alias MishkaCmsCore.Runtime.Translations
 
   @snippet_name "Blog sidebar"
 
   # THE BLOG'S ADDRESSES, WRITTEN ONCE. A page's path, the base a component builds links to it from
-  # and the URL the frame writes to reach it are all the same string — `/:lang/blog/:slug` is where
+  # and the URL the bar writes to reach it are all the same string — `/:lang/blog/:slug` is where
   # a post is read, `/:lang/blog` is what a block appends that post's slug to, and
-  # `/:lang/blog/categories` is both a page and what the frame's tabs call it — and they were twenty-seven
+  # `/:lang/blog/categories` is both a page and what the bar's links call it — and they were twenty-seven
   # separate literals, six paths, fifteen bases and six URLs, each one its own chance to write a path
   # this site does not answer.
   #
@@ -162,8 +164,8 @@ defmodule MishkaBlog.Provision do
   # which is where the snippet below ends up.
   #
   # A URL IS THE SAME ADDRESS WITH THAT CAPTURE ALREADY FILLED IN — `live_url/2` — because nothing
-  # fills it later: a pager writes its `?page=2` to the address bar, and the frame links to a page
-  # rather than to a row.
+  # fills it later: a pager writes its `?page=2` to the address bar, and a link to a page rather than to a
+  # row is written whole.
   @blog "/:lang/blog"
   @category "#{@blog}/category"
   @tag "#{@blog}/tag"
@@ -182,11 +184,11 @@ defmodule MishkaBlog.Provision do
     team: "#{@team}/:slug"
   }
 
-  @section "blog"
+  # THE PLACES OF THE BLOG, in the order its bar lists them, each with the page that is its front.
+  # `MishkaBlog.Plugins.PageFrame` draws the bar from this list and marks the place a page is in.
+  @places [posts: @blog, categories: @categories, tags: @tags, people: @people]
 
-  # THE LAYOUT `MishkaCmsCore.Install.StarterContent` gives a site: header, footer and the room
-  # between them.
-  @layout_name "site-main"
+  @section "blog"
 
   @typedoc "See `MishkaCmsCore.Runtime.ExtensionProvision.report/0`."
   @type report :: ExtensionProvision.report()
@@ -243,8 +245,19 @@ defmodule MishkaBlog.Provision do
   session behind them. See `MishkaCmsCore.Runtime.ExtensionProvision.ensure!/4`.
   """
   @spec ensure!(map() | String.t(), map(), keyword()) :: report()
-  def ensure!(site, answers \\ %{}, opts \\ []),
-    do: ExtensionProvision.ensure!(manifest(), site, answers, opts)
+  def ensure!(site, answers \\ %{}, opts \\ []) do
+    report = ExtensionProvision.ensure!(manifest(), site, answers, opts)
+
+    # THE BAR'S WORDS ARE ASKED FOR BY A PLUGIN, not by a template that saving a page could register
+    # them from, so they are registered here, in every language of the site, for a translator to
+    # find among the site's words. A row that is there is left as it is.
+    :ok = Translations.register(site_id(site), PageFrame.words())
+
+    report
+  end
+
+  defp site_id(%{id: site_id}), do: site_id
+  defp site_id(site_id) when is_binary(site_id), do: site_id
 
   @doc """
   Creates the blog's permission names that are not stored yet, and returns the ones it created —
@@ -270,6 +283,17 @@ defmodule MishkaBlog.Provision do
   @doc "The paths of the sample pages, in the order they are created."
   @spec page_paths() :: [String.t()]
   def page_paths, do: Enum.map(page_definitions(), & &1.path)
+
+  @doc """
+  The places of the blog, in the order its bar lists them, each with the path of the page that is
+  its front. A post, a category and a tag are in Posts, and a blogger and a team are in People.
+
+      Provision.places()
+      #=> [posts: "/:lang/blog", categories: "/:lang/blog/categories", tags: "/:lang/blog/tags",
+      #    people: "/:lang/blog/people"]
+  """
+  @spec places() :: [{:posts | :categories | :tags | :people, String.t()}]
+  def places, do: @places
 
   @doc """
   The paths of the sample pages that read one row each, by the kind of row their `:slug` capture
@@ -308,8 +332,16 @@ defmodule MishkaBlog.Provision do
 
   # THE PAGES THEMSELVES, which is the one thing only this extension knows. `section` is put on by
   # `ExtensionProvision` from the manifest, so it cannot disagree with what the manifest declares.
-  defp page_attrs_for(%{name: site_name} = site) do
-    layout_id = layout_id(site)
+  defp page_attrs_for(%{id: site_id, name: site_name}) do
+    # THE PAGES HANG ON THE SITE'S OWN FRAME, the `site-main` layout, which draws the header with the
+    # logo, the language switcher and the sign-in menu, the bar under it (`MishkaBlog.Plugins.PageFrame`
+    # hands it the blog's) and the footer around them, in one column — so a blog page is the page and
+    # nothing else. `MishkaCmsCore.Install.StarterContent` writes the layout, and the install wizard runs
+    # it before the extensions' step, as do the dev seeds. A site that has none, one that started empty,
+    # gets `nil`, which is the page with no layout of its own, drawn in the application's frame as it
+    # always was; `ExtensionProvision` hangs such a page on the layout once the site has one
+    # (`SiteLayout.adopt_pages/3`), as it does a page written before pages carried one.
+    layout_id = SiteLayout.layout_id(site_id)
 
     Enum.map(page_definitions(), fn definition ->
       %{
@@ -325,28 +357,6 @@ defmodule MishkaBlog.Provision do
       }
     end)
   end
-
-  # THE PAGES HANG ON THE SITE'S OWN FRAME, the `site-main` layout, which is what draws the header
-  # with the logo, the language switcher and the sign-in menu and the footer around them — so a blog
-  # page is the page and nothing else, and the site's header is not drawn a second time inside it.
-  # `MishkaCmsCore.Install.StarterContent` writes the layout, and the install wizard runs it before
-  # the extensions' step, as do the dev seeds. A site that has none — one that started empty — gets
-  # `nil`, which is the page with no layout of its own, drawn in the application's frame as it
-  # always was.
-  defp layout_id(%{id: site_id}) when is_binary(site_id) do
-    Layout
-    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
-    |> Ash.Query.filter(name == ^@layout_name and site_id == ^site_id)
-    |> Ash.Query.select([:id])
-    |> Ash.read!(authorize?: false, page: [limit: 1])
-    |> Map.fetch!(:results)
-    |> case do
-      [%{id: id} | _rest] -> id
-      [] -> nil
-    end
-  end
-
-  defp layout_id(_site_without_an_id), do: nil
 
   # The kind of record a page shows, which `MishkaBlog.Plugins.PageSeo` answers for whatever path
   # the page is later given.
@@ -442,9 +452,9 @@ defmodule MishkaBlog.Provision do
 
   defp blog_tag(site), do: index_screen(site, :tag)
 
-  # THE DESIGN'S POST SCREEN, drawn in the blog's frame between the site's header and its footer, in
-  # the Posts place. Three blocks in one column, and the column is the design's: the article and its
-  # cover (`blog-post-detail`), the conversation under it in the width of the text
+  # THE DESIGN'S POST SCREEN, drawn in the layout's column, in the Posts place of the bar. Three
+  # blocks in one column, and the column is the design's: the article and its cover
+  # (`blog-post-detail`), the conversation under it in the width of the text
   # (`blog-post-comments`), then what to read next (`blog-related-posts`).
   #
   # `language` ON THE COMMENTS AND THE NEXT READS AS WELL AS ON THE ARTICLE. All three resolve the
@@ -452,7 +462,7 @@ defmodule MishkaBlog.Provision do
   # conversation at /fa/blog/<its slug> under a detail block correctly saying that post is not here —
   # and offered a signed-in reader a box that writes onto the English post.
   defp blog_post(site) do
-    frame(:posts, """
+    """
     <div class="flex w-full flex-col items-center pt-12">
       <.component
         component_name="blog-post-detail"
@@ -495,7 +505,7 @@ defmodule MishkaBlog.Provision do
         />
       </div>
     </div>
-    """)
+    """
   end
 
   # `parent="all"`, where the sidebar's list keeps the default and shows the roots. This page is the
@@ -503,7 +513,7 @@ defmodule MishkaBlog.Provision do
   # one has to appear on it — the sidebar is a menu, and a menu that listed every child would be the
   # whole taxonomy in a 320px column.
   defp blog_categories(site) do
-    frame(:categories, """
+    """
     <.component
       component_name="blog-category-list"
       site="#{site}"
@@ -524,11 +534,11 @@ defmodule MishkaBlog.Provision do
       category_base="#{@category}"
       post_base="#{@blog}"
     />
-    """)
+    """
   end
 
   defp blog_tags(site) do
-    frame(:tags, """
+    """
     <.component
       component_name="blog-tag-cloud"
       site="#{site}"
@@ -544,12 +554,12 @@ defmodule MishkaBlog.Provision do
       language={@page.language}
       tag_base="#{@tag}"
     />
-    """)
+    """
   end
 
   # A BLOGGER'S PAGE AND A TEAM'S ARE ONE PERSON'S PAGE IN THE DESIGN, so they are the same shape: the
   # row the capture names, read by the block that draws it with its head, its numbers and its posts as
-  # cards, paged under it at this page's own URL, in the People place of the frame. A blogger and a team
+  # cards, paged under it at this page's own URL, in the People place of the bar. A blogger and a team
   # are one row in every language, so `language` decides only which of their posts are listed and the
   # language the links out of them are built in. There is no sidebar: the design's person page is the
   # whole width.
@@ -557,7 +567,7 @@ defmodule MishkaBlog.Provision do
   # `back_href` IS THE ADDRESS OF THE PEOPLE PAGE, built here because a page is what knows its own
   # neighbours; the block draws the way back above the profile and only knows where it was told to go.
   defp blog_author(site) do
-    frame(:people, """
+    """
     <div class="pt-14">
       <.component
         component_name="blog-author-profile"
@@ -582,11 +592,11 @@ defmodule MishkaBlog.Provision do
         empty_text={t("Nothing published yet.")}
       />
     </div>
-    """)
+    """
   end
 
   defp blog_team(site) do
-    frame(:people, """
+    """
     <div class="pt-14">
       <.component
         component_name="blog-team-profile"
@@ -616,14 +626,14 @@ defmodule MishkaBlog.Provision do
         empty_text={t("Nothing published yet.")}
       />
     </div>
-    """)
+    """
   end
 
   # THE PAGE'S TITLE IS THE PAGE'S, NOT THE BLOCK'S. The design heads the people page with a small line
   # over a large `People`, which belongs to the page the way the layout's header does, so it is written
   # here — and the block under it draws the teams and the writers with no heading of its own.
   defp blog_people(site) do
-    frame(:people, """
+    """
     <section class="flex flex-col gap-3 pt-16 pb-10">
       <span class="text-[12px] font-semibold tracking-[0.16em] text-subtle uppercase rtl:tracking-normal dark:text-subtle-dark">
         {t("The people behind it")}
@@ -648,7 +658,7 @@ defmodule MishkaBlog.Provision do
       members_empty_text={t("Nobody is in this team yet.")}
       empty_text={t("Nobody writes here yet.")}
     />
-    """)
+    """
   end
 
   # THE SIDEBAR SNIPPET'S SOURCE, which no page of the blog carries any more: the design's screens are
@@ -723,7 +733,7 @@ defmodule MishkaBlog.Provision do
   # ONE OF THE ADDRESSES ABOVE AS A URL A READER COULD HAVE TYPED, written as the `site_path/2` the
   # template calls: the `lang` capture filled in with the language this page is being read in, at the
   # address the site's URL mode gives it, which is what a pager writes to the address bar and what
-  # the frame's tabs link a page by. `captured` names the page's OTHER capture, where it has one and the
+  # a link to a page is written with. `captured` names the page's OTHER capture, where it has one and the
   # pager's URL has to end in it; the admin's Preview assigns no captures at all, and gets no URL.
   defp live_url(address, captured \\ nil)
 
@@ -736,20 +746,8 @@ defmodule MishkaBlog.Provision do
     ~s|site_path("#{address}/:#{name}", #{captures})|
   end
 
-  defp indent(markup, spaces) do
-    pad = String.duplicate(" ", spaces)
-
-    markup
-    |> String.trim_trailing("\n")
-    |> String.split("\n")
-    |> Enum.map_join("\n", fn
-      "" -> ""
-      line -> pad <> line
-    end)
-  end
-
   # ---------------------------------------------------------------------------
-  # The frame every page of the blog is drawn in, and the screen of the list pages
+  # The screen of the list pages
   # ---------------------------------------------------------------------------
 
   # HOW MANY POSTS THE FEATURED STRIP DRAWS, which is also how many the list under it leaves out so
@@ -775,14 +773,14 @@ defmodule MishkaBlog.Provision do
   defp index_screen(site, filter) do
     %{address: address, captured: captured} = index_address(filter)
 
-    frame(:posts, """
+    """
     <section class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] items-end gap-8 pt-16 pb-10">
       <div class="flex flex-col gap-3.5">
         <span class="text-xs font-semibold tracking-[0.16em] text-subtle uppercase dark:text-subtle-dark">
           {t("Journal")}
         </span>
         <h1 class="font-newsreader text-[clamp(44px,6vw,68px)] leading-none font-normal tracking-[-0.03em] text-balance">
-          {t("Notes, guides &")} <em class="text-brand dark:text-[#a9a2f7]">{t("long reads")}</em>.
+          {t("Notes, guides &")} <em class="text-brand dark:text-brand-dark">{t("long reads")}</em>.
         </h1>
         <p class="max-w-[480px] text-[17px] leading-[1.6] text-dim dark:text-dim-dark">
           {t("Written by the team, in more than one language.")}
@@ -831,7 +829,7 @@ defmodule MishkaBlog.Provision do
       of_text={t("of")}
       search={@query_params["q"] || ""}
     />
-    """)
+    """
   end
 
   # WHERE EACH VERSION OF THE SCREEN LIVES, and the capture its address ends in.
@@ -904,72 +902,4 @@ defmodule MishkaBlog.Provision do
   # ask. `||` and not a bare read, because the admin's Preview assigns no query at all.
   defp unfiltered,
     do: ~S'String.trim(@query_params["q"] || "") == "" and (@query_params["tag"] || "") == ""'
-
-  # THE FRAME OF A PAGE OF THE BLOG: what the site's header does not draw — the blog's own name and
-  # the four places in it — and then the page, in the column the design sets it in. The header
-  # itself, with the logo, the language switcher and the sign-in menu, and the footer are the site's
-  # own, drawn by its layout around this; see `layout_id/1`.
-  #
-  # `active` IS THE PLACE THE READER IS IN, one of `:posts`, `:categories`, `:tags` and `:people`.
-  # The tabs are written out in both of their looks rather than a class chosen from a hole in a
-  # string, which Tailwind would not find — see `MishkaCmsWeb.InterpolatedClassTest`.
-  defp frame(active, body) do
-    """
-    <div class="border-b border-edge dark:border-edge-dark">
-      <div class="mx-auto flex w-full max-w-[1160px] flex-wrap items-center justify-between gap-4 px-8 py-3">
-        <.link
-          navigate={#{live_url(@blog)}}
-          class="font-newsreader text-[22px] text-fg italic no-underline dark:text-fg-dark"
-        >
-          {t("Blog")}
-        </.link>
-
-        <nav
-          data-role="blog-section-nav"
-          class="flex items-center gap-1 rounded-xl border border-edge bg-surface p-1 dark:border-edge-dark dark:bg-surface-dark"
-        >
-    #{indent(tabs(active), 6)}
-        </nav>
-      </div>
-    </div>
-
-    <div class="mx-auto w-full max-w-[1160px] px-8 pb-24">
-    #{indent(body, 2)}
-    </div>
-    """
-  end
-
-  defp tabs(active) do
-    Enum.map_join(
-      [
-        {:posts, @blog, "Posts"},
-        {:categories, @categories, "Categories"},
-        {:tags, @tags, "Tags"},
-        {:people, @people, "People"}
-      ],
-      "\n",
-      fn {place, address, label} ->
-        """
-        <.link
-          navigate={#{live_url(address)}}#{aria_current(place == active)}
-          class="#{tab_class(place == active)}"
-        >
-          {t("#{label}")}
-        </.link>
-        """
-      end
-    )
-  end
-
-  # THE PLACE THE READER IS IN IS SAID TO A SCREEN READER TOO, not only coloured.
-  defp aria_current(true), do: ~s(\n  aria-current="page")
-  defp aria_current(false), do: ""
-
-  defp tab_class(true),
-    do:
-      "inline-flex h-8 items-center rounded-[9px] bg-[#eceafb] px-3.5 text-[13.5px] font-medium text-brand no-underline dark:bg-[#25223f] dark:text-[#a9a2f7]"
-
-  defp tab_class(false),
-    do:
-      "inline-flex h-8 items-center rounded-[9px] px-3.5 text-[13.5px] font-medium text-dim no-underline hover:text-fg dark:text-dim-dark dark:hover:text-fg-dark"
 end

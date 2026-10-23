@@ -245,7 +245,7 @@ defmodule MishkaBlog.ListPagesTest do
   # ---------------------------------------------------------------------------
 
   describe "the blog's home" do
-    test "draws the title, the search box with the count of the posts, and a nav of the blog",
+    test "draws the title and the search box with the count of the posts, and no bar of its own",
          %{site: site} do
       the_design!(site)
       html = render_page(site, "/:lang/blog")
@@ -257,12 +257,9 @@ defmodule MishkaBlog.ListPagesTest do
       assert attrs(html, ~s(form[role="search"]), "method") == ["get"]
       assert attrs(html, ~s(form[role="search"]), "action") == ["/blog"]
 
-      assert text(html, ~s([data-role="blog-section-nav"] a)) == [
-               "Posts",
-               "Categories",
-               "Tags",
-               "People"
-             ]
+      # THE BAR UNDER THE HEADER IS THE LAYOUT'S, handed it by `MishkaBlog.Plugins.PageFrame`
+      assert count(html, ~s([data-role="blog-section-nav"])) == 0
+      assert html |> String.trim_leading() |> String.starts_with?("<section")
     end
 
     test "draws the newest featured post large and the next two beside it, with their authors",
@@ -378,8 +375,9 @@ defmodule MishkaBlog.ListPagesTest do
 
       assert hd(twice) in once
 
+      # one of the six tints of the site's theme, and its twin for the dark
       assert hd(twice) =~
-               ~r/bg-\[#[0-9a-f]{6}\] text-\[#[0-9a-f]{6}\] dark:bg-\[#[0-9a-f]{6}\] dark:text-\[#[0-9a-f]{6}\]/
+               ~r/bg-tint-([1-6]) text-tint-\1-ink dark:bg-tint-\1-dark dark:text-tint-\1-ink-dark/
     end
 
     test "offers the roots of the categories as chips, and not the ones nobody may read",

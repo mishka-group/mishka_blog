@@ -382,6 +382,69 @@ defmodule MishkaBlog.KitTest do
       end
     end
 
+    # THE LAYOUT OWNS THE WIDTH OF THE PAGE (`MishkaCmsCore.Runtime.SiteLayout`): its column is the
+    # 1160 px of the header and the footer, with the gutters of both, and a block is drawn straight
+    # into it. A block that centred itself in a container of its own would double the gutters and
+    # set the page narrower than the header above it. The columns inside a block, the text's and the
+    # article's, are its own; the page's is not.
+    test "and none draws a container of the page's width, or runs to the window's edges" do
+      for component <- components() do
+        source = component["template"] <> Enum.map_join(component["helpers"], & &1["code"])
+
+        for container <- ["mx-auto", "max-w-[1160px]", "w-screen", "site-bleed"] do
+          refute source =~ container,
+                 "#{component["name"]} draws #{container}, which is the layout's"
+        end
+      end
+    end
+
+    # THE COLOURS THE SITE'S THEME HAS ARE ITS TOKENS (`MishkaCmsCore.Install.StarterContent`), not
+    # hex values of the block's own: a theme an admin edits, or a release that moves a tint, then
+    # reaches the blog too. So every token the blog names exists in the theme, and none of the
+    # values the theme's shared tokens hold is written out as a hex value.
+    test "and write the theme's colours as its tokens" do
+      theme =
+        for [name, value] <-
+              Regex.scan(
+                ~r/--color-([a-z0-9-]+):\s*(#[0-9a-f]{6});/,
+                MishkaCmsCore.Install.StarterContent.missing_theme(""),
+                capture: :all_but_first
+              ),
+            into: %{},
+            do: {name, value}
+
+      assert map_size(theme) > 40, "the theme was not read, so nothing is asserted of the blog"
+
+      shared =
+        ~r/^(tint-\d.*|chip-wash.*|brand-dark|body.*|edge-hover|warn-ink.*)$/
+
+      # a hex value the blog draws that is not a token, on purpose: the warning wash of a featured
+      # mark, which the theme has no token of
+      warn_wash = ~w(#fbf0dc #2e2618)
+
+      held = for {name, value} <- theme, name =~ shared, value not in warn_wash, do: value
+      assert length(held) > 20
+
+      for component <- components() do
+        source = component["template"] <> Enum.map_join(component["helpers"], & &1["code"])
+
+        for value <- held do
+          refute String.contains?(source, "[#{value}]"),
+                 "#{component["name"]} writes #{value}, which is a token of the theme"
+        end
+
+        used =
+          ~r/(?:bg|text|border|divide|ring|from|to)-((?:tint-[1-6](?:-ink)?|chip-wash|brand|body|edge-hover|warn-ink)(?:-dark)?)(?![\w-])/
+          |> Regex.scan(source, capture: :all_but_first)
+          |> List.flatten()
+
+        for token <- Enum.uniq(used) do
+          assert Map.has_key?(theme, token),
+                 "#{component["name"]} draws #{token}, which the theme does not declare"
+        end
+      end
+    end
+
     # AND IT HAS TO TRAVEL. `MishkaBlog.Kit.bundle_path/0` reads the file out of `:code.priv_dir/1`,
     # and `priv` was left out of the package's `files` — so a hex install of this extension pointed
     # at a path that does not exist and gave that site no blog components at all. Nothing in this

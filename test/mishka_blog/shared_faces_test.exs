@@ -94,12 +94,13 @@ defmodule MishkaBlog.SharedFacesTest do
     LazyHTML.from_fragment(html)
   end
 
-  # THE COLOUR OF WHAT IS FOUND, as the four classes the design's tints are written in.
+  # THE COLOUR OF WHAT IS FOUND, as the four classes of the site theme's tint it wears: its surface and
+  # its ink, each with the twin the dark theme answers with.
   defp tint_of(nodes) do
     nodes
     |> Enum.flat_map(&LazyHTML.attribute(&1, "class"))
     |> Enum.flat_map(&String.split/1)
-    |> Enum.filter(&String.match?(&1, ~r/^(dark:)?(bg|text)-\[#[0-9a-f]{6}\]$/))
+    |> Enum.filter(&String.match?(&1, ~r/^(dark:)?(bg|text)-tint-[1-6](-ink)?(-dark)?$/))
     |> Enum.sort()
   end
 
@@ -125,7 +126,7 @@ defmodule MishkaBlog.SharedFacesTest do
     assert [colour] = Enum.uniq(lists)
 
     assert length(colour) == 4,
-           "a tint is the four classes of the design's colours: #{inspect(colour)}"
+           "a tint is the four classes of the theme's tokens: #{inspect(colour)}"
 
     colour
   end
