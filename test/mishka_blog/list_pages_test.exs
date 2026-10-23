@@ -377,7 +377,9 @@ defmodule MishkaBlog.ListPagesTest do
       twice = html_classes(render_page(site, "/:lang/blog", %{"q" => "e2e"}), cover)
 
       assert hd(twice) in once
-      assert hd(twice) =~ ~r/bg-\[#[0-9a-f]{6}\] dark:bg-\[#[0-9a-f]{6}\]/
+
+      assert hd(twice) =~
+               ~r/bg-\[#[0-9a-f]{6}\] text-\[#[0-9a-f]{6}\] dark:bg-\[#[0-9a-f]{6}\] dark:text-\[#[0-9a-f]{6}\]/
     end
 
     test "offers the roots of the categories as chips, and not the ones nobody may read",

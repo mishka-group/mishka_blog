@@ -16,15 +16,14 @@ defmodule MishkaBlog.Kit do
 
   `blog-post-list`, `blog-featured-posts`, `blog-post-search`, `blog-tag-cloud`,
   `blog-post-detail`, `blog-category-list`, `blog-post-comments`, `blog-related-posts`,
-  `blog-author-profile`, `blog-team-profile` and `blog-people`. Each is a `Phoenix.LiveComponent` that runs its own query,
-  so an author can put any of them on any page, on its own or beside the others, and each holds what
-  it read.
+  `blog-author-profile`, `blog-team-profile` and `blog-people`. Each is a `Phoenix.LiveComponent`
+  that runs its own query, so an author can put any of them on any page, on its own or beside the
+  others, and each holds what it read.
 
   A blogger's page and a team's read their own page of posts and draw it with `blog-pager` and, for
-  each post, `person_post_card`: a markup helper inside each of the two, the card the design draws on
-  a person's page (a 16:8 cover, the category and the date, the title in the serif, two lines of the
-  summary, one link over the whole of it). It is its own markup rather than `blog-post-card`, because
-  the list's card and this one are not yet the same card. They cannot draw `blog-post-list` itself: a
+  each post, `blog-post-card` in its `related` variant, which is also the card under an article
+  (`blog-related-posts`): a 16:8 cover, the category and the date, the title in the serif, two lines
+  of the summary, one link over the whole of it. They cannot draw `blog-post-list` itself: a
   component's markup may not hold a live component
   (`MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement`).
 
@@ -33,10 +32,16 @@ defmodule MishkaBlog.Kit do
   `blog-post-card`, `blog-post-meta`, `blog-term-row`, `blog-pager`, `blog-notice` and
   `blog-profile-card`. These hold nothing and read nothing: they draw what the block above hands
   them. They are components rather than markup inside one block because more than one block draws
-  them — the card is drawn by the paged list and by the featured strip, the profile card by both
-  profiles and by `blog-people`, the notice by every block but the search box — and an admin who
-  restyles a card restyles it once. The profile card is also where a person's picture is drawn, as a
-  tile, a pill or the picture alone at four sizes, in the tint their slug picks.
+  them — the card is drawn by the paged list, by the featured strip, by the posts to read next and by
+  both profiles, the profile card by both profiles and by `blog-people`, the notice by every block
+  but the search box — and an admin who restyles a card restyles it once.
+
+  Two of them are also where a colour is decided, once, so the same post or person is the same
+  colour on every page that draws them. `blog-post-card` draws a post's cover — its picture, or its
+  first letter on the tint its slug picks — for the grid, the strip, the posts to read next, a
+  person's page and the head of the article. `blog-profile-card` draws a person's picture, or their
+  letters on the tint their slug picks, as a tile, a pill or the picture alone at four sizes or any
+  size a caller sets; the byline of a card and of an article draw it too.
 
   ### Who they read as
 

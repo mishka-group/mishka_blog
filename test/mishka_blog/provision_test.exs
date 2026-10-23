@@ -27,9 +27,9 @@ defmodule MishkaBlog.ProvisionTest do
   alias MishkaCmsCore.Install
   alias MishkaCmsCore.Install.{Bootstrap, Extensions}
   alias MishkaCmsCore.Runtime.Component
+  alias MishkaCmsCore.Runtime.ExtensionProvision
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Page
-  alias MishkaCmsCore.Runtime.ExtensionProvision
   alias MishkaCmsCore.Runtime.PageProvision
   alias MishkaCmsCore.Runtime.Snippet
   alias MishkaCmsCore.Runtime.States.SiteState
@@ -265,23 +265,21 @@ defmodule MishkaBlog.ProvisionTest do
       assert Enum.sort(shown) == Enum.sort(kinds)
     end
 
-    # THE DESIGN'S PEOPLE PAGES DRAW THEIR CONTENT AND NOTHING AROUND IT. The header, the footer, the
-    # language switcher and the dark-mode toggle are the `site-main` layout's, so a page that drew
-    # its own would show the site's chrome twice.
-    test "draws the people, blogger and team pages as a column of content, with no chrome of its own",
+    # EVERY PAGE DRAWS ITS CONTENT UNDER THE BLOG'S OWN BAR AND NOTHING ELSE AROUND IT. The header, the
+    # footer, the language switcher and the dark-mode toggle are the `site-main` layout's, so a page
+    # that drew its own would show the site's chrome twice, and the design has no sidebar.
+    test "draws every page as the blog's bar and a centred column, with no chrome of its own",
          %{site: site} do
       Provision.ensure!(site)
-      paths = Provision.item_paths()
 
-      for path <- [paths.author, paths.team, "/:lang/blog/people"] do
+      for path <- Provision.page_paths() do
         template = page(site, path).template
 
-        refute template =~ "<header", "#{path} draws a header of its own"
-        refute template =~ "min-h-screen", "#{path} draws a page of its own"
+        for tag <- ["<header", "<main", "<footer", "min-h-screen", "blog-sidebar"] do
+          refute template =~ tag, "#{path} draws #{tag}, which is the layout's"
+        end
 
-        refute template =~ "blog-sidebar",
-               "#{path} still carries the sidebar the design has no place for"
-
+        assert template =~ ~s(data-role="blog-section-nav"), "#{path} has no bar of the blog"
         assert template =~ "max-w-[1160px]", "#{path} is not the design's centred column"
       end
 
@@ -292,26 +290,33 @@ defmodule MishkaBlog.ProvisionTest do
       refute people =~ ~s|heading={t("People")}|, "the block would head the page a second time"
     end
 
-    # THE FRAME THE SITE'S HOME PAGE HANGS ON, where the site has it. The pages are written once and
-    # never updated, so this is the only time they can be hung on it.
-    test "hangs every page on the site's site-main layout", %{site: site} do
-      layout = create_layout!(site_id: site.id, name: "site-main")
-
+    # THE BAR NAMES THE PLACE THE READER IS IN, as the design does: a post is in Posts, and a blogger or
+    # a team is in People. The template says it twice, in colour and to a screen reader.
+    test "marks the place each page is in on the blog's bar", %{site: site} do
       Provision.ensure!(site)
+      paths = Provision.item_paths()
 
-      for path <- Provision.page_paths() do
-        assert page(site, path).layout_id == layout.id, "#{path} is not on site-main"
-      end
-    end
+      places = %{
+        "/:lang/blog" => "Posts",
+        paths.post => "Posts",
+        paths.category => "Posts",
+        paths.tag => "Posts",
+        "/:lang/blog/categories" => "Categories",
+        "/:lang/blog/tags" => "Tags",
+        paths.author => "People",
+        paths.team => "People",
+        "/:lang/blog/people" => "People"
+      }
 
-    test "writes the pages with no layout where the site has no site-main", %{site: site} do
-      create_layout!(site_id: site.id, name: "something-else")
+      assert Enum.sort(Map.keys(places)) == Enum.sort(Provision.page_paths())
 
-      Provision.ensure!(site)
+      for {path, place} <- places do
+        template = page(site, path).template
 
-      for path <- Provision.page_paths() do
-        assert is_nil(page(site, path).layout_id),
-               "#{path} was hung on a layout it was not asked to"
+        assert [marked] = Regex.scan(~r/aria-current="page"[^>]*>\s*\{t\("([^"]+)"\)\}/, template),
+               "#{path} marks no place or more than one"
+
+        assert List.last(marked) == place, "#{path} is in #{place}"
       end
     end
 

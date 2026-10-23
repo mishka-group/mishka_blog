@@ -79,14 +79,16 @@ defmodule MishkaBlog.Provision do
 
   Every page is hung on the site's `site-main` layout — see `layout_id/1` — whose header and footer
   are the site's own: the logo, the language switcher, the sign-in menu and the dark-mode switch.
-  A page therefore draws only what lies between them. The list pages begin with a bar of their own,
-  the blog's name and its four places (Posts, Categories, Tags and People), which `frame/2` writes
-  and which marks the one the reader is in; the colours, type and radii of everything below are the
-  tokens of the site's theme, with a `dark:` twin for each, and the screen is the design's: the
-  search box with its count, the featured strip, the row of categories above the cards, and the
-  pager that says which posts it shows. A site that skipped the starter content has neither the
-  layout nor the theme tokens the markup is written in (`bg-surface`, `text-dim`, `font-newsreader`
-  and the rest), and these pages are plain on it.
+  A page therefore draws only what lies between them. Every page begins with the same bar of its
+  own, the blog's name and its four places (Posts, Categories, Tags and People), which `frame/2`
+  writes and which marks the one the reader is in: a post is in Posts, a blogger and a team are in
+  People, as the design has them. The colours, type and radii of everything below are the tokens of
+  the site's theme, with a `dark:` twin for each, and the screens are the design's: the search box
+  with its count, the featured strip, the row of categories above the cards, the pager that says
+  which posts it shows, the article with its conversation and what to read next, and the people with
+  their posts. A site that skipped the starter content has neither the layout nor the theme tokens
+  the markup is written in (`bg-surface`, `text-dim`, `font-newsreader` and the rest), and these
+  pages are plain on it.
 
   No static route in the host application's router answers any of them, which is the point of the
   `/:lang` prefix: `/mish-blog/*` is hand-written marketing the user keeps, and a runtime page
@@ -125,10 +127,10 @@ defmodule MishkaBlog.Provision do
 
   One capture name carries a category on `/:lang/blog/category/:slug`, a tag on
   `/:lang/blog/tag/:slug`, a blogger on `/:lang/blog/author/:slug`, a team on `/:lang/blog/team/:slug`
-  and a post on `/:lang/blog/:slug` — while the sidebar's category list and
-  tag cloud both read `params` under the same default `selected_param` to mark the row the reader is
-  on. So a capture is handed only to the component whose kind of row it holds, which is what the
-  sidebar builder below takes its second argument for.
+  and a post on `/:lang/blog/:slug` — while a category list and a tag cloud both read `params` under
+  the same default `selected_param` to mark the row the reader is on. So a capture is handed only to
+  the component whose kind of row it holds, and the sidebar snippet, which an author drops on a page
+  this module knows nothing about, is handed none and marks none.
 
   Every template stays inside what BOTH renderers assign: `@page`, `@query_params`, `@page_languages`
   and `assigns[:current_user]`. The admin's Preview tab assigns no visitor and no captures (see
@@ -146,9 +148,9 @@ defmodule MishkaBlog.Provision do
   @snippet_name "Blog sidebar"
 
   # THE BLOG'S ADDRESSES, WRITTEN ONCE. A page's path, the base a component builds links to it from
-  # and the URL the chrome writes to reach it are all the same string — `/:lang/blog/:slug` is where
+  # and the URL the frame writes to reach it are all the same string — `/:lang/blog/:slug` is where
   # a post is read, `/:lang/blog` is what a block appends that post's slug to, and
-  # `/:lang/blog/categories` is both a page and what the header calls it — and they were twenty-seven
+  # `/:lang/blog/categories` is both a page and what the frame's tabs call it — and they were twenty-seven
   # separate literals, six paths, fifteen bases and six URLs, each one its own chance to write a path
   # this site does not answer.
   #
@@ -160,7 +162,7 @@ defmodule MishkaBlog.Provision do
   # which is where the snippet below ends up.
   #
   # A URL IS THE SAME ADDRESS WITH THAT CAPTURE ALREADY FILLED IN — `live_url/2` — because nothing
-  # fills it later: a pager writes its `?page=2` to the address bar, and the header links to a page
+  # fills it later: a pager writes its `?page=2` to the address bar, and the frame links to a page
   # rather than to a row.
   @blog "/:lang/blog"
   @category "#{@blog}/category"
@@ -217,7 +219,7 @@ defmodule MishkaBlog.Provision do
       bundle_path: Kit.bundle_path(),
       section: @section,
       pages: &page_attrs_for/1,
-      snippet: %{name: @snippet_name, source: &sidebar(&1, :nothing)},
+      snippet: %{name: @snippet_name, source: &sidebar/1},
       permissions: @permissions
     }
   end
@@ -440,18 +442,18 @@ defmodule MishkaBlog.Provision do
 
   defp blog_tag(site), do: index_screen(site, :tag)
 
-  # THE DESIGN'S POST SCREEN, drawn in the `site-main` layout between its header and its footer — so
-  # nothing here is a header, a footer or a menu. Three blocks in one column, and the column is the
-  # design's: the article and its cover (`blog-post-detail`), the conversation under it in the width
-  # of the text (`blog-post-comments`), then what to read next (`blog-related-posts`).
+  # THE DESIGN'S POST SCREEN, drawn in the blog's frame between the site's header and its footer, in
+  # the Posts place. Three blocks in one column, and the column is the design's: the article and its
+  # cover (`blog-post-detail`), the conversation under it in the width of the text
+  # (`blog-post-comments`), then what to read next (`blog-related-posts`).
   #
   # `language` ON THE COMMENTS AND THE NEXT READS AS WELL AS ON THE ARTICLE. All three resolve the
   # same `:slug` capture, and a block that resolved it by slug alone published the English article's
   # conversation at /fa/blog/<its slug> under a detail block correctly saying that post is not here —
   # and offered a signed-in reader a box that writes onto the English post.
   defp blog_post(site) do
-    """
-    <div class="mx-auto flex w-full max-w-[1160px] flex-col items-center px-8 pb-24 pt-12">
+    frame(:posts, """
+    <div class="flex w-full flex-col items-center pt-12">
       <.component
         component_name="blog-post-detail"
         site="#{site}"
@@ -493,7 +495,7 @@ defmodule MishkaBlog.Provision do
         />
       </div>
     </div>
-    """
+    """)
   end
 
   # `parent="all"`, where the sidebar's list keeps the default and shows the roots. This page is the
@@ -547,16 +549,16 @@ defmodule MishkaBlog.Provision do
 
   # A BLOGGER'S PAGE AND A TEAM'S ARE ONE PERSON'S PAGE IN THE DESIGN, so they are the same shape: the
   # row the capture names, read by the block that draws it with its head, its numbers and its posts as
-  # cards, paged under it at this page's own URL. A blogger and a team are one row in every language, so
-  # `language` decides only which of their posts are listed and the language the links out of them are
-  # built in. There is no sidebar: the design's person page is the whole width, and this `:slug` names
-  # none of the rows the sidebar marks anyway.
+  # cards, paged under it at this page's own URL, in the People place of the frame. A blogger and a team
+  # are one row in every language, so `language` decides only which of their posts are listed and the
+  # language the links out of them are built in. There is no sidebar: the design's person page is the
+  # whole width.
   #
   # `back_href` IS THE ADDRESS OF THE PEOPLE PAGE, built here because a page is what knows its own
   # neighbours; the block draws the way back above the profile and only knows where it was told to go.
   defp blog_author(site) do
-    column(
-      """
+    frame(:people, """
+    <div class="pt-14">
       <.component
         component_name="blog-author-profile"
         site="#{site}"
@@ -579,14 +581,13 @@ defmodule MishkaBlog.Provision do
         missing_text={t("That blogger is not here, or no longer writes for this site.")}
         empty_text={t("Nothing published yet.")}
       />
-      """,
-      :person
-    )
+    </div>
+    """)
   end
 
   defp blog_team(site) do
-    column(
-      """
+    frame(:people, """
+    <div class="pt-14">
       <.component
         component_name="blog-team-profile"
         site="#{site}"
@@ -614,62 +615,56 @@ defmodule MishkaBlog.Provision do
         members_empty_text={t("Nobody is in this team yet.")}
         empty_text={t("Nothing published yet.")}
       />
-      """,
-      :person
-    )
+    </div>
+    """)
   end
 
   # THE PAGE'S TITLE IS THE PAGE'S, NOT THE BLOCK'S. The design heads the people page with a small line
   # over a large `People`, which belongs to the page the way the layout's header does, so it is written
   # here — and the block under it draws the teams and the writers with no heading of its own.
   defp blog_people(site) do
-    column(
-      """
-      <section class="flex flex-col gap-3 pb-10">
-        <span class="text-[12px] font-semibold tracking-[0.16em] text-subtle uppercase rtl:tracking-normal dark:text-subtle-dark">
-          {t("The people behind it")}
-        </span>
-        <h1 class="font-newsreader text-[length:clamp(40px,5vw,60px)] font-normal tracking-[-0.03em] rtl:tracking-normal">
-          {t("People")}
-        </h1>
-      </section>
+    frame(:people, """
+    <section class="flex flex-col gap-3 pt-16 pb-10">
+      <span class="text-[12px] font-semibold tracking-[0.16em] text-subtle uppercase rtl:tracking-normal dark:text-subtle-dark">
+        {t("The people behind it")}
+      </span>
+      <h1 class="font-newsreader text-[length:clamp(40px,5vw,60px)] font-normal tracking-[-0.03em] rtl:tracking-normal">
+        {t("People")}
+      </h1>
+    </section>
 
-      <.component
-        component_name="blog-people"
-        site="#{site}"
-        id="blog-people"
-        current_user={assigns[:current_user]}
-        unteamed_heading={t("Writers")}
-        team_text={t("Team")}
-        post_text={t("%{count} post")}
-        posts_text={t("%{count} posts")}
-        language={@page.language}
-        author_base="#{@author}"
-        team_base="#{@team}"
-        members_empty_text={t("Nobody is in this team yet.")}
-        empty_text={t("Nobody writes here yet.")}
-      />
-      """,
-      :people
-    )
+    <.component
+      component_name="blog-people"
+      site="#{site}"
+      id="blog-people"
+      current_user={assigns[:current_user]}
+      unteamed_heading={t("Writers")}
+      team_text={t("Team")}
+      post_text={t("%{count} post")}
+      posts_text={t("%{count} posts")}
+      language={@page.language}
+      author_base="#{@author}"
+      team_base="#{@team}"
+      members_empty_text={t("Nobody is in this team yet.")}
+      empty_text={t("Nobody writes here yet.")}
+    />
+    """)
   end
 
-  # The sidebar the lists and the post page carry, and the snippet's own source. The card chrome is
-  # here rather than in the components, because a component that drew its own card could not be
-  # dropped into one.
+  # THE SIDEBAR SNIPPET'S SOURCE, which no page of the blog carries any more: the design's screens are
+  # the whole width, and what an author wants beside the text of a page of their own is this. The
+  # card chrome is here rather than in the components, because a component that drew its own card
+  # could not be dropped into one.
   #
-  # `holds` IS WHAT THE PAGE'S `:slug` CAPTURE NAMES, and it is the only thing the sidebar differs
-  # by. One key, `slug`, means a category on one of these pages, a tag on another and a post on a
-  # third, while the category list and the tag cloud both read `params` under the same default
-  # `selected_param` to mark the row the reader is on. Handing both of them the capture on every
-  # page therefore marks a tag the reader is not on as where they are whenever a tag and a category
-  # share a slug — and "elixir" being both is the ordinary case, not a contrived one. Only the
-  # component whose kind of row the capture holds is given it. The snippet, which an author drops on
-  # a page this module knows nothing about, is given `:nothing` and marks none.
-  defp sidebar(site, holds) do
+  # IT MARKS NO ROW AS THE ONE THE READER IS ON, because an author drops it on a page this module
+  # knows nothing about: the page's `:slug` capture could be a category, a tag or a post there, and
+  # the category list and the tag cloud both read `params` under the same default `selected_param`.
+  # Handed the capture, a tag would be marked as where the reader is whenever a tag and a category
+  # share a slug — and "elixir" being both is the ordinary case, not a contrived one.
+  defp sidebar(site) do
     """
     <aside data-role="blog-sidebar" class="flex flex-col gap-5">
-      <div class="rounded-[18px] border border-[#ecebe6] bg-white p-5">
+      <div class="rounded-[18px] border border-edge bg-surface p-5 dark:border-edge-dark dark:bg-surface-dark">
         <.component
           component_name="blog-post-search"
           site="#{site}"
@@ -691,10 +686,10 @@ defmodule MishkaBlog.Provision do
         show_count={true}
         language={@page.language}
         category_base="#{@category}"
-        post_base="#{@blog}"#{marks(holds, :category, 4)}#{without_the_open_one(holds, 4)}
+        post_base="#{@blog}"
       />
 
-      <div class="rounded-[18px] border border-[#ecebe6] bg-white p-5">
+      <div class="rounded-[18px] border border-edge bg-surface p-5 dark:border-edge-dark dark:bg-surface-dark">
         <.component
           component_name="blog-tag-cloud"
           site="#{site}"
@@ -704,7 +699,7 @@ defmodule MishkaBlog.Provision do
           limit={24}
           show_count={true}
           language={@page.language}
-          tag_base="#{@tag}"#{marks(holds, :tag, 6)}
+          tag_base="#{@tag}"
         />
       </div>
 
@@ -719,28 +714,16 @@ defmodule MishkaBlog.Provision do
         show_pager={false}
         show_excerpt={false}
         language={@page.language}
-        post_base="#{@blog}"#{without_the_open_one(holds, 4)}
+        post_base="#{@blog}"
       />
     </aside>
     """
   end
 
-  defp marks(holds, holds, pad), do: "\n#{String.duplicate(" ", pad)}params={@query_params}"
-  defp marks(_elsewhere, _kind, _pad), do: ""
-
-  # WHAT ELSE THERE IS TO READ, which the article the reader already has open is not — in BOTH of the
-  # blocks that offer it, the recent list and the three posts hung under each category. `|| ""`
-  # because the admin's Preview assigns no captures, and the attribute's own default is the same
-  # empty string.
-  defp without_the_open_one(:post, pad),
-    do: ~s(\n#{String.duplicate(" ", pad)}exclude_slug={@query_params["slug"] || ""})
-
-  defp without_the_open_one(_no_post_here, _pad), do: ""
-
   # ONE OF THE ADDRESSES ABOVE AS A URL A READER COULD HAVE TYPED, written as the `site_path/2` the
   # template calls: the `lang` capture filled in with the language this page is being read in, at the
   # address the site's URL mode gives it, which is what a pager writes to the address bar and what
-  # the header links a page by. `captured` names the page's OTHER capture, where it has one and the
+  # the frame's tabs link a page by. `captured` names the page's OTHER capture, where it has one and the
   # pager's URL has to end in it; the admin's Preview assigns no captures at all, and gets no URL.
   defp live_url(address, captured \\ nil)
 
@@ -751,27 +734,6 @@ defmodule MishkaBlog.Provision do
       ~s|%{"#{Languages.capture()}" => @page.language, "#{name}" => @query_params["#{name}"]}|
 
     ~s|site_path("#{address}/:#{name}", #{captures})|
-  end
-
-  # THE DESIGN'S COLUMN, FOR A PAGE THE `site-main` LAYOUT FRAMES. The layout draws the header, the
-  # messages and the footer and gives its `<main>` the whole width, so what a page draws is its own
-  # centred column: 1160px with 32px at the sides, the 96px under it, and the space over its first
-  # line that its design gives it. One clause per top, written out in full: Tailwind reads source text,
-  # and a class with a hole in it gets no rule — see `MishkaCmsWeb.InterpolatedClassTest`.
-  defp column(body, :people) do
-    """
-    <div class="mx-auto w-full max-w-[1160px] px-8 pt-16 pb-24">
-    #{indent(body, 2)}
-    </div>
-    """
-  end
-
-  defp column(body, :person) do
-    """
-    <div class="mx-auto w-full max-w-[1160px] px-8 pt-14 pb-24">
-    #{indent(body, 2)}
-    </div>
-    """
   end
 
   defp indent(markup, spaces) do
@@ -787,7 +749,7 @@ defmodule MishkaBlog.Provision do
   end
 
   # ---------------------------------------------------------------------------
-  # The list pages: the screen of the design, and the frame the blog's pages share
+  # The frame every page of the blog is drawn in, and the screen of the list pages
   # ---------------------------------------------------------------------------
 
   # HOW MANY POSTS THE FEATURED STRIP DRAWS, which is also how many the list under it leaves out so
@@ -950,7 +912,7 @@ defmodule MishkaBlog.Provision do
   #
   # `active` IS THE PLACE THE READER IS IN, one of `:posts`, `:categories`, `:tags` and `:people`.
   # The tabs are written out in both of their looks rather than a class chosen from a hole in a
-  # string, which Tailwind would not find — see `main_class/1` for the same rule.
+  # string, which Tailwind would not find — see `MishkaCmsWeb.InterpolatedClassTest`.
   defp frame(active, body) do
     """
     <div class="border-b border-edge dark:border-edge-dark">
@@ -989,7 +951,7 @@ defmodule MishkaBlog.Provision do
       fn {place, address, label} ->
         """
         <.link
-          navigate={#{live_url(address)}}
+          navigate={#{live_url(address)}}#{aria_current(place == active)}
           class="#{tab_class(place == active)}"
         >
           {t("#{label}")}
@@ -998,6 +960,10 @@ defmodule MishkaBlog.Provision do
       end
     )
   end
+
+  # THE PLACE THE READER IS IN IS SAID TO A SCREEN READER TOO, not only coloured.
+  defp aria_current(true), do: ~s(\n  aria-current="page")
+  defp aria_current(false), do: ""
 
   defp tab_class(true),
     do:

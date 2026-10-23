@@ -17,7 +17,8 @@ defmodule MishkaBlog.PostPageTest do
   What each assertion pins is a part of the design's post screen and the runtime data it is drawn
   from: the badges above the title, the people under it, the cover, the text, the rows under the
   text, the conversation with its count, and "Keep reading". The page draws none of the site's
-  header, footer or menu: the `site-main` layout does.
+  header, footer or menu: the `site-main` layout does. What it draws above the article is the
+  blog's own bar, with Posts marked, which every page of the blog shares.
   """
   use MishkaBlog.DataCase, async: false
 
@@ -81,6 +82,13 @@ defmodule MishkaBlog.PostPageTest do
   defp texts(doc, name),
     do:
       doc |> role(name) |> Enum.map(&(&1 |> LazyHTML.text() |> String.split() |> Enum.join(" ")))
+
+  # WHAT A ROLE HOLDS INSIDE THE POSTS TO READ NEXT, which are `blog-post-card`s like the lists' own.
+  defp next_reads(doc, name) do
+    doc
+    |> LazyHTML.query(~s([data-role="blog-related-items"] [data-role="#{name}"]))
+    |> Enum.map(&(&1 |> LazyHTML.text() |> String.split() |> Enum.join(" ")))
+  end
 
   defp hrefs(doc, selector),
     do: doc |> LazyHTML.query(selector) |> Enum.flat_map(&LazyHTML.attribute(&1, "href"))
@@ -405,16 +413,18 @@ defmodule MishkaBlog.PostPageTest do
 
       doc = page_of(site, post.slug)
 
-      assert texts(doc, "blog-related-title") == ["Near", "Newest far", "Far"]
+      assert next_reads(doc, "blog-list-title") == ["Near", "Newest far", "Far"]
       assert texts(doc, "blog-related-heading") == ["Keep reading"]
 
-      assert hrefs(doc, ~s(a[data-role="blog-related-card"])) == [
+      assert hrefs(doc, ~s([data-role="blog-related-items"] a[data-role="blog-list-title"])) == [
                "/blog/near",
                "/blog/newest-far",
                "/blog/far"
              ]
 
-      assert texts(doc, "blog-related-category") == ["Shared", "Elsewhere", "Elsewhere"]
+      assert next_reads(doc, "blog-list-category") == ["Shared", "Elsewhere", "Elsewhere"]
+      assert next_reads(doc, "blog-list-date") == ["01 Jan 2026", "15 Apr 2026", "01 Apr 2026"]
+      assert next_reads(doc, "blog-list-excerpt") == [], "a post to read next has no summary"
     end
 
     test "offers only posts in the language of the one being read, and only ones the reader may open",
@@ -423,12 +433,13 @@ defmodule MishkaBlog.PostPageTest do
       published!(site, "فارسی", slug: "farsi", language: "fa")
       published!(site, "Locked", slug: "locked", permissions: ["members:read"])
 
-      assert texts(page_of(site, post.slug), "blog-related-title") == ["English"]
+      assert next_reads(page_of(site, post.slug), "blog-list-title") == ["English"]
 
       member = create_user_with_permissions!(["members:read"], site_id: site.id)
 
-      assert page_of(site, post.slug, user: member) |> texts("blog-related-title") |> Enum.sort() ==
-               ["English", "Locked"]
+      assert page_of(site, post.slug, user: member)
+             |> next_reads("blog-list-title")
+             |> Enum.sort() == ["English", "Locked"]
     end
 
     test "draws nothing, not even its heading, when there is nothing else to read", %{
@@ -438,7 +449,26 @@ defmodule MishkaBlog.PostPageTest do
       doc = page_of(site, post.slug)
 
       refute has_role?(doc, "blog-related-heading")
-      refute has_role?(doc, "blog-related-card")
+      refute has_role?(doc, "blog-related-items")
+    end
+
+    # THE CARD IS THE LISTS' OWN `blog-post-card`, in the variant the design draws under an article: a
+    # 16:8 cover, the category and the day, the title. A post to read next is not announced as featured.
+    test "draws each as the card of the lists, without the badge a featured post carries in them",
+         %{site: site, post: post} do
+      published!(site, "Starred", slug: "starred", featured: true)
+
+      doc = page_of(site, post.slug)
+
+      assert next_reads(doc, "blog-list-title") == ["Starred"]
+      refute has_role?(doc, "blog-list-featured")
+
+      assert doc
+             |> LazyHTML.query(
+               ~s([data-role="blog-related-items"] [data-role="blog-list-nocover"])
+             )
+             |> LazyHTML.attribute("class")
+             |> hd() =~ "aspect-[16/8]"
     end
 
     test "draws the stand-in picture of a post that has none, and the post's own picture when it has one",
@@ -452,9 +482,14 @@ defmodule MishkaBlog.PostPageTest do
         )
 
       doc = page_of(site, post.slug)
+      items = ~s([data-role="blog-related-items"])
 
-      assert doc |> role("blog-related-card") |> LazyHTML.query("img") |> Enum.count() == 1
-      assert hrefs(doc, ~s(a[data-role="blog-related-card"] img)) == []
+      assert doc |> LazyHTML.query("#{items} img") |> Enum.count() == 1
+
+      assert doc |> LazyHTML.query(~s(#{items} [data-role="blog-list-nocover"])) |> Enum.count() ==
+               1
+
+      assert next_reads(doc, "blog-list-nocover") == ["P"]
       assert pictured.slug == "pictured"
     end
   end
@@ -482,17 +517,33 @@ defmodule MishkaBlog.PostPageTest do
   end
 
   describe "the markup" do
-    test "draws no header, footer, menu or sidebar of its own: the layout does", %{site: site} do
+    test "draws no header, footer or sidebar of its own: the layout does", %{site: site} do
       post = published!(site, "Plain page", slug: "plain-page")
       page = Enum.find(Provision.sample_pages(site), &(&1.path == @path))
       doc = page_of(site, post.slug)
 
-      for tag <- ["<nav", "<main", "<footer", "min-h-screen"] do
+      for tag <- ["<header", "<main", "<footer", "min-h-screen"] do
         refute page.template =~ tag, "the page's own template draws #{tag}"
       end
 
       refute has_role?(doc, "blog-sidebar")
-      assert doc |> LazyHTML.query("nav, footer, main") |> Enum.count() == 0
+      assert doc |> LazyHTML.query("footer, main") |> Enum.count() == 0
+    end
+
+    # THE BLOG'S OWN BAR IS THE PAGE'S, the same one the lists draw: the blog's name and its four
+    # places, and a post is in Posts.
+    test "begins with the blog's bar, which marks Posts", %{site: site} do
+      post = published!(site, "Plain page", slug: "plain-page")
+      doc = page_of(site, post.slug)
+
+      assert texts(doc, "blog-section-nav") == ["Posts Categories Tags People"]
+
+      assert doc
+             |> LazyHTML.query(~s([data-role="blog-section-nav"] a[aria-current="page"]))
+             |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim())) == ["Posts"]
+
+      assert hrefs(doc, ~s([data-role="blog-section-nav"] a)) ==
+               ["/blog", "/blog/categories", "/blog/tags", "/blog/people"]
     end
 
     test "is styled with classes alone, never an inline style", %{site: site} do
