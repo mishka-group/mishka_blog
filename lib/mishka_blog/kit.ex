@@ -8,15 +8,15 @@ defmodule MishkaBlog.Kit do
 
   ## What is in the bundle, and why it is a bundle
 
-  `priv/cms_ui_kits/mishka_blog.json` carries sixteen components of two kinds. Each is complete on
+  `priv/cms_ui_kits/mishka_blog.json` carries seventeen components of two kinds. Each is complete on
   its own: its markup, its declarations, and its own code, including the Ash reads it runs. Nothing
   about them lives in Elixir.
 
-  ### The ten blocks, which are live components
+  ### The eleven blocks, which are live components
 
   `blog-post-list`, `blog-featured-posts`, `blog-post-search`, `blog-tag-cloud`,
-  `blog-post-detail`, `blog-category-list`, `blog-post-comments`, `blog-author-profile`,
-  `blog-team-profile` and `blog-people`. Each is a `Phoenix.LiveComponent` that runs its own query,
+  `blog-post-detail`, `blog-category-list`, `blog-post-comments`, `blog-related-posts`,
+  `blog-author-profile`, `blog-team-profile` and `blog-people`. Each is a `Phoenix.LiveComponent` that runs its own query,
   so an author can put any of them on any page, on its own or beside the others, and each holds what
   it read.
 
@@ -91,11 +91,15 @@ defmodule MishkaBlog.Kit do
   What puts the rows INTO the new one is `asked/1`: a streamed row is drawn once and never
   re-rendered, so everything a row is built from is part of the read's own signature.
 
-  Two read in step with the page on every read, not only the first, and both on purpose:
+  Three read in step with the page on every read, not only the first, and all on purpose:
 
     * `blog-post-detail` is what the page IS. A skeleton where the article should be is a worse
       page than one that takes as long as the article does, and a crawler that is served the
       skeleton is served nothing.
+    * `blog-related-posts` is three cards under the article, and a read of the same kind as the
+      article's own: the post the URL names, its categories and the newest posts of them. It reads
+      again only when what it is read for changes, because the page re-renders it far more often
+      than anybody asks for different reading.
     * `blog-post-search` reads nothing until the reader types. Its query is already a round trip
       the reader started, and one run in a task could land after a later one and answer the wrong
       words.

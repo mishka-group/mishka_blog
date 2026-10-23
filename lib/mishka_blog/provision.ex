@@ -66,7 +66,7 @@ defmodule MishkaBlog.Provision do
   Nine pattern pages in `/:lang` PATH mode, which is what seeded and starter content uses here:
 
       /:lang/blog                  the search, the featured strip and the paged list
-      /:lang/blog/:slug            one post, its comments and the sidebar
+      /:lang/blog/:slug            one post, its conversation and what to read next
       /:lang/blog/category/:slug   the same screen, narrowed to that category's posts
       /:lang/blog/tag/:slug        the same screen, narrowed to that tag's posts
       /:lang/blog/categories       every category, as cards
@@ -438,13 +438,18 @@ defmodule MishkaBlog.Provision do
 
   defp blog_tag(site), do: index_screen(site, :tag)
 
-  # `language` ON THE COMMENTS AS WELL AS ON THE ARTICLE. Both resolve the same `:slug` capture, and
-  # a block that resolved it by slug alone published the English article's conversation at
-  # /fa/blog/<its slug> under a detail block correctly saying that post is not here — and offered a
-  # signed-in reader a box that writes onto the English post.
+  # THE DESIGN'S POST SCREEN, drawn in the `site-main` layout between its header and its footer — so
+  # nothing here is a header, a footer or a menu. Three blocks in one column, and the column is the
+  # design's: the article and its cover (`blog-post-detail`), the conversation under it in the width
+  # of the text (`blog-post-comments`), then what to read next (`blog-related-posts`).
+  #
+  # `language` ON THE COMMENTS AND THE NEXT READS AS WELL AS ON THE ARTICLE. All three resolve the
+  # same `:slug` capture, and a block that resolved it by slug alone published the English article's
+  # conversation at /fa/blog/<its slug> under a detail block correctly saying that post is not here —
+  # and offered a signed-in reader a box that writes onto the English post.
   defp blog_post(site) do
-    chrome(
-      """
+    """
+    <div class="mx-auto flex w-full max-w-[1160px] flex-col items-center px-8 pb-24 pt-12">
       <.component
         component_name="blog-post-detail"
         site="#{site}"
@@ -456,22 +461,37 @@ defmodule MishkaBlog.Provision do
         post_base="#{@blog}"
         category_base="#{@category}"
         tag_base="#{@tag}"
+        author_base="#{@author}"
       />
 
-      <div class="rounded-[18px] border border-[#ecebe6] bg-white p-5 sm:p-7">
+      <div class="mt-[46px] w-full max-w-[680px]">
         <.component
           component_name="blog-post-comments"
           site="#{site}"
           id="blog-post-comments"
+          heading={t("Comments")}
           params={@query_params}
           post_param="slug"
           language={@page.language}
           current_user={assigns[:current_user]}
         />
       </div>
-      """,
-      sidebar(site, :post)
-    )
+
+      <div class="mt-20 w-full">
+        <.component
+          component_name="blog-related-posts"
+          site="#{site}"
+          id="blog-post-related"
+          current_user={assigns[:current_user]}
+          params={@query_params}
+          post_param="slug"
+          heading={t("Keep reading")}
+          language={@page.language}
+          post_base="#{@blog}"
+        />
+      </div>
+    </div>
+    """
   end
 
   # `parent="all"`, where the sidebar's list keeps the default and shows the roots. This page is the

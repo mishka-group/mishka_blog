@@ -30,7 +30,7 @@ Mishka Blog is an extension of [Mishka CMS](https://mishka.tools/cms), an open s
 - Threaded comments with the moderation states pending, approved, flagged and spam, pinning, and up and down votes.
 - For readers: a 1 to 5 star rating for each post, bookmarks, follows for bloggers and teams, and a count of unique views.
 - An analytics page with daily views, the most-read posts, where readers came from and whether they were signed in, over a period you choose.
-- Sixteen page components (ten blocks that run their own queries and six smaller pieces they draw with) and nine sample pages: the blog index, a post, a category, a tag, an author, a team, and the lists of categories, tags and people.
+- Seventeen page components (eleven blocks that run their own queries and six smaller pieces they draw with) and nine sample pages: the blog index, a post, a category, a tag, an author, a team, and the lists of categories, tags and people.
 - SEO for each record: its own head, `BlogPosting` and breadcrumb JSON-LD, `sitemap.xml` entries for posts, categories, bloggers and teams, and share cards.
 - A notification to the blog's admins when a post is published, and dashboard widgets for recent posts, top posts, drafts and scheduled posts, comments to moderate, and bloggers.
 - A JSON:API for admins at `/api/json/v1/master/admin/mishka-blog/…` and `/api/json/v1/tenant/admin/mishka-blog/…`, and one for readers at `/api/json/v1/user/mishka-blog/…` (published posts, comments, ratings, bookmarks, follows and votes), described in the CMS's OpenAPI spec.
@@ -47,7 +47,7 @@ Mishka Blog is installed with [Mishka CMS](https://github.com/mishka-group/mishk
 
 Mishka CMS registers it in three places: `MishkaBlog` in `ash_domains` and `MishkaBlogWeb` in the core's `extensions` list, both in `config/config.exs`, and `MishkaBlog` in the domains of the JSON:API router.
 
-Then install the blog onto a site. Tick Blog in the install wizard, or open the Blog dashboard of a site that does not have it yet and press Set up. Either way the site gets the sixteen components, the nine sample pages and a sidebar snippet. Running it again adds only what is missing and leaves anything you edited.
+Then install the blog onto a site. Tick Blog in the install wizard, or open the Blog dashboard of a site that does not have it yet and press Set up. Either way the site gets the seventeen components, the nine sample pages and a sidebar snippet. Running it again adds only what is missing and leaves anything you edited.
 
 For sample bloggers, posts and comments in development, run `mix run priv/repo/dev_seeds.exs` in `mishka_cms`.
 

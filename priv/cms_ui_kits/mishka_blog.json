@@ -1598,7 +1598,7 @@
       "precompile": false,
       "required": false,
       "priority": 0,
-      "template": "<div id={@id} {@rest} data-role=\"blog-post-detail\" class=\"text-[#1b1a18]\">\n  <.component\n    :if={@post == nil and @slug in [nil, \"\"]}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-detail-idle\"\n    text={@idle_text}\n    quiet={true}\n  />\n\n  <.component\n    :if={@post == nil and @slug not in [nil, \"\"]}\n    component_name=\"blog-notice\"\n    site={site_name()}\n    tone=\"empty\"\n    role=\"blog-detail-missing\"\n    text={@missing_text}\n  />\n\n  <article\n    :if={@post}\n    data-role=\"blog-detail-article\"\n    lang={@post.language}\n    dir={text_direction(@post.language)}\n    class=\"rounded-[18px] border border-[#ecebe6] bg-white p-5 sm:p-7\"\n  >\n    <h1 data-role=\"blog-detail-title\" class=\"mb-2 text-2xl font-bold leading-tight sm:text-3xl\">\n      {@post.title}\n    </h1>\n\n    <p :if={@post.subtitle} data-role=\"blog-detail-subtitle\" class=\"mb-3 text-base text-[#6d6a63]\">\n      {@post.subtitle}\n    </p>\n\n    <div class=\"mb-5 flex flex-wrap items-center gap-3 text-xs text-[#8a877f]\">\n      <time\n        :if={@show_date and @post.published_at}\n        data-role=\"blog-detail-date\"\n        datetime={to_string(@post.published_at)}\n      >\n        {Calendar.strftime(@post.published_at, \"%d %b %Y\")}\n      </time>\n\n      <span :if={@show_date and updated?(@post)} data-role=\"blog-detail-updated\">\n        {@updated_text} {Calendar.strftime(@post.updated_at, \"%d %b %Y\")}\n      </span>\n\n      <span :if={@show_reading_time and @post.reading_time_minutes} data-role=\"blog-detail-reading\">\n        {@post.reading_time_minutes} {@reading_text}\n      </span>\n\n      <span\n        :if={@show_authors and @authors != []}\n        data-role=\"blog-detail-authors\"\n        class=\"flex flex-wrap items-center gap-1\"\n      >\n        {@authors_text}\n        <span :for={blogger <- @authors} data-role=\"blog-detail-author\" class=\"font-semibold\">\n          {blogger.display_name}\n        </span>\n      </span>\n\n      <span\n        :if={@post.featured}\n        data-role=\"blog-detail-featured\"\n        class=\"rounded-full bg-[#fbf1dc] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#8a5514]\"\n      >\n        {@featured_text}\n      </span>\n\n      <.link\n        :if={trimmed(@base) != \"\"}\n        patch={close_href(@base, @params, @post_param)}\n        data-role=\"blog-detail-close\"\n        class=\"ml-auto underline hover:text-[#5b57d6]\"\n      >\n        {@close_text}\n      </.link>\n    </div>\n\n    <img\n      :if={@show_cover and @post.featured_image_url}\n      data-role=\"blog-detail-cover\"\n      src={@post.featured_image_url}\n      alt={@post.title}\n      class=\"mb-5 h-64 w-full rounded-[14px] object-cover\"\n    />\n\n    <p\n      :if={@show_excerpt and @post.excerpt}\n      data-role=\"blog-detail-excerpt\"\n      class=\"mb-4 text-base font-medium leading-relaxed text-[#3a382f]\"\n    >\n      {@post.excerpt}\n    </p>\n\n    <hr class=\"border-[#ecebe6]\" />\n\n    <%!-- The post's own text takes these styles: an element with no class, and nothing with a\n      class between it and this body. A component drawn in the post carries classes, so none of\n      them reach its markup. --%>\n    <div\n      data-role=\"blog-detail-body\"\n      class={[\n        \"prose prose-sm mt-4 max-w-none leading-relaxed\",\n        \"[&_a:not([class],&_[class]_*)]:underline\",\n        \"[&_h2:not([class],&_[class]_*)]:mb-2 [&_h2:not([class],&_[class]_*)]:mt-5\",\n        \"[&_h2:not([class],&_[class]_*)]:text-lg [&_h2:not([class],&_[class]_*)]:font-bold\",\n        \"[&_h3:not([class],&_[class]_*)]:mt-4 [&_h3:not([class],&_[class]_*)]:font-semibold\",\n        \"[&_img:not([class],&_[class]_*)]:rounded-lg\",\n        \"[&_li:not([class],&_[class]_*)]:ml-5\",\n        \"[&_ul>li:not([class],&_[class]_*)]:list-disc [&_ol>li:not([class],&_[class]_*)]:list-decimal\",\n        \"[&_p:not([class],&_[class]_*)]:mb-3\"\n      ]}\n    >\n      <.rich_content\n        id={\"#{@id}-body\"}\n        html={body_html(@post.content, @post.rendered_content)}\n        site={site_name()}\n        current_user={@current_user}\n      />\n    </div>\n\n    <.component\n      :if={@show_categories}\n      component_name=\"blog-term-row\"\n      site={site_name()}\n      label={@categories_text}\n      role=\"blog-detail-categories\"\n      item_role=\"blog-detail-category\"\n      spaced={true}\n      terms={term_links(@categories, @category_base, @lang_param)}\n    />\n\n    <.component\n      :if={@show_tags}\n      component_name=\"blog-term-row\"\n      site={site_name()}\n      label={@tags_text}\n      role=\"blog-detail-tags\"\n      item_role=\"blog-detail-tag\"\n      terms={term_links(@tags, @tag_base, @lang_param)}\n    />\n\n    <.component\n      :if={@show_translations}\n      component_name=\"blog-term-row\"\n      site={site_name()}\n      label={@translations_text}\n      role=\"blog-detail-translations\"\n      item_role=\"blog-detail-translation\"\n      uppercase={true}\n      terms={\n        translation_links(@translations, @post_base, @base, @params, @post_param, @lang_param)\n      }\n    />\n\n    <p :for={href <- permalink(@post_base, @base, @post, @lang_param)} class=\"mt-6\">\n      <.link\n        data-role=\"blog-detail-permalink\"\n        navigate={href}\n        class=\"text-sm underline hover:text-[#5b57d6]\"\n      >\n        {@permalink_text}\n      </.link>\n    </p>\n  </article>\n</div>",
+      "template": "<div id={@id} {@rest} data-role=\"blog-post-detail\" class=\"flex w-full flex-col items-center\">\n  <div :if={@post == nil and @slug in [nil, \"\"]} class=\"w-full max-w-[680px]\">\n    <.component\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"empty\"\n      role=\"blog-detail-idle\"\n      text={@idle_text}\n      quiet={true}\n    />\n  </div>\n\n  <div :if={@post == nil and @slug not in [nil, \"\"]} class=\"w-full max-w-[680px]\">\n    <.component\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"empty\"\n      role=\"blog-detail-missing\"\n      text={@missing_text}\n    />\n  </div>\n\n  <article\n    :if={@post}\n    data-role=\"blog-detail-article\"\n    lang={@post.language}\n    dir={text_direction(@post.language)}\n    class=\"flex w-full flex-col items-center\"\n  >\n    <header class=\"mb-10 flex w-full max-w-[720px] flex-col gap-5\">\n      <.link\n        :for={href <- back_links(@post_base, @post)}\n        navigate={href}\n        data-role=\"blog-detail-back\"\n        class=\"self-start text-[13.5px] text-dim hover:text-fg dark:text-dim-dark dark:hover:text-fg-dark\"\n      >\n        <span aria-hidden=\"true\" class=\"inline-block rtl:rotate-180\">&larr;</span> {@back_text}\n      </.link>\n\n      <div\n        :if={(@show_categories and @categories != []) or @post.featured or @locked}\n        class=\"flex flex-wrap items-center gap-2\"\n      >\n        <.component\n          :if={@show_categories}\n          component_name=\"blog-term-row\"\n          site={site_name()}\n          kind=\"category\"\n          role=\"blog-detail-categories\"\n          item_role=\"blog-detail-category\"\n          terms={term_links(@categories, @category_base, @lang_param)}\n        />\n\n        <span\n          :if={@post.featured}\n          data-role=\"blog-detail-featured\"\n          class=\"flex h-7 items-center rounded-full bg-[#fbf0dc] px-3 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-[#a26a10] dark:bg-[#2e2618]\"\n        >\n          {@featured_text}\n        </span>\n\n        <span\n          :if={@locked}\n          data-role=\"blog-detail-locked\"\n          class=\"flex h-7 items-center rounded-full border border-edge px-3 text-[12.5px] text-dim dark:border-edge-dark dark:text-dim-dark\"\n        >\n          {@locked_text}\n        </span>\n      </div>\n\n      <h1\n        data-role=\"blog-detail-title\"\n        class=\"m-0 font-newsreader text-[clamp(40px,5.4vw,60px)] font-normal leading-[1.04] tracking-[-0.03em] text-balance\"\n      >\n        {@post.title}\n      </h1>\n\n      <p\n        :if={@post.subtitle}\n        data-role=\"blog-detail-subtitle\"\n        class=\"m-0 text-[17px] leading-[1.6] text-dim dark:text-dim-dark\"\n      >\n        {@post.subtitle}\n      </p>\n\n      <div class=\"flex flex-wrap items-center gap-3.5 text-sm text-dim dark:text-dim-dark\">\n        <div :if={@show_authors and @authors != []} class=\"flex\">\n          <.maybe_link\n            :for={{blogger, href} <- author_links(@authors, @author_base, @lang_param, @post.language)}\n            href={href}\n            title={blogger.display_name}\n            aria-label={blogger.display_name}\n            data-role=\"blog-detail-avatar\"\n            class={[\n              \"-me-2 grid size-[34px] place-items-center overflow-hidden rounded-full border-2 border-page p-0 text-xs font-semibold dark:border-page-dark\",\n              tint(blogger.slug)\n            ]}\n          >\n            <img\n              :if={trimmed(blogger.avatar_url) != \"\"}\n              src={blogger.avatar_url}\n              alt=\"\"\n              class=\"size-full object-cover\"\n            />\n            <span :if={trimmed(blogger.avatar_url) == \"\"} aria-hidden=\"true\">\n              {initials(blogger.display_name)}\n            </span>\n          </.maybe_link>\n        </div>\n\n        <span\n          :if={@show_authors and @authors != []}\n          data-role=\"blog-detail-authors\"\n          class=\"ms-2 font-medium text-fg dark:text-fg-dark\"\n        >\n          <span :if={trimmed(@authors_text) != \"\"} class=\"font-normal text-dim dark:text-dim-dark\">\n            {@authors_text}\n          </span>\n          <span :for={{blogger, index} <- Enum.with_index(@authors)} data-role=\"blog-detail-author\">\n            <span :if={index > 0} aria-hidden=\"true\">&amp; </span>{blogger.display_name}\n          </span>\n        </span>\n\n        <span\n          :if={\n            (@show_date && @post.published_at) ||\n              (@show_reading_time && @post.reading_time_minutes)\n          }\n          class=\"whitespace-nowrap\"\n        >\n          <time\n            :if={@show_date && @post.published_at}\n            data-role=\"blog-detail-date\"\n            datetime={to_string(@post.published_at)}\n          >\n            {Calendar.strftime(@post.published_at, \"%d %b %Y\")}\n          </time>\n          <span\n            :if={\n              @show_date && @post.published_at && @show_reading_time &&\n                @post.reading_time_minutes\n            }\n            aria-hidden=\"true\"\n          >\n            &middot;\n          </span>\n          <span\n            :if={@show_reading_time && @post.reading_time_minutes}\n            data-role=\"blog-detail-reading\"\n          >\n            {@post.reading_time_minutes} {@reading_text}\n          </span>\n        </span>\n\n        <span\n          :if={@show_date && updated?(@post)}\n          data-role=\"blog-detail-updated\"\n          class=\"whitespace-nowrap\"\n        >\n          {@updated_text} {Calendar.strftime(@post.updated_at, \"%d %b %Y\")}\n        </span>\n\n        <.link\n          :if={trimmed(@base) != \"\"}\n          patch={close_href(@base, @params, @post_param)}\n          data-role=\"blog-detail-close\"\n          class=\"ms-auto underline hover:text-brand dark:hover:text-[#a9a2f7]\"\n        >\n          {@close_text}\n        </.link>\n      </div>\n    </header>\n\n    <img\n      :if={@show_cover and @post.featured_image_url}\n      data-role=\"blog-detail-cover\"\n      src={@post.featured_image_url}\n      alt={@post.title}\n      class=\"mb-10 aspect-[21/9] w-full max-w-[1000px] rounded-3xl border border-edge object-cover dark:border-edge-dark\"\n    />\n\n    <div\n      :if={@show_cover and !@post.featured_image_url}\n      data-role=\"blog-detail-cover\"\n      aria-hidden=\"true\"\n      class={[\n        \"mb-10 flex aspect-[21/9] w-full max-w-[1000px] items-end justify-between rounded-3xl border border-edge bg-[repeating-linear-gradient(135deg,transparent_0_14px,rgba(127,127,127,0.07)_14px_15px)] p-7 dark:border-edge-dark\",\n        tint(@post.slug)\n      ]}\n    >\n      <span class=\"font-geist-mono text-xs\">{@cover_text}</span>\n      <span class=\"font-newsreader text-[180px] italic leading-[0.7] opacity-45\">\n        {initial(@post.title)}\n      </span>\n    </div>\n\n    <div class=\"flex w-full max-w-[680px] flex-col gap-[22px] text-lg leading-[1.75]\">\n      <p\n        :if={@show_excerpt and @post.excerpt}\n        data-role=\"blog-detail-excerpt\"\n        class=\"m-0 font-newsreader text-2xl leading-normal text-fg text-pretty dark:text-fg-dark\"\n      >\n        {@post.excerpt}\n      </p>\n\n      <%!-- The post's own text takes these styles: an element with no class, and nothing with a\n        class between it and this body. A component drawn in the post carries classes, so none of\n        them reach its markup. --%>\n      <div\n        data-role=\"blog-detail-body\"\n        class={[\n          \"text-[#3a3940] dark:text-[#c9c7d2] [&>:first-child:not([class])]:mt-0! [&>:last-child:not([class])]:mb-0!\",\n          \"[&_a:not([class],&_[class]_*)]:text-brand [&_a:not([class],&_[class]_*)]:underline\",\n          \"dark:[&_a:not([class],&_[class]_*)]:text-[#a9a2f7]\",\n          \"[&_p:not([class],&_[class]_*)]:mb-[22px] [&_p:not([class],&_[class]_*)]:text-pretty\",\n          \"[&_h2:not([class],&_[class]_*)]:mb-[22px] [&_h2:not([class],&_[class]_*)]:mt-[38px]\",\n          \"[&_h2:not([class],&_[class]_*)]:font-newsreader [&_h2:not([class],&_[class]_*)]:text-[30px]\",\n          \"[&_h2:not([class],&_[class]_*)]:font-normal [&_h2:not([class],&_[class]_*)]:tracking-[-0.02em]\",\n          \"[&_h2:not([class],&_[class]_*)]:text-fg dark:[&_h2:not([class],&_[class]_*)]:text-fg-dark\",\n          \"[&_h3:not([class],&_[class]_*)]:mb-[22px] [&_h3:not([class],&_[class]_*)]:mt-[38px]\",\n          \"[&_h3:not([class],&_[class]_*)]:font-newsreader [&_h3:not([class],&_[class]_*)]:text-2xl\",\n          \"[&_h3:not([class],&_[class]_*)]:font-normal [&_h3:not([class],&_[class]_*)]:text-fg\",\n          \"dark:[&_h3:not([class],&_[class]_*)]:text-fg-dark\",\n          \"[&_blockquote:not([class],&_[class]_*)]:my-[30px] [&_blockquote:not([class],&_[class]_*)]:border-s-2\",\n          \"[&_blockquote:not([class],&_[class]_*)]:border-brand [&_blockquote:not([class],&_[class]_*)]:py-1\",\n          \"[&_blockquote:not([class],&_[class]_*)]:ps-6 [&_blockquote:not([class],&_[class]_*)]:font-newsreader\",\n          \"[&_blockquote:not([class],&_[class]_*)]:text-2xl [&_blockquote:not([class],&_[class]_*)]:italic\",\n          \"[&_blockquote:not([class],&_[class]_*)]:leading-[1.45] [&_blockquote:not([class],&_[class]_*)]:text-fg\",\n          \"dark:[&_blockquote:not([class],&_[class]_*)]:border-[#a9a2f7] dark:[&_blockquote:not([class],&_[class]_*)]:text-fg-dark\",\n          \"[&_blockquote_p:not([class],&_[class]_*)]:mb-0\",\n          \"[&_ul:not([class],&_[class]_*)]:mb-[22px] [&_ol:not([class],&_[class]_*)]:mb-[22px]\",\n          \"[&_li:not([class],&_[class]_*)]:ms-6\",\n          \"[&_ul>li:not([class],&_[class]_*)]:list-disc [&_ol>li:not([class],&_[class]_*)]:list-decimal\",\n          \"[&_img:not([class],&_[class]_*)]:max-w-full [&_img:not([class],&_[class]_*)]:rounded-lg\",\n          \"[&_pre:not(&_[class]_*)]:mb-[22px] [&_pre:not(&_[class]_*)]:overflow-x-auto\"\n        ]}\n      >\n        <.rich_content\n          id={\"#{@id}-body\"}\n          html={body_html(@post.content, @post.rendered_content)}\n          site={site_name()}\n          current_user={@current_user}\n        />\n      </div>\n\n      <div\n        :if={(@show_tags and @tags != []) or (@show_translations and @translations != [])}\n        class=\"mt-2 flex flex-col gap-3.5 border-t border-edge pt-6 text-sm dark:border-edge-dark\"\n      >\n        <.component\n          :if={@show_tags}\n          component_name=\"blog-term-row\"\n          site={site_name()}\n          kind=\"tag\"\n          label={@tags_text}\n          role=\"blog-detail-tags\"\n          item_role=\"blog-detail-tag\"\n          terms={term_links(@tags, @tag_base, @lang_param)}\n        />\n\n        <.component\n          :if={@show_translations}\n          component_name=\"blog-term-row\"\n          site={site_name()}\n          kind=\"language\"\n          label={@translations_text}\n          role=\"blog-detail-translations\"\n          item_role=\"blog-detail-translation\"\n          terms={\n            translation_links(@translations, @post_base, @base, @params, @post_param, @lang_param)\n          }\n        />\n      </div>\n\n      <.maybe_link\n        :for={{blogger, href} <- author_links(@authors, @author_base, @lang_param, @post.language)}\n        :if={@show_authors}\n        href={href}\n        data-role=\"blog-detail-author-card\"\n        class=\"flex items-center gap-4 rounded-[18px] border border-edge bg-surface p-5 leading-[normal] text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark\"\n      >\n        <span\n          class={[\n            \"grid size-[52px] flex-none place-items-center overflow-hidden rounded-full text-base font-semibold\",\n            tint(blogger.slug)\n          ]}\n        >\n          <img\n            :if={trimmed(blogger.avatar_url) != \"\"}\n            src={blogger.avatar_url}\n            alt=\"\"\n            class=\"size-full object-cover\"\n          />\n          <span :if={trimmed(blogger.avatar_url) == \"\"} aria-hidden=\"true\">\n            {initials(blogger.display_name)}\n          </span>\n        </span>\n        <span class=\"flex min-w-0 flex-col gap-[3px]\">\n          <span dir=\"auto\" class=\"text-[15px] font-medium\">\n            {blogger.display_name}\n            <span dir=\"ltr\" class=\"font-geist-mono text-xs font-normal text-faint dark:text-faint-dark\">\n              @{blogger.slug}\n            </span>\n          </span>\n          <span\n            :if={plain(blogger.bio) != \"\"}\n            dir=\"auto\"\n            class=\"text-sm leading-normal text-dim dark:text-dim-dark\"\n          >\n            {plain(blogger.bio)}\n          </span>\n        </span>\n      </.maybe_link>\n\n      <p :for={href <- permalink(@post_base, @base, @post, @lang_param)} class=\"m-0\">\n        <.link\n          data-role=\"blog-detail-permalink\"\n          navigate={href}\n          class=\"text-sm text-dim underline hover:text-brand dark:text-dim-dark dark:hover:text-[#a9a2f7]\"\n        >\n          {@permalink_text}\n        </.link>\n      </p>\n    </div>\n  </article>\n</div>",
       "body": null,
       "attrs": [
         {
@@ -1663,6 +1663,14 @@
           "opts": {
             "default": "",
             "doc": "Where a tag's posts live — /en/blog/tag, say. Left empty the tags are drawn as plain words. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the row it points at, which is the only way one of them can lead to another language's edition — at the address the site's URL mode gives that language."
+          }
+        },
+        {
+          "name": "author_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a blogger's page lives — /en/blog/author, say. Left empty the bloggers are drawn without a link. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the row it points at, which is the only way one of them can lead to another language's edition — at the address the site's URL mode gives that language."
           }
         },
         {
@@ -1778,6 +1786,30 @@
           }
         },
         {
+          "name": "back_text",
+          "type": "string",
+          "opts": {
+            "default": "All posts",
+            "doc": "The words on the link back to the blog's front page, above the post. Drawn only where post_base says where the blog lives."
+          }
+        },
+        {
+          "name": "locked_text",
+          "type": "string",
+          "opts": {
+            "default": "Members only",
+            "doc": "The badge a post carries when it is open only to readers who hold a permission."
+          }
+        },
+        {
+          "name": "cover_text",
+          "type": "string",
+          "opts": {
+            "default": "cover image",
+            "doc": "The caption of the stand-in drawn where a post has no cover image. Left empty, the stand-in carries the post's first letter alone."
+          }
+        },
+        {
           "name": "reading_text",
           "type": "string",
           "opts": {
@@ -1797,16 +1829,8 @@
           "name": "authors_text",
           "type": "string",
           "opts": {
-            "default": "By",
-            "doc": "What precedes the author names."
-          }
-        },
-        {
-          "name": "categories_text",
-          "type": "string",
-          "opts": {
-            "default": "In",
-            "doc": "What precedes the categories."
+            "default": "",
+            "doc": "What precedes the author names. Left empty, which is how the design draws them, the names stand alone."
           }
         },
         {
@@ -1844,7 +1868,7 @@
         {
           "name": "mount",
           "args": "socket",
-          "code": "{:ok,\n Phoenix.Component.assign(socket,\n   post: nil,\n   tags: [],\n   categories: [],\n   authors: [],\n   translations: []\n )}\n"
+          "code": "{:ok,\n Phoenix.Component.assign(socket,\n   post: nil,\n   locked: false,\n   tags: [],\n   categories: [],\n   authors: [],\n   translations: []\n )}\n"
         },
         {
           "name": "update",
@@ -1944,7 +1968,7 @@
         {
           "name": "authors_of",
           "args": "post, visitor",
-          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  %{id: post_id} ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(display_name: :asc)\n    |> Ash.Query.select([:id, :display_name])\n    |> Ash.read(tenant: site_id(), page: [limit: 20])\n    |> rows()\nend\n"
+          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  %{id: post_id} ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(display_name: :asc)\n    |> Ash.Query.select([:id, :display_name, :slug, :bio, :avatar_url])\n    |> Ash.read(tenant: site_id(), page: [limit: 20])\n    |> rows()\nend\n"
         },
         {
           "name": "only_language",
@@ -1954,7 +1978,7 @@
         {
           "name": "load_post",
           "args": "socket",
-          "code": "require Ash.Query\n\nassigns = socket.assigns\nslug = asked_slug(assigns)\n\npost =\n  case slug in [nil, \"\"] do\n    true ->\n      nil\n\n    false ->\n      MishkaBlog.BlogPost\n      |> Ash.Query.for_read(:public_list, %{}, read_as(assigns[:current_user]))\n      |> Ash.Query.filter(slug == ^to_string(slug))\n      |> only_language(assigns[:language])\n      |> Ash.Query.select([\n        :id,\n        :title,\n        :subtitle,\n        :slug,\n        :excerpt,\n        :content,\n        :published_at,\n        :updated_at,\n        :featured_image_url,\n        :featured,\n        :language,\n        :language_group_id,\n        :reading_time_minutes\n      ])\n      |> Ash.Query.load([:rendered_content])\n      |> Ash.read(tenant: site_id(), page: [limit: 1])\n      |> first_row()\n  end\n\n# A SLUG THE URL NAMED AND NOTHING ANSWERS IS A MISSING PAGE, not a page with a notice on it.\n# The address was a post; there is no post; 404 is the honest answer and the one a crawler needs —\n# see `MishkaCmsCore.ErrorsExceptions.NotFoundError`, which every other \"not here\" in this CMS\n# raises. LiveView converts it exactly as a controller does: on the HTTP render Phoenix's error view\n# draws the 404 page, and on a connected render the client reloads into that same answer.\n#\n# ONLY WHEN THE URL NAMED IT. A slug an author typed into the `slug` attribute of an embedded card\n# is their content mistake, and taking the whole page down for it would be a worse answer than the\n# notice — so that case still draws `missing_text`.\nif post == nil and slug not in [nil, \"\"] and from_url?(assigns) do\n  missing!(socket)\nend\n\n# NOTHING IS READ FOR A PART THE PAGE TURNED OFF. `update/2` runs again on every re-render of the\n# page holding this component, so a page drawing the body alone paid for four reads it never showed,\n# every single time.\nsocket\n|> Phoenix.Component.assign(:slug, slug)\n|> Phoenix.Component.assign(:post, post)\n|> Phoenix.Component.assign(:tags, (assigns[:show_tags] && tags_of(post, assigns[:current_user])) || [])\n|> Phoenix.Component.assign(:categories, (assigns[:show_categories] && categories_of(post, assigns[:current_user])) || [])\n|> Phoenix.Component.assign(:authors, (assigns[:show_authors] && authors_of(post, assigns[:current_user])) || [])\n|> Phoenix.Component.assign(\n  :translations,\n  (assigns[:show_translations] && translations(post, assigns[:current_user])) || []\n)\n"
+          "code": "require Ash.Query\n\nassigns = socket.assigns\nslug = asked_slug(assigns)\n\npost =\n  case slug in [nil, \"\"] do\n    true ->\n      nil\n\n    false ->\n      MishkaBlog.BlogPost\n      |> Ash.Query.for_read(:public_list, %{}, read_as(assigns[:current_user]))\n      |> Ash.Query.filter(slug == ^to_string(slug))\n      |> only_language(assigns[:language])\n      |> Ash.Query.select([\n        :id,\n        :title,\n        :subtitle,\n        :slug,\n        :excerpt,\n        :content,\n        :published_at,\n        :updated_at,\n        :featured_image_url,\n        :featured,\n        :language,\n        :language_group_id,\n        :reading_time_minutes\n      ])\n      |> Ash.Query.load([:rendered_content, :effective_permissions])\n      |> Ash.read(tenant: site_id(), page: [limit: 1])\n      |> first_row()\n  end\n\n# A SLUG THE URL NAMED AND NOTHING ANSWERS IS A MISSING PAGE, not a page with a notice on it.\n# The address was a post; there is no post; 404 is the honest answer and the one a crawler needs —\n# see `MishkaCmsCore.ErrorsExceptions.NotFoundError`, which every other \"not here\" in this CMS\n# raises. LiveView converts it exactly as a controller does: on the HTTP render Phoenix's error view\n# draws the 404 page, and on a connected render the client reloads into that same answer.\n#\n# ONLY WHEN THE URL NAMED IT. A slug an author typed into the `slug` attribute of an embedded card\n# is their content mistake, and taking the whole page down for it would be a worse answer than the\n# notice — so that case still draws `missing_text`.\nif post == nil and slug not in [nil, \"\"] and from_url?(assigns) do\n  missing!(socket)\nend\n\n# NOTHING IS READ FOR A PART THE PAGE TURNED OFF. `update/2` runs again on every re-render of the\n# page holding this component, so a page drawing the body alone paid for four reads it never showed,\n# every single time.\nsocket\n|> Phoenix.Component.assign(:slug, slug)\n|> Phoenix.Component.assign(:post, post)\n|> Phoenix.Component.assign(:locked, locked?(post))\n|> Phoenix.Component.assign(:tags, (assigns[:show_tags] && tags_of(post, assigns[:current_user])) || [])\n|> Phoenix.Component.assign(:categories, (assigns[:show_categories] && categories_of(post, assigns[:current_user])) || [])\n|> Phoenix.Component.assign(:authors, (assigns[:show_authors] && authors_of(post, assigns[:current_user])) || [])\n|> Phoenix.Component.assign(\n  :translations,\n  (assigns[:show_translations] && translations(post, assigns[:current_user])) || []\n)\n"
         },
         {
           "name": "site_name",
@@ -1970,6 +1994,46 @@
           "name": "translation_links",
           "args": "rows, post_base, base, params, post_param, lang_param",
           "code": "# AN EDITION LEADS TO ITS OWN LANGUAGE'S ADDRESS where posts have pages of their own, and opens\n# beside this one where they do not — and the second is a PATCH, which is what keeps the page\n# holding this block mounted while the article under it changes. `navigate` would remount it, and\n# the two are the same href, so nothing but the reload says which one was drawn.\n#\n# A TRANSLATIONS ROW SAYS WHAT EXISTS, so an edition this site has no URL for stays in it as a word\n# — `slug_href/4` makes none for a language the site does not publish. That is the truth about it:\n# the translation was written, this site does not serve it. Offering it as a link would send the\n# reader to a 404 instead.\nEnum.map(rows, fn row ->\n  {address, beside} =\n    case {trimmed(post_base), trimmed(base)} do\n      {\"\", \"\"} -> {nil, nil}\n      {\"\", _beside_this_one} -> {nil, href(base, params, post_param, row.slug)}\n      {own_page, _either} -> {slug_href(own_page, row.slug, lang_param, row.language), nil}\n    end\n\n  %{\n    name: row.language,\n    href: address,\n    patch: beside,\n    hreflang: row.language\n  }\nend)\n"
+        },
+        {
+          "name": "locked?",
+          "args": "post",
+          "code": "# A POST THAT OPENS ONLY FOR READERS WHO HOLD A PERMISSION — its own, or its categories' — and this\n# one was read by a reader who does. A reader who does not is never handed the post at all (see\n# `read_as/1`), so the badge says \"you are inside\", not \"you are not\".\ncase post do\n  nil -> false\n  %{effective_permissions: [_ | _]} -> true\n  _open_to_everybody -> false\nend\n"
+        },
+        {
+          "name": "back_links",
+          "args": "post_base, post",
+          "code": "# THE BLOG'S FRONT PAGE IN THE LANGUAGE OF THE POST, as a list so the template can draw it with\n# `:for` — empty where `post_base` says nothing, or where the post's language is one this site does\n# not publish and the address would be a 404.\ncase trimmed(post_base) do\n  \"\" -> []\n  front -> List.wrap(site_path(front, %{\"lang\" => trimmed(post.language)}))\nend\n"
+        },
+        {
+          "name": "author_links",
+          "args": "authors, base, lang_param, language",
+          "code": "# EACH BLOGGER WITH THE ADDRESS OF THEIR PAGE, or with none where the page was told nowhere to link.\n# A blogger is one row in every language, so the language they are linked under is the post's.\ncase trimmed(base) do\n  \"\" -> Enum.map(authors, &{&1, nil})\n  address -> Enum.map(authors, &{&1, slug_href(address, &1.slug, lang_param, language)})\nend\n"
+        },
+        {
+          "name": "initial",
+          "args": "text",
+          "code": "text\n|> to_string()\n|> String.trim()\n|> String.first()\n|> to_string()\n|> String.upcase()\n"
+        },
+        {
+          "name": "plain",
+          "args": "value",
+          "code": "# PLAIN TEXT, because a line on a card is not the place for a bio's links and emphasis: what was\n# stored is drawn without its tags, its whitespace folded.\ncase value do\n  text when is_binary(text) ->\n    text\n    |> HtmlSanitizeEx.strip_tags()\n    |> String.replace(~r/\\s+/u, \" \")\n    |> String.trim()\n\n  _nothing ->\n    \"\"\nend\n"
+        },
+        {
+          "name": "tint",
+          "args": "seed",
+          "code": "# THE FACE A POST OR A BLOGGER WEARS WHERE IT HAS NO PICTURE: one of six, chosen by the slug so it is\n# the same on every visit and in every language, each with the twin the dark theme answers with.\n# Written out whole, one clause per tint, because Tailwind reads source text.\ncase :erlang.phash2(to_string(seed), 6) do\n  0 -> \"bg-[#e7f1ee] text-[#2f6b5e] dark:bg-[#1d2b28] dark:text-[#8fd1bf]\"\n  1 -> \"bg-[#eceafb] text-brand dark:bg-[#24223a] dark:text-[#a9a2f7]\"\n  2 -> \"bg-[#faefdc] text-[#9a6412] dark:bg-[#2e2618] dark:text-[#e6b86a]\"\n  3 -> \"bg-[#f6e7eb] text-[#a13d5a] dark:bg-[#2e1f24] dark:text-[#e89ab0]\"\n  4 -> \"bg-[#e7edf7] text-[#3b5e99] dark:bg-[#1d2433] dark:text-[#93b2e8]\"\n  _the_sixth -> \"bg-[#efede6] text-[#6b6650] dark:bg-[#26251f] dark:text-[#c9c3a6]\"\nend\n"
+        },
+        {
+          "name": "maybe_link",
+          "args": "assigns",
+          "code": "# A LINK WHERE THERE IS AN ADDRESS AND A PLAIN BOX WHERE THERE IS NONE, drawn the same either way:\n# the blogger's avatar and card point at their page only when the page was told where bloggers\n# live, and a post in a language the site does not publish has no page to point at.\nassigns =\n  Phoenix.Component.assign(\n    assigns,\n    :extra,\n    Phoenix.Component.assigns_to_attributes(assigns, [:href, :class])\n  )\n\n~H\"\"\"\n<.link :if={@href} navigate={@href} class={@class} {@extra}>{render_slot(@inner_block)}</.link>\n<span :if={!@href} class={@class} {@extra}>{render_slot(@inner_block)}</span>\n\"\"\"\n"
+        },
+        {
+          "name": "initials",
+          "args": "name",
+          "code": "# THE LETTERS ON A BLOGGER'S ROUND PICTURE WHERE THEY HAVE NONE: the first letter of the first two\n# words of their name, \"Dave Brown\" being DB.\nname\n|> to_string()\n|> String.split()\n|> Enum.take(2)\n|> Enum.map_join(&String.first/1)\n|> String.upcase()\n"
         }
       ],
       "permissions": [],
@@ -2377,7 +2441,7 @@
       "precompile": false,
       "required": false,
       "priority": 0,
-      "template": "<div id={@id} {@rest} data-role=\"blog-post-comments\" class=\"text-[#1b1a18]\">\n  <h2\n    :if={not @loading and @post && trimmed(@heading) != \"\"}\n    data-role=\"blog-comments-heading\"\n    class=\"mb-4 text-lg font-bold leading-tight\"\n  >\n    {@heading}\n  </h2>\n\n  <form\n    :if={@allow_posting && @current_user && @post}\n    id={\"#{@id}-form\"}\n    data-role=\"blog-comments-form\"\n    phx-submit=\"submit\"\n    phx-target={@myself}\n    class=\"flex flex-col gap-2\"\n  >\n    <p :if={@replying != \"\"} data-role=\"blog-comments-replying\" class=\"text-xs text-[#6d6a63]\">\n      {@reply_text}\n      <button\n        type=\"button\"\n        data-role=\"blog-comments-cancel\"\n        phx-click=\"cancel\"\n        phx-target={@myself}\n        class=\"ml-2 font-semibold text-[#5b57d6] hover:underline\"\n      >\n        {@cancel_text}\n      </button>\n    </p>\n\n    <textarea\n      name=\"content\"\n      rows=\"3\"\n      required\n      data-role=\"blog-comments-input\"\n      placeholder={@placeholder}\n      class=\"w-full rounded-[14px] border border-[#ecebe6] bg-white px-4 py-2 text-sm outline-none placeholder:text-[#a8a5a0] focus:border-[#5b57d6]\"\n    ></textarea>\n\n    <button\n      type=\"submit\"\n      data-role=\"blog-comments-submit\"\n      class=\"self-start rounded-full bg-[#5b57d6] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#4f4bcc]\"\n    >\n      {@submit_text}\n    </button>\n  </form>\n\n  <p\n    :if={@post && @allow_posting && is_nil(@current_user)}\n    data-role=\"blog-comments-login\"\n    class=\"text-sm text-[#6d6a63]\"\n  >\n    <.link\n      navigate={@login_href || sign_in_href(@post.language)}\n      rel=\"nofollow\"\n      class=\"font-semibold text-[#5b57d6] hover:underline\"\n    >\n      {@login_text}\n    </.link>\n  </p>\n  <p\n    :if={@notice == \"pending\"}\n    data-role=\"blog-comments-pending\"\n    class=\"mt-4 rounded-[18px] border border-[#ecebe6] bg-[#f6f5f2] px-4 py-3 text-sm text-[#6d6a63]\"\n  >\n    {@pending_text}\n  </p>\n\n  <p\n    :if={@notice == \"error\"}\n    data-role=\"blog-comments-error\"\n    class=\"mt-4 rounded-[18px] border border-[#e8b7b1] bg-[#fdf6f5] px-4 py-3 text-sm text-[#c0473d]\"\n  >\n    {@error_text}\n  </p>\n\n  <div data-role=\"blog-comments-thread\" class=\"mt-6\">\n    <.component\n      :if={@loading and wanted?(@asked)}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"loading\"\n      role=\"blog-comments-loading\"\n      text={@loading_text}\n    />\n\n    <.component\n      :if={@failed}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"error\"\n      role=\"blog-comments-failed\"\n      text={@failed_text}\n      retry_text={@retry_text}\n      target={@myself}\n    />\n\n    <.component\n      :if={not @loading and not @failed and @post && @comments == []}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"empty\"\n      role=\"blog-comments-empty\"\n      text={@empty_text}\n      quiet={true}\n    />\n\n    <ul\n      :if={not @loading and not @failed and @comments != []}\n      data-role=\"blog-comments-list\"\n      class=\"flex flex-col gap-3\"\n    >\n      <li\n        :for={comment <- @comments}\n        data-role=\"blog-comment\"\n        id={\"#{@id}-comment-#{comment.id}\"}\n        class=\"rounded-[18px] border border-[#ecebe6] bg-white p-4\"\n      >\n        <div class=\"mb-1 flex flex-wrap items-baseline gap-2 text-xs text-[#8a877f]\">\n          <span data-role=\"blog-comment-author\" class=\"font-semibold text-[#1b1a18]\">\n            {comment.author}\n          </span>\n          <time data-role=\"blog-comment-date\" datetime={to_string(comment.at)}>\n            {Calendar.strftime(comment.at, \"%d %b %Y\")}\n          </time>\n          <span\n            :if={comment.pinned}\n            data-role=\"blog-comment-pinned\"\n            class=\"rounded-full bg-[#f2f1fc] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#5b57d6]\"\n          >\n            {@pinned_text}\n          </span>\n        </div>\n\n        <div\n          data-role=\"blog-comment-body\"\n          class=\"whitespace-pre-line text-sm leading-relaxed\"\n        >{body_text(comment.body)}</div>\n\n        <button\n          :if={@allow_posting && @current_user}\n          type=\"button\"\n          data-role=\"blog-comment-reply\"\n          phx-click=\"reply\"\n          phx-value-comment={comment.id}\n          phx-target={@myself}\n          class=\"mt-2 text-xs font-semibold text-[#5b57d6] hover:underline\"\n        >\n          {@reply_text}\n        </button>\n\n        <ul\n          :if={comment.replies != []}\n          data-role=\"blog-comment-replies\"\n          class=\"mt-3 flex flex-col gap-3 border-l-2 border-[#ecebe6] pl-4\"\n        >\n          <li\n            :for={reply <- comment.replies}\n            data-role=\"blog-comment\"\n            id={\"#{@id}-comment-#{reply.id}\"}\n          >\n            <div class=\"mb-1 flex flex-wrap items-baseline gap-2 text-xs text-[#8a877f]\">\n              <span data-role=\"blog-comment-author\" class=\"font-semibold text-[#1b1a18]\">\n                {reply.author}\n              </span>\n              <time data-role=\"blog-comment-date\" datetime={to_string(reply.at)}>\n                {Calendar.strftime(reply.at, \"%d %b %Y\")}\n              </time>\n            </div>\n\n            <div\n              data-role=\"blog-comment-body\"\n              class=\"whitespace-pre-line text-sm leading-relaxed\"\n            >{body_text(reply.body)}</div>\n          </li>\n        </ul>\n      </li>\n    </ul>\n\n    <div :if={@has_more} class=\"mt-4 flex justify-center\">\n      <button\n        type=\"button\"\n        data-role=\"blog-comments-more\"\n        phx-click=\"more\"\n        phx-target={@myself}\n        class=\"rounded-full border border-[#ecebe6] bg-white px-4 py-1.5 text-xs font-semibold text-[#6d6a63] hover:border-[#5b57d6] hover:text-[#5b57d6]\"\n      >\n        {@more_text}\n      </button>\n    </div>\n  </div>\n\n</div>",
+      "template": "<div id={@id} {@rest} data-role=\"blog-post-comments\" class=\"flex flex-col gap-4 leading-[1.75]\">\n  <h2\n    :if={not @loading and @post && trimmed(@heading) != \"\"}\n    data-role=\"blog-comments-heading\"\n    class=\"m-0 font-newsreader text-[28px] font-normal\"\n  >\n    {@heading}\n    <span\n      data-role=\"blog-comments-count\"\n      class=\"font-geist-mono text-sm text-faint dark:text-faint-dark\"\n    >{@total}</span>\n  </h2>\n\n  <div data-role=\"blog-comments-thread\" class=\"flex flex-col gap-4\">\n    <.component\n      :if={@loading and wanted?(@asked)}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"loading\"\n      role=\"blog-comments-loading\"\n      text={@loading_text}\n    />\n\n    <.component\n      :if={@failed}\n      component_name=\"blog-notice\"\n      site={site_name()}\n      tone=\"error\"\n      role=\"blog-comments-failed\"\n      text={@failed_text}\n      retry_text={@retry_text}\n      target={@myself}\n    />\n\n    <p\n      :if={not @loading and not @failed and @post && @comments == []}\n      data-role=\"blog-comments-empty\"\n      class=\"m-0 text-[15px] text-dim dark:text-dim-dark\"\n    >\n      {@empty_text}\n    </p>\n\n    <ul\n      :if={not @loading and not @failed and @comments != []}\n      data-role=\"blog-comments-list\"\n      class=\"m-0 flex list-none flex-col gap-4 p-0\"\n    >\n      <li\n        :for={comment <- @comments}\n        data-role=\"blog-comment\"\n        id={\"#{@id}-comment-#{comment.id}\"}\n        class=\"flex gap-3 text-[15px] leading-[1.6]\"\n      >\n        <span\n          aria-hidden=\"true\"\n          class=\"grid size-8 flex-none place-items-center rounded-full bg-[#eceafb] text-xs font-semibold text-brand dark:bg-[#25223f] dark:text-[#a9a2f7]\"\n        >\n          {initial(comment.author)}\n        </span>\n\n        <div class=\"flex min-w-0 flex-1 flex-col gap-0.5\">\n          <div class=\"flex flex-wrap items-baseline gap-x-1.5 text-[13px] text-subtle dark:text-subtle-dark\">\n            <span data-role=\"blog-comment-author\" dir=\"auto\">{comment.author}</span>\n            <span aria-hidden=\"true\">&middot;</span>\n            <time data-role=\"blog-comment-date\" datetime={to_string(comment.at)}>\n              {Calendar.strftime(comment.at, \"%d %b %Y\")}\n            </time>\n            <span\n              :if={comment.pinned}\n              data-role=\"blog-comment-pinned\"\n              class=\"ms-1 rounded-full bg-[#eceafb] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-brand dark:bg-[#25223f] dark:text-[#a9a2f7]\"\n            >\n              {@pinned_text}\n            </span>\n          </div>\n\n          <div\n            data-role=\"blog-comment-body\"\n            dir=\"auto\"\n            class=\"whitespace-pre-line\"\n          >{body_text(comment.body)}</div>\n\n          <button\n            :if={@allow_posting && @current_user}\n            type=\"button\"\n            data-role=\"blog-comment-reply\"\n            phx-click=\"reply\"\n            phx-value-comment={comment.id}\n            phx-target={@myself}\n            class=\"mt-1 cursor-pointer self-start border-0 bg-transparent p-0 text-xs font-semibold text-brand hover:underline dark:text-[#a9a2f7]\"\n          >\n            {@reply_text}\n          </button>\n\n          <ul\n            :if={comment.replies != []}\n            data-role=\"blog-comment-replies\"\n            class=\"m-0 mt-3 flex list-none flex-col gap-4 border-s-2 border-edge p-0 ps-4 dark:border-edge-dark\"\n          >\n            <li\n              :for={reply <- comment.replies}\n              data-role=\"blog-comment\"\n              id={\"#{@id}-comment-#{reply.id}\"}\n              class=\"flex gap-3\"\n            >\n              <span\n                aria-hidden=\"true\"\n                class=\"grid size-7 flex-none place-items-center rounded-full bg-[#eceafb] text-[11px] font-semibold text-brand dark:bg-[#25223f] dark:text-[#a9a2f7]\"\n              >\n                {initial(reply.author)}\n              </span>\n\n              <div class=\"flex min-w-0 flex-1 flex-col gap-0.5\">\n                <div class=\"flex flex-wrap items-baseline gap-x-1.5 text-[13px] text-subtle dark:text-subtle-dark\">\n                  <span data-role=\"blog-comment-author\" dir=\"auto\">{reply.author}</span>\n                  <span aria-hidden=\"true\">&middot;</span>\n                  <time data-role=\"blog-comment-date\" datetime={to_string(reply.at)}>\n                    {Calendar.strftime(reply.at, \"%d %b %Y\")}\n                  </time>\n                </div>\n\n                <div\n                  data-role=\"blog-comment-body\"\n                  dir=\"auto\"\n                  class=\"whitespace-pre-line\"\n                >{body_text(reply.body)}</div>\n              </div>\n            </li>\n          </ul>\n        </div>\n      </li>\n    </ul>\n\n    <div :if={@has_more} class=\"flex justify-center pt-1\">\n      <button\n        type=\"button\"\n        data-role=\"blog-comments-more\"\n        phx-click=\"more\"\n        phx-target={@myself}\n        class=\"h-11 cursor-pointer rounded-xl border border-edge bg-surface px-[22px] text-sm font-medium text-fg hover:border-[#b9b2f3] dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark\"\n      >\n        {@more_text}\n      </button>\n    </div>\n  </div>\n\n  <p\n    :if={@notice == \"pending\"}\n    data-role=\"blog-comments-pending\"\n    class=\"m-0 rounded-2xl border border-edge bg-sunk px-4 py-3 text-sm text-dim dark:border-edge-dark dark:bg-sunk-dark dark:text-dim-dark\"\n  >\n    {@pending_text}\n  </p>\n\n  <p\n    :if={@notice == \"error\"}\n    data-role=\"blog-comments-error\"\n    class=\"m-0 rounded-2xl border border-[#e8b7b1] bg-[#fdf6f5] px-4 py-3 text-sm text-[#c0473d] dark:border-[#5a2d29] dark:bg-[#2b1a19] dark:text-[#e8908a]\"\n  >\n    {@error_text}\n  </p>\n\n  <form\n    :if={@allow_posting && @current_user && @post}\n    id={\"#{@id}-form\"}\n    data-role=\"blog-comments-form\"\n    phx-submit=\"submit\"\n    phx-target={@myself}\n    class=\"flex flex-col rounded-2xl border border-edge bg-surface p-1.5 focus-within:border-[#b9b2f3] dark:border-edge-dark dark:bg-surface-dark\"\n  >\n    <p\n      :if={@replying != \"\"}\n      data-role=\"blog-comments-replying\"\n      class=\"m-0 px-3.5 pt-2 text-xs text-dim dark:text-dim-dark\"\n    >\n      {@reply_text}\n      <button\n        type=\"button\"\n        data-role=\"blog-comments-cancel\"\n        phx-click=\"cancel\"\n        phx-target={@myself}\n        class=\"ms-2 cursor-pointer border-0 bg-transparent p-0 font-semibold text-brand hover:underline dark:text-[#a9a2f7]\"\n      >\n        {@cancel_text}\n      </button>\n    </p>\n\n    <textarea\n      name=\"content\"\n      rows=\"3\"\n      required\n      data-role=\"blog-comments-input\"\n      placeholder={@placeholder}\n      class=\"resize-y border-0 bg-transparent px-3.5 py-3 text-[15px] leading-[normal] text-fg outline-none dark:text-fg-dark\"\n    ></textarea>\n\n    <div class=\"flex justify-end p-1.5\">\n      <button\n        type=\"submit\"\n        data-role=\"blog-comments-submit\"\n        class=\"h-[38px] cursor-pointer rounded-[10px] border-0 bg-[linear-gradient(180deg,#6a60ec,#5246d6)] px-[18px] text-sm font-medium text-white\"\n      >\n        {@submit_text}\n      </button>\n    </div>\n  </form>\n\n  <p\n    :if={@post && @allow_posting && is_nil(@current_user)}\n    data-role=\"blog-comments-login\"\n    class=\"m-0 rounded-2xl border border-edge bg-surface px-4 py-3.5 text-[15px] text-dim dark:border-edge-dark dark:bg-surface-dark dark:text-dim-dark\"\n  >\n    <.link\n      navigate={@login_href || sign_in_href(@post.language)}\n      rel=\"nofollow\"\n      class=\"font-medium text-brand hover:underline dark:text-[#a9a2f7]\"\n    >\n      {@login_text}\n    </.link>\n  </p>\n</div>",
       "body": null,
       "attrs": [
         {
@@ -2458,7 +2522,7 @@
           "name": "empty_text",
           "type": "string",
           "opts": {
-            "default": "No comments yet.",
+            "default": "No comments yet — start the conversation.",
             "doc": "What a reader is told when nobody has written anything."
           }
         },
@@ -2577,7 +2641,7 @@
         {
           "name": "mount",
           "args": "socket",
-          "code": "{:ok,\n Phoenix.Component.assign(socket,\n   asked: nil,\n   loading: true,\n   failed: false,\n   post: nil,\n   comments: [],\n   shown: 0,\n   has_more: false,\n   replying: \"\",\n   notice: \"\"\n )}\n"
+          "code": "{:ok,\n Phoenix.Component.assign(socket,\n   asked: nil,\n   loading: true,\n   failed: false,\n   post: nil,\n   comments: [],\n   total: 0,\n   shown: 0,\n   has_more: false,\n   replying: \"\",\n   notice: \"\"\n )}\n"
         },
         {
           "name": "update",
@@ -2722,17 +2786,17 @@
         {
           "name": "fetch",
           "args": "asked",
-          "code": "case post_row(asked.slug, asked.language, asked.visitor) do\n  nil ->\n    {:ok, %{post: nil, comments: [], shown: asked.shown, has_more: false}}\n\n  post ->\n    with {:ok, {found, total}} <- top_level(post.id, asked.shown, asked.visitor) do\n      names = author_names(found, asked.visitor)\n\n      comments =\n        Enum.map(found, fn comment ->\n          replies =\n            comment\n            |> approved_replies()\n            |> Enum.map(&shape(&1, names, asked.reader, []))\n\n          shape(comment, names, asked.reader, replies)\n        end)\n\n      {:ok,\n       %{\n         post: post,\n         comments: comments,\n         shown: asked.shown,\n         has_more: total > length(comments)\n       }}\n    end\nend\n"
+          "code": "case post_row(asked.slug, asked.language, asked.visitor) do\n  nil ->\n    {:ok, %{post: nil, comments: [], total: 0, shown: asked.shown, has_more: false}}\n\n  post ->\n    with {:ok, {found, total}} <- top_level(post.id, asked.shown, asked.visitor) do\n      names = author_names(found, asked.visitor)\n\n      comments =\n        Enum.map(found, fn comment ->\n          replies =\n            comment\n            |> approved_replies()\n            |> Enum.map(&shape(&1, names, asked.reader, []))\n\n          shape(comment, names, asked.reader, replies)\n        end)\n\n      {:ok,\n       %{\n         post: post,\n         comments: comments,\n         total: everything(post.id, asked.visitor, length(comments)),\n         shown: asked.shown,\n         has_more: total > length(comments)\n       }}\n    end\nend\n"
         },
         {
           "name": "arrived",
           "args": "socket, {:ok, data}",
-          "code": "Phoenix.Component.assign(socket,\n  loading: false,\n  failed: false,\n  post: data.post,\n  comments: data.comments,\n  shown: data.shown,\n  has_more: data.has_more\n)\n"
+          "code": "Phoenix.Component.assign(socket,\n  loading: false,\n  failed: false,\n  post: data.post,\n  comments: data.comments,\n  total: data.total,\n  shown: data.shown,\n  has_more: data.has_more\n)\n"
         },
         {
           "name": "arrived",
           "args": "socket, {:error, _reason}",
-          "code": "Phoenix.Component.assign(socket, loading: false, failed: true, comments: [], has_more: false)\n"
+          "code": "Phoenix.Component.assign(socket, loading: false, failed: true, comments: [], total: 0, has_more: false)\n"
         },
         {
           "name": "cold?",
@@ -2743,6 +2807,16 @@
           "name": "load",
           "args": "socket",
           "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:comments, fn -> fetch(asked) end)\n    end\nend\n"
+        },
+        {
+          "name": "everything",
+          "args": "post_id, visitor, drawn",
+          "code": "# HOW MANY COMMENTS THE CONVERSATION HOLDS, replies included — the number beside the heading. One\n# read of one row, which carries the count Ash works out for the whole of the approved ones. Where\n# it cannot be had the number is what is drawn, never nothing.\nMishkaBlog.Comment\n|> Ash.Query.for_read(:approved_by_post, %{post_id: post_id}, read_as(visitor))\n|> Ash.read(tenant: site_id(), page: [limit: 1, count: true])\n|> case do\n  {:ok, %{count: count}} when is_integer(count) -> count\n  _unreadable -> drawn\nend\n"
+        },
+        {
+          "name": "initial",
+          "args": "text",
+          "code": "text\n|> to_string()\n|> String.trim()\n|> String.first()\n|> to_string()\n|> String.upcase()\n"
         }
       ],
       "permissions": [],
@@ -2752,6 +2826,201 @@
       "examples": [],
       "extra": {
         "icon": "comment",
+        "ui_kit": "mishka_blog"
+      },
+      "site_id": null
+    },
+    {
+      "name": "blog-related-posts",
+      "description": "The posts to read next, under an article: the newest in the categories the article is filed under, then the newest of the rest, each as a card. Read in step with the page, from the slug the URL carries, and drawn as nothing when there is nothing else to read.",
+      "type": "media",
+      "format": "heex",
+      "stateful": true,
+      "active": true,
+      "precompile": false,
+      "required": false,
+      "priority": 0,
+      "template": "<div id={@id} {@rest} data-role=\"blog-related-posts\" class=\"w-full\">\n  <section :if={@posts != []} class=\"flex w-full flex-col gap-5\">\n    <h2\n      :if={trimmed(@heading) != \"\"}\n      data-role=\"blog-related-heading\"\n      class=\"m-0 font-newsreader text-[30px] font-normal tracking-[-0.02em]\"\n    >\n      {@heading}\n    </h2>\n\n    <div\n      data-role=\"blog-related-items\"\n      class=\"grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-5\"\n    >\n      <.related_post_card\n        :for={post <- @posts}\n        post={post}\n        navigate={slug_href(@post_base, post.slug, post.language)}\n      />\n    </div>\n  </section>\n</div>",
+      "body": null,
+      "attrs": [
+        {
+          "name": "slug",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The post to find more to read after, named outright. A page that carries the slug in its URL should leave this alone and use post_param instead."
+          }
+        },
+        {
+          "name": "params",
+          "type": "any",
+          "opts": {
+            "default": {},
+            "doc": "The page's own captures and query string, read for the one key post_param names — the post these are the next reads after."
+          }
+        },
+        {
+          "name": "post_param",
+          "type": "any",
+          "opts": {
+            "default": "slug",
+            "doc": "The key in params holding the post's slug — slug for a page stored at /:lang/blog/:slug."
+          }
+        },
+        {
+          "name": "language",
+          "type": "string",
+          "opts": {
+            "default": "",
+            "doc": "Only a post written in this language is looked up here, and only posts in its language are offered after it — fa on a page stored at /fa/blog/:slug. Left empty, or all, the slug alone decides."
+          }
+        },
+        {
+          "name": "post_base",
+          "type": "any",
+          "opts": {
+            "default": "",
+            "doc": "Where a post lives — /en/blog, say. It is what each card's link is built from. Left empty the cards are drawn without a link. Write the language into it as :lang — /:lang/blog — and every link is built under the language of the row it points at, at the address the site's URL mode gives that language."
+          }
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "opts": {
+            "default": 3,
+            "doc": "How many posts to offer."
+          }
+        },
+        {
+          "name": "heading",
+          "type": "string",
+          "opts": {
+            "default": "Keep reading",
+            "doc": "The words above the cards. Left empty, no heading is drawn."
+          }
+        },
+        {
+          "name": "current_user",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The signed-in reader, handed down by the page as current_user. A post locked to permissions it does not hold is not offered; without one, every locked post is left out."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [],
+      "helpers": [
+        {
+          "name": "mount",
+          "args": "socket",
+          "code": "{:ok, Phoenix.Component.assign(socket, asked: nil, posts: [])}\n"
+        },
+        {
+          "name": "update",
+          "args": "_assigns, socket",
+          "code": "{:ok, load(socket)}\n"
+        },
+        {
+          "name": "site_id",
+          "args": "",
+          "code": "__MODULE__.__component_information__([:private, :site_id])\n"
+        },
+        {
+          "name": "read_as",
+          "args": "visitor",
+          "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of what is offered, and a page with nobody signed in reads as a guest.\n# The tenant goes with it, because a public action that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
+        },
+        {
+          "name": "trimmed",
+          "args": "value",
+          "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "positive",
+          "args": "value, fallback",
+          "code": "cond do\n  is_integer(value) and value > 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number > 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
+        },
+        {
+          "name": "asked_slug",
+          "args": "assigns",
+          "code": "key = to_string(assigns[:post_param] || \"slug\")\n\ncase assigns[:params] do\n  %{^key => asked} -> asked\n  _no_params_or_key -> assigns[:slug]\nend\n"
+        },
+        {
+          "name": "first_row",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: [found | _rest]}} -> found\n  {:ok, [found | _rest]} -> found\n  _nothing -> nil\nend\n"
+        },
+        {
+          "name": "rows",
+          "args": "result",
+          "code": "case result do\n  {:ok, %{results: found}} -> found\n  {:ok, found} when is_list(found) -> found\n  _unreadable -> []\nend\n"
+        },
+        {
+          "name": "only_language",
+          "args": "query, wanted",
+          "code": "# THE SAME EDITION THE ARTICLE ABOVE THIS ONE IS SERVING. A slug belongs to one edition, so a\n# /fa/blog/<english-slug> that the detail block answers with \"not here\" is not offered further reading\n# either. Left empty the component sits on a page that does not address languages at all.\nrequire Ash.Query\n\ncase trimmed(wanted) do\n  \"\" -> query\n  \"all\" -> query\n  code -> Ash.Query.filter(query, language == ^code)\nend\n"
+        },
+        {
+          "name": "slug_href",
+          "args": "base, slug, language",
+          "code": "# THE ADDRESS OF A POST, built by `site_path/2`: a `:lang` in the base is filled with the language of\n# the post being linked to, at the address the site's URL mode gives that language. No base, or a\n# language this site does not publish, makes no link rather than a link to a 404.\ncase trimmed(base) do\n  \"\" -> nil\n  address -> site_path(address <> \"/:slug\", %{\"lang\" => trimmed(language), \"slug\" => to_string(slug)})\nend\n"
+        },
+        {
+          "name": "initial",
+          "args": "text",
+          "code": "text\n|> to_string()\n|> String.trim()\n|> String.first()\n|> to_string()\n|> String.upcase()\n"
+        },
+        {
+          "name": "tint",
+          "args": "seed",
+          "code": "# THE FACE A POST WEARS WHERE IT HAS NO PICTURE: one of six, chosen by the slug so it is the same on\n# every visit and in every language, each with the twin the dark theme answers with. Written out\n# whole, one clause per tint, because Tailwind reads source text.\ncase :erlang.phash2(to_string(seed), 6) do\n  0 -> \"bg-[#e7f1ee] text-[#2f6b5e] dark:bg-[#1d2b28] dark:text-[#8fd1bf]\"\n  1 -> \"bg-[#eceafb] text-brand dark:bg-[#24223a] dark:text-[#a9a2f7]\"\n  2 -> \"bg-[#faefdc] text-[#9a6412] dark:bg-[#2e2618] dark:text-[#e6b86a]\"\n  3 -> \"bg-[#f6e7eb] text-[#a13d5a] dark:bg-[#2e1f24] dark:text-[#e89ab0]\"\n  4 -> \"bg-[#e7edf7] text-[#3b5e99] dark:bg-[#1d2433] dark:text-[#93b2e8]\"\n  _the_sixth -> \"bg-[#efede6] text-[#6b6650] dark:bg-[#26251f] dark:text-[#c9c3a6]\"\nend\n"
+        },
+        {
+          "name": "category_name",
+          "args": "post",
+          "code": "# THE FIRST CATEGORY THE POST IS FILED UNDER, by the order the blog's editors gave them — the word\n# before the date on a card. A post in none has none.\ncase post.collections do\n  [_ | _] = filed ->\n    filed\n    |> Enum.sort_by(&{&1.display_order || 0, &1.name})\n    |> List.first()\n    |> Map.get(:name)\n\n  _filed_under_nothing ->\n    nil\nend\n"
+        },
+        {
+          "name": "listed",
+          "args": "post, visitor, limit, shared, skip",
+          "code": "# THE NEWEST POSTS IN THE SAME LANGUAGE AS THE ONE BEING READ, as the visitor — those filed under\n# one of the categories `shared` names, or from every category when it names none — with the\n# categories each is filed under. `skip` is what is already on the page.\nrequire Ash.Query\n\nlanguage = post.language\n\nquery =\n  MishkaBlog.BlogPost\n  |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n  |> Ash.Query.filter(language == ^language and not (id in ^skip))\n  |> Ash.Query.sort(published_at: :desc)\n  |> Ash.Query.select([:id, :title, :slug, :language, :published_at, :featured_image_url])\n  |> Ash.Query.load(collections: Ash.Query.select(MishkaBlog.Collection, [:id, :name, :display_order]))\n\nquery =\n  case shared do\n    [] -> query\n    ids -> Ash.Query.filter(query, exists(collections, id in ^ids))\n  end\n\nquery\n|> Ash.read(tenant: site_id(), page: [limit: limit])\n|> rows()\n"
+        },
+        {
+          "name": "related",
+          "args": "slug, language, visitor, limit",
+          "code": "require Ash.Query\n\npost =\n  MishkaBlog.BlogPost\n  |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n  |> Ash.Query.filter(slug == ^to_string(slug))\n  |> only_language(language)\n  |> Ash.Query.select([:id, :language])\n  |> Ash.Query.load(collections: Ash.Query.select(MishkaBlog.Collection, [:id]))\n  |> Ash.read(tenant: site_id(), page: [limit: 1])\n  |> first_row()\n\ncase post do\n  nil ->\n    []\n\n  found ->\n    filed = if is_list(found.collections), do: Enum.map(found.collections, & &1.id), else: []\n\n    # THE SAME CATEGORIES FIRST, then whatever else is newest — which is what keeps a post in a\n    # category of one from being offered nothing at all.\n    same =\n      case filed do\n        [] -> []\n        ids -> listed(found, visitor, limit, ids, [found.id])\n      end\n\n    more =\n      case limit - length(same) do\n        missing when missing > 0 ->\n          listed(found, visitor, missing, [], [found.id | Enum.map(same, & &1.id)])\n\n        _enough ->\n          []\n      end\n\n    same ++ more\nend\n"
+        },
+        {
+          "name": "asked",
+          "args": "assigns",
+          "code": "%{\n  visitor: assigns[:current_user],\n  slug: to_string(asked_slug(assigns) || \"\"),\n  language: trimmed(assigns[:language]),\n  limit: positive(assigns[:limit], 3)\n}\n"
+        },
+        {
+          "name": "load",
+          "args": "socket",
+          "code": "asked = asked(socket.assigns)\n\n# READ AGAIN ONLY WHEN WHAT IT IS READ FOR CHANGED. `update/2` runs on every re-render of the page\n# holding this block, and three reads for the same three cards is not what a re-render asked for.\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  _before ->\n    posts =\n      case asked.slug do\n        \"\" -> []\n        slug -> related(slug, asked.language, asked.visitor, asked.limit)\n      end\n\n    Phoenix.Component.assign(socket, asked: asked, posts: posts)\nend\n"
+        },
+        {
+          "name": "maybe_link",
+          "args": "assigns",
+          "code": "# A LINK WHERE THERE IS AN ADDRESS AND A PLAIN BOX WHERE THERE IS NONE, drawn the same either way: a\n# card has nowhere to lead until the page says where posts live, and a post in a language the site\n# does not publish has no page to lead to.\nassigns =\n  Phoenix.Component.assign(\n    assigns,\n    :extra,\n    Phoenix.Component.assigns_to_attributes(assigns, [:href, :class])\n  )\n\n~H\"\"\"\n<.link :if={@href} navigate={@href} class={@class} {@extra}>{render_slot(@inner_block)}</.link>\n<span :if={!@href} class={@class} {@extra}>{render_slot(@inner_block)}</span>\n\"\"\"\n"
+        },
+        {
+          "name": "related_post_card",
+          "args": "assigns",
+          "code": "# THE CARD OF ONE POST UNDER AN ARTICLE: the cover — or the stand-in with the post's first letter —\n# and under it the category and the date, then the title. A function component of its own, so the\n# card can be told apart from the one the lists draw and replaced by it.\n~H\"\"\"\n<.maybe_link\n  href={@navigate}\n  data-role=\"blog-related-card\"\n  class=\"flex flex-col overflow-hidden rounded-[20px] border border-edge bg-surface text-start text-fg transition-[transform,box-shadow] duration-200 hover:-translate-y-[3px] hover:shadow-[0_20px_40px_-26px_rgba(40,30,90,0.35)] dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark\"\n>\n  <img\n    :if={trimmed(@post.featured_image_url) != \"\"}\n    src={@post.featured_image_url}\n    alt=\"\"\n    class=\"aspect-[16/8] w-full object-cover\"\n  />\n  <span\n    :if={trimmed(@post.featured_image_url) == \"\"}\n    aria-hidden=\"true\"\n    class={[\n      \"flex aspect-[16/8] items-end bg-[repeating-linear-gradient(135deg,transparent_0_14px,rgba(127,127,127,0.07)_14px_15px)] p-4\",\n      tint(@post.slug)\n    ]}\n  >\n    <span class=\"font-newsreader text-[56px] italic leading-[0.7] opacity-50\">\n      {initial(@post.title)}\n    </span>\n  </span>\n\n  <span class=\"flex flex-col gap-2 px-5 pb-5 pt-[18px]\">\n    <span class=\"text-xs text-subtle dark:text-subtle-dark\">\n      <span :if={category_name(@post)} data-role=\"blog-related-category\">{category_name(@post)}</span>\n      <span :if={category_name(@post) && @post.published_at} aria-hidden=\"true\">&middot;</span>\n      <time :if={@post.published_at} datetime={to_string(@post.published_at)}>\n        {Calendar.strftime(@post.published_at, \"%d %b %Y\")}\n      </time>\n    </span>\n    <span data-role=\"blog-related-title\" dir=\"auto\" class=\"font-newsreader text-[22px] leading-[1.15]\">\n      {@post.title}\n    </span>\n  </span>\n</.maybe_link>\n\"\"\"\n"
+        }
+      ],
+      "permissions": [],
+      "dependencies": [],
+      "examples": [],
+      "extra": {
+        "icon": "document",
         "ui_kit": "mishka_blog"
       },
       "site_id": null
@@ -4378,7 +4647,7 @@
     },
     {
       "name": "blog-term-row",
-      "description": "A function component: a labelled row of linked words — the categories a post is filed under, the tags it carries, the languages it was published in. blog-post-detail draws all three with it.",
+      "description": "A function component: a row of linked words — the categories a post is filed under, the tags it carries, the languages it was published in. blog-post-detail draws all three with it, each in the shape the design gives it.",
       "type": "navigations",
       "format": "heex",
       "stateful": false,
@@ -4386,7 +4655,7 @@
       "precompile": false,
       "required": false,
       "priority": 0,
-      "template": "<div\n  :if={@terms != []}\n  {@rest}\n  data-role={@role}\n  class={[\n    \"flex flex-wrap items-center gap-2 text-xs\",\n    (@spaced && \"mt-6\") || \"mt-3\"\n  ]}\n>\n  <span :if={trimmed(@label) != \"\"} class=\"text-[#8a877f]\">{@label}</span>\n\n  <.link\n    :for={term <- @terms}\n    :if={term[:href] || term[:patch]}\n    navigate={term[:href]}\n    patch={term[:patch]}\n    hreflang={term[:hreflang]}\n    data-role={@item_role}\n    class={[\n      \"rounded-full border border-[#ecebe6] px-3 py-1 font-semibold text-[#5b57d6] hover:bg-[#f2f1fc]\",\n      @uppercase && \"uppercase\"\n    ]}\n  >\n    {term.name}\n  </.link>\n\n  <span\n    :for={term <- @terms}\n    :if={is_nil(term[:href]) and is_nil(term[:patch])}\n    data-role={@item_role}\n    class={[\n      \"rounded-full border border-[#ecebe6] px-3 py-1 font-semibold text-[#6d6a63]\",\n      @uppercase && \"uppercase\"\n    ]}\n  >\n    {term.name}\n  </span>\n</div>",
+      "template": "<div\n  :if={@terms != []}\n  {@rest}\n  data-role={@role}\n  class={row_class(@kind)}\n>\n  <span :if={trimmed(@label) != \"\" and trimmed(@kind) != \"category\"} class={label_class()}>\n    {@label}\n  </span>\n\n  <.link\n    :for={term <- @terms}\n    :if={term[:href] || term[:patch]}\n    navigate={term[:href]}\n    patch={term[:patch]}\n    hreflang={term[:hreflang]}\n    data-role={@item_role}\n    class={chip_class(@kind, true)}\n  >{marked(@kind, term.name)}</.link>\n\n  <span\n    :for={term <- @terms}\n    :if={is_nil(term[:href]) and is_nil(term[:patch])}\n    data-role={@item_role}\n    class={chip_class(@kind, false)}\n  >{marked(@kind, term.name)}</span>\n</div>",
       "body": null,
       "attrs": [
         {
@@ -4422,19 +4691,16 @@
           }
         },
         {
-          "name": "uppercase",
-          "type": "boolean",
+          "name": "kind",
+          "type": "string",
           "opts": {
-            "default": false,
-            "doc": "Draw each word in capitals, which is what a row of language codes wants."
-          }
-        },
-        {
-          "name": "spaced",
-          "type": "boolean",
-          "opts": {
-            "default": false,
-            "doc": "Leave a wider gap above the row, which is what the first row under an article wants."
+            "default": "tag",
+            "values": [
+              "category",
+              "tag",
+              "language"
+            ],
+            "doc": "Which of the three rows this is: category is the accent pill a post's header carries, drawn inline with the badges beside it; tag is a hashtag chip under the article; language is a capitalised code in the \"also in\" row."
           }
         },
         {
@@ -4449,6 +4715,26 @@
           "name": "trimmed",
           "args": "value",
           "code": "case value do\n  binary when is_binary(binary) -> String.trim(binary)\n  nil -> \"\"\n  other -> to_string(other)\nend\n"
+        },
+        {
+          "name": "row_class",
+          "args": "kind",
+          "code": "# THE ROW'S OWN BOX, one clause per kind and each written out whole: Tailwind reads source text, and\n# a class assembled from parts has no rule. A category row has no box at all (`contents`), so its\n# pills sit in the line of badges the block above draws them in.\ncase trimmed(kind) do\n  \"category\" -> \"contents\"\n  _a_row_under_the_article -> \"flex flex-wrap items-center gap-2\"\nend\n"
+        },
+        {
+          "name": "label_class",
+          "args": "",
+          "code": "# The word in front of a row — \"Tags\", \"Also in\" — in a column of its own, so the two rows under an\n# article start their chips at the same place.\n\"w-16 text-subtle dark:text-subtle-dark\"\n"
+        },
+        {
+          "name": "chip_class",
+          "args": "kind, linked",
+          "code": "# ONE WORD OF A ROW, in the shape of its kind — and the hover a link has and a plain word does not.\ncase {trimmed(kind), linked} do\n  {\"category\", _linked_or_not} ->\n    \"flex h-7 items-center rounded-full border border-chip bg-[#eceafb] px-3 text-[12.5px] font-medium text-brand dark:border-chip-dark dark:bg-[#25223f] dark:text-[#a9a2f7]\"\n\n  {\"language\", true} ->\n    \"grid h-[30px] min-w-10 place-items-center rounded-full border border-edge px-2.5 font-geist-mono text-xs uppercase text-dim hover:border-[#b9b2f3] hover:text-brand dark:border-edge-dark dark:text-dim-dark\"\n\n  {\"language\", false} ->\n    \"grid h-[30px] min-w-10 place-items-center rounded-full border border-edge px-2.5 font-geist-mono text-xs uppercase text-dim dark:border-edge-dark dark:text-dim-dark\"\n\n  {_tag, true} ->\n    \"flex h-[30px] items-center rounded-full border border-edge bg-surface px-3 font-geist-mono text-[12.5px] text-fg hover:border-[#b9b2f3] hover:text-brand dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark\"\n\n  {_tag, false} ->\n    \"flex h-[30px] items-center rounded-full border border-edge bg-surface px-3 font-geist-mono text-[12.5px] text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark\"\nend\n"
+        },
+        {
+          "name": "marked",
+          "args": "kind, name",
+          "code": "# A tag is written with the hash the design gives it; the other two are the word itself.\ncase trimmed(kind) do\n  \"tag\" -> \"#\" <> to_string(name)\n  _the_word_itself -> to_string(name)\nend\n"
         }
       ],
       "permissions": [],

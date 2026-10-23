@@ -137,7 +137,9 @@ defmodule MishkaBlog.ProvisionTest do
             "Posts",
             "Teams",
             "Members",
-            "Writers"
+            "Writers",
+            "Comments",
+            "Keep reading"
           ] do
         assert templates =~ ~s|t("#{word}")|, "#{word} is not asked of t/1"
       end
@@ -212,6 +214,28 @@ defmodule MishkaBlog.ProvisionTest do
     end
 
     # THE PAGE SAYS WHAT IT SHOWS, so its SEO is the record's whatever path it is later given.
+    # THE HEADER, THE LANGUAGE SWITCHER AND THE FOOTER ARE THE LAYOUT'S, so a page of the blog draws
+    # none of them and is given the layout the site's own pages hang on. A site installed without
+    # starter content has none, and its pages are written with no layout rather than with a wrong one.
+    test "hangs every page on the site's site-main layout when it has one", %{site: site} do
+      layout = create_layout!(site_id: site.id, name: "site-main")
+      create_layout!(site_id: site.id, name: "another")
+
+      Provision.ensure!(site)
+
+      assert Enum.map(Provision.page_paths(), &page(site, &1).layout_id) ==
+               List.duplicate(layout.id, length(Provision.page_paths()))
+    end
+
+    test "writes the pages with no layout when the site has no site-main", %{site: site} do
+      create_layout!(site_id: site.id, name: "another")
+
+      Provision.ensure!(site)
+
+      assert Enum.map(Provision.page_paths(), &page(site, &1).layout_id) ==
+               List.duplicate(nil, length(Provision.page_paths()))
+    end
+
     test "marks each page that shows a record with the kind it shows", %{site: site} do
       Provision.ensure!(site)
       paths = Provision.item_paths()

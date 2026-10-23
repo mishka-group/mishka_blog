@@ -36,7 +36,8 @@ defmodule MishkaBlog.KitTest do
   # lets every assertion below ask the right question of each — a function component has no socket,
   # so it has no `mount/1`, no `id={@id}` and nothing to aim an event at.
   @live ~w(blog-post-list blog-featured-posts blog-post-search blog-tag-cloud blog-post-detail
-           blog-category-list blog-post-comments blog-author-profile blog-team-profile blog-people)
+           blog-category-list blog-post-comments blog-related-posts blog-author-profile blog-team-profile
+           blog-people)
 
   @functions ~w(blog-post-card blog-post-meta blog-term-row blog-pager blog-notice
                 blog-profile-card)
@@ -85,7 +86,7 @@ defmodule MishkaBlog.KitTest do
       assert bundle()["name"] == "mishka_blog"
     end
 
-    test "ships exactly the sixteen components, each of the kind it is listed under" do
+    test "ships exactly the seventeen components, each of the kind it is listed under" do
       assert Enum.map(components(), & &1["name"]) |> Enum.sort() == Enum.sort(@names)
 
       for component <- components() do
@@ -375,7 +376,8 @@ defmodule MishkaBlog.KitTest do
           ]
           |> Enum.join()
 
-        assert callers =~ ~r/\b#{Regex.escape(name)}\s*\(/,
+        # A FUNCTION COMPONENT A HELPER DEFINES IS CALLED THE WAY HEEX CALLS IT, `<.name …/>`.
+        assert callers =~ ~r/\b#{Regex.escape(name)}\s*\(|<\.#{Regex.escape(name)}\b/,
                "#{component["name"]} carries #{name}/n and calls it nowhere"
       end
     end
