@@ -375,7 +375,11 @@ defmodule MishkaBlog.KitTest do
           ]
           |> Enum.join()
 
-        assert callers =~ ~r/\b#{Regex.escape(name)}\s*\(/,
+        # CALLED AS A FUNCTION, OR DRAWN AS A TAG: a helper that returns markup is a function
+        # component, and its call is `<.name attr={...} />`.
+        escaped = Regex.escape(name)
+
+        assert callers =~ ~r/(?:<\.#{escaped}[\s\/>]|\b#{escaped}\s*\()/,
                "#{component["name"]} carries #{name}/n and calls it nowhere"
       end
     end
