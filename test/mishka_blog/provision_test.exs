@@ -124,7 +124,7 @@ defmodule MishkaBlog.ProvisionTest do
   describe "the blog's words" do
     test "every heading and header link asks t/1, none is written in English", %{site: site} do
       Provision.ensure!(site)
-      templates = site |> pages() |> Enum.map_join("\n", & &1.template)
+      templates = site |> templates() |> Enum.map_join("\n", &elem(&1, 1))
 
       for word <- [
             "Categories",
@@ -134,7 +134,8 @@ defmodule MishkaBlog.ProvisionTest do
             "Recent posts",
             "Search",
             "Blog",
-            "Posts",
+            "Posts by %{name}",
+            "The people behind it",
             "Teams",
             "Members",
             "Writers",
@@ -262,6 +263,56 @@ defmodule MishkaBlog.ProvisionTest do
                ["blog:author", "blog:category", "blog:post", "blog:tag", "blog:team"]
 
       assert Enum.sort(shown) == Enum.sort(kinds)
+    end
+
+    # THE DESIGN'S PEOPLE PAGES DRAW THEIR CONTENT AND NOTHING AROUND IT. The header, the footer, the
+    # language switcher and the dark-mode toggle are the `site-main` layout's, so a page that drew
+    # its own would show the site's chrome twice.
+    test "draws the people, blogger and team pages as a column of content, with no chrome of its own",
+         %{site: site} do
+      Provision.ensure!(site)
+      paths = Provision.item_paths()
+
+      for path <- [paths.author, paths.team, "/:lang/blog/people"] do
+        template = page(site, path).template
+
+        refute template =~ "<header", "#{path} draws a header of its own"
+        refute template =~ "min-h-screen", "#{path} draws a page of its own"
+
+        refute template =~ "blog-sidebar",
+               "#{path} still carries the sidebar the design has no place for"
+
+        assert template =~ "max-w-[1160px]", "#{path} is not the design's centred column"
+      end
+
+      people = page(site, "/:lang/blog/people").template
+
+      assert people =~ "<h1"
+      assert people =~ ~s|t("The people behind it")|
+      refute people =~ ~s|heading={t("People")}|, "the block would head the page a second time"
+    end
+
+    # THE FRAME THE SITE'S HOME PAGE HANGS ON, where the site has it. The pages are written once and
+    # never updated, so this is the only time they can be hung on it.
+    test "hangs every page on the site's site-main layout", %{site: site} do
+      layout = create_layout!(site_id: site.id, name: "site-main")
+
+      Provision.ensure!(site)
+
+      for path <- Provision.page_paths() do
+        assert page(site, path).layout_id == layout.id, "#{path} is not on site-main"
+      end
+    end
+
+    test "writes the pages with no layout where the site has no site-main", %{site: site} do
+      create_layout!(site_id: site.id, name: "something-else")
+
+      Provision.ensure!(site)
+
+      for path <- Provision.page_paths() do
+        assert is_nil(page(site, path).layout_id),
+               "#{path} was hung on a layout it was not asked to"
+      end
     end
 
     # WHO WRITES THE BLOG HAS PAGES TOO: a blogger's, a team's, and everybody at once, each drawn by

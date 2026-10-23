@@ -3502,6 +3502,98 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert has_element?(view, ~s([data-role="blog-author-pager"])) == false
     end
 
+    # THE DESIGN'S PERSON: the way back above the head, how many posts a reader can open and the team
+    # they are in beside it, and the cards under a heading that names them by their first name.
+    test "draws the way back, the numbers and the heading the design puts around a person", %{
+      site: site
+    } do
+      {:ok, view, _html} =
+        mount_page(site, "blog-author-profile", %{
+          slug: "mona",
+          back_href: "/blog/people",
+          back_text: "People",
+          posts_heading: "Posts by %{name}"
+        })
+
+      assert hrefs(view, ~s([data-role="blog-author-back"])) == ["/blog/people"]
+      assert squished(view, ~s([data-role="blog-author-back"])) == ["← People"]
+      assert squished(view, ~s([data-role="blog-author-stat"])) == ["2 posts"]
+      assert squished(view, ~s([data-role="blog-author-teams"])) == ["Team Core"]
+      assert text_of(view, ~s([data-role="blog-author-posts-heading"])) == ["Posts by Mona"]
+
+      {:ok, alone, _html} = mount_page(site, "blog-author-profile", %{slug: "mona"})
+      refute has_element?(alone, ~s([data-role="blog-author-back"]))
+    end
+
+    test "counts one post as a post, and nothing published as none", %{site: site} do
+      blogger!(site, display_name: "Quiet", slug: "quiet")
+      solo = blogger!(site, display_name: "Solo Writer", slug: "solo")
+      [only] = publish!(site, ["Solo post"])
+      credit!(only, solo)
+
+      {:ok, none, _html} = mount_page(site, "blog-author-profile", %{slug: "quiet"})
+      assert squished(none, ~s([data-role="blog-author-stat"])) == ["0 posts"]
+
+      {:ok, one, _html} = mount_page(site, "blog-author-profile", %{slug: "solo"})
+      assert squished(one, ~s([data-role="blog-author-stat"])) == ["1 post"]
+    end
+
+    # EACH POST IS ONE CARD AND ONE LINK, with the category it is filed under and the day it went out
+    # in the line over its title, and the badge a featured one carries over its picture.
+    test "draws each post as the design's card, with one link over the whole of it", %{
+      site: site,
+      writer: writer
+    } do
+      guides = category!(site, name: "Guides", slug: "guides")
+
+      post =
+        create_blog_post!(
+          site_id: site.id,
+          title: "Filed and featured",
+          status: :published,
+          featured: true,
+          published_at: ~U[2026-02-03 00:00:00Z]
+        )
+
+      credit!(post, writer)
+      categorize!(post, guides)
+
+      {:ok, view, _html} =
+        mount_page(site, "blog-author-profile", %{slug: "mona", post_base: "/:lang/blog"})
+
+      assert titles(view) == ["Filed and featured", "Newer post", "Older post"]
+      assert text_of(view, ~s([data-role="blog-list-category"])) == ["Guides"]
+      assert hd(text_of(view, ~s([data-role="blog-list-date"]))) == "03 Feb 2026"
+      assert squished(view, ~s([data-role="blog-list-featured"])) == ["★ Featured"]
+
+      links = hrefs(view, ~s([data-role="blog-list-item"] a))
+      assert length(links) == 3, "a card holds more than the one link over it"
+      assert hd(links) == "/blog/#{post.slug}"
+    end
+
+    test "draws the picture of a post that has one, and its first letter where it has none", %{
+      site: site,
+      writer: writer
+    } do
+      with_picture =
+        create_blog_post!(
+          site_id: site.id,
+          title: "Pictured",
+          status: :published,
+          featured_image_url: "https://cdn.example.test/pictured.png",
+          published_at: ~U[2026-02-03 00:00:00Z]
+        )
+
+      credit!(with_picture, writer)
+
+      {:ok, view, _html} = mount_page(site, "blog-author-profile", %{slug: "mona"})
+
+      assert attrs_of(view, ~s([data-role="blog-list-item"] img), "src") ==
+               ["https://cdn.example.test/pictured.png"]
+
+      assert text_of(view, ~s([data-role="blog-list-nocover"])) == ["N", "O"]
+    end
+
     # A LINK ON A PROFILE IS AN ADDRESS SOMEBODY TYPED. Only one a browser should follow is put in
     # an `href`; the rest is drawn as the words it was saved as.
     test "links only the addresses a browser should follow", %{site: site} do
@@ -3677,6 +3769,52 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert titles(view) == ["By the team"]
     end
 
+    # THE TEAM AS THE DESIGN DRAWS A PERSON: the way back, a line under its name, and the numbers of
+    # posts and members in the head, with each member's own count on their card.
+    test "draws the way back, the numbers and the heading the design puts around it", %{
+      site: site
+    } do
+      {:ok, view, _html} =
+        mount_page(site, "blog-team-profile", %{
+          slug: "core",
+          back_href: "/blog/people",
+          back_text: "People",
+          posts_heading: "Posts by %{name}"
+        })
+
+      assert hrefs(view, ~s([data-role="blog-team-back"])) == ["/blog/people"]
+      assert text_of(view, ~s([data-role="blog-team-label"])) == ["Team"]
+      assert squished(view, ~s([data-role="blog-team-stat"])) == ["1 post", "1 member"]
+      assert text_of(view, ~s([data-role="blog-team-posts-heading"])) == ["Posts by Core"]
+
+      assert text_of(view, ~s([data-role="blog-team-member"] [data-role="blog-profile-count"])) ==
+               ["1 post"]
+
+      {:ok, alone, _html} = mount_page(site, "blog-team-profile", %{slug: "core"})
+      refute has_element?(alone, ~s([data-role="blog-team-back"]))
+    end
+
+    test "draws its cover across the top, and no cover where it has none", %{site: site} do
+      {:ok, plain, _html} = mount_page(site, "blog-team-profile", %{slug: "core"})
+      refute has_element?(plain, ~s([data-role="blog-team-cover"]))
+
+      team!(site,
+        name: "Pictured",
+        slug: "pictured",
+        cover_image_url: "https://cdn.example.test/cover.png"
+      )
+
+      {:ok, view, _html} = mount_page(site, "blog-team-profile", %{slug: "pictured"})
+
+      assert attrs_of(view, ~s([data-role="blog-team-cover"]), "src") ==
+               ["https://cdn.example.test/cover.png"]
+
+      {:ok, hidden, _html} =
+        mount_page(site, "blog-team-profile", %{slug: "pictured", show_cover: false})
+
+      refute has_element?(hidden, ~s([data-role="blog-team-cover"]))
+    end
+
     test "leaves a locked post out for a visitor who may not open it", %{site: site, ada: ada} do
       locked =
         create_blog_post!(
@@ -3746,7 +3884,8 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
   describe "blog-people" do
     setup %{site: site} do
       core = team!(site, name: "Core", slug: "core")
-      member!(core, blogger!(site, display_name: "Ada", slug: "ada"))
+      ada = blogger!(site, display_name: "Ada", slug: "ada")
+      member!(core, ada)
       gone = blogger!(site, display_name: "Gone", slug: "gone")
       member!(core, gone)
       Ash.destroy!(gone, action: :destroy, tenant: site.id, authorize?: false)
@@ -3759,7 +3898,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       blogger!(site, display_name: "Cyrus", slug: "cyrus")
       team!(site, name: "Empty", slug: "empty")
 
-      :ok
+      %{ada: ada}
     end
 
     test "draws every active team with its members, then the bloggers in none", %{site: site} do
@@ -3788,6 +3927,139 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
                "/blog/author/bea",
                "/blog/author/cyrus"
              ]
+    end
+
+    # THE NUMBER ON A CARD IS THE NUMBER BEHIND IT: the posts the reader may open, so a draft and a post
+    # locked away from them are not counted, and one that is theirs to open is.
+    test "says how many posts each person has that the reader may open", %{site: site} do
+      zed = blogger!(site, display_name: "Zed", slug: "zed")
+      [one, two] = publish!(site, ["Zed one", "Zed two"])
+      credit!(one, zed)
+      credit!(two, zed)
+      credit!(create_blog_post!(site_id: site.id, title: "Draft", status: :draft), zed)
+
+      locked =
+        create_blog_post!(
+          site_id: site.id,
+          title: "Members only",
+          status: :published,
+          permissions: ["members:read"],
+          published_at: ~U[2026-03-01 00:00:00Z]
+        )
+
+      credit!(locked, zed)
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+
+      counted = fn attrs ->
+        {:ok, view, _html} = mount_page(site, "blog-people", attrs)
+
+        text_of(
+          view,
+          ~s([data-role="blog-people-person"] [data-role="blog-profile-count"])
+        )
+      end
+
+      assert counted.(%{}) == ["0 posts", "0 posts", "2 posts"]
+      assert counted.(%{current_user: member}) == ["0 posts", "0 posts", "3 posts"]
+    end
+
+    test "says a post in the words the page gave it, one in the singular", %{site: site, ada: ada} do
+      credit!(hd(publish!(site, ["Ada's only"])), ada)
+
+      {:ok, view, _html} =
+        mount_page(site, "blog-people", %{
+          post_text: "%{count} entry",
+          posts_text: "%{count} entries"
+        })
+
+      assert text_of(view, ~s([data-role="blog-people-member"] [data-role="blog-profile-count"])) ==
+               ["1 entry"]
+
+      assert text_of(view, ~s([data-role="blog-people-person"] [data-role="blog-profile-count"])) ==
+               ["0 entries", "0 entries"]
+    end
+
+    # THE DESIGN'S TEAM HEAD: its members' faces in a stack, and a corner that counts them.
+    test "stacks the faces of a team and counts its members", %{site: site} do
+      {:ok, view, _html} = mount_page(site, "blog-people", %{})
+
+      assert text_of(
+               view,
+               ~s([data-role="blog-people-team-faces"] [data-role="blog-profile-initial"])
+             ) == ["A"]
+
+      assert squished(view, ~s([data-role="blog-people-team-size"])) == ["Team · 1", "Team · 0"]
+    end
+
+    test "shows eight faces at most, and says how many more there are", %{site: site} do
+      crowd = team!(site, name: "Crowd", slug: "crowd")
+
+      for number <- 1..10 do
+        member!(crowd, blogger!(site, display_name: "Person #{number}", slug: "person-#{number}"))
+      end
+
+      {:ok, view, _html} = mount_page(site, "blog-people", %{})
+
+      faces =
+        text_of(view, ~s([data-role="blog-people-team-faces"] [data-role="blog-profile-initial"]))
+
+      # Crowd's eight, and Ada's one in Core.
+      assert length(faces) == 9
+      assert text_of(view, ~s([data-role="blog-people-team-more"])) == ["+2"]
+      assert "Team · 10" in squished(view, ~s([data-role="blog-people-team-size"]))
+    end
+
+    # ONE PERSON, ONE COLOUR: their letters are tinted by their slug, so the card, the head of their
+    # own page and a stack of faces all agree.
+    test "tints a person's letters the same wherever they are drawn", %{site: site} do
+      tint = fn view, selector ->
+        view
+        |> attrs_of(selector, "class")
+        |> hd()
+        |> String.split()
+        |> Enum.filter(&String.match?(&1, ~r/^(dark:)?(bg|text)-\[#[0-9a-f]+\]$/))
+        |> Enum.sort()
+      end
+
+      {:ok, people, _html} = mount_page(site, "blog-people", %{})
+
+      {:ok, own_page, _html} = mount_page(site, "blog-author-profile", %{slug: "ada"})
+
+      card =
+        tint.(people, ~s([data-role="blog-people-member"] [data-role="blog-profile-initial"]))
+
+      faces =
+        tint.(people, ~s([data-role="blog-people-team-faces"] [data-role="blog-profile-initial"]))
+
+      head =
+        tint.(own_page, ~s([data-role="blog-author-card"] [data-role="blog-profile-initial"]))
+
+      assert length(card) == 4, "the tint is not the four classes the design's colours are"
+      assert card == faces
+      assert card == head
+    end
+
+    test "draws a picture where the blogger has one, and their letters where they have none", %{
+      site: site
+    } do
+      blogger!(site,
+        display_name: "Pictured",
+        slug: "pictured",
+        avatar_url: "https://cdn.example.test/pictured.png"
+      )
+
+      {:ok, view, _html} = mount_page(site, "blog-people", %{})
+
+      assert attrs_of(
+               view,
+               ~s([data-role="blog-people-person"] img[data-role="blog-profile-image"]),
+               "src"
+             ) == ["https://cdn.example.test/pictured.png"]
+
+      assert text_of(
+               view,
+               ~s([data-role="blog-people-person"] [data-role="blog-profile-initial"])
+             ) == ["B", "C"]
     end
 
     # A BLOGGER AND A TEAM ARE ONE ROW IN EVERY LANGUAGE, so their addresses are the page's own.

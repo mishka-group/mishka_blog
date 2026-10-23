@@ -20,9 +20,13 @@ defmodule MishkaBlog.Kit do
   so an author can put any of them on any page, on its own or beside the others, and each holds what
   it read.
 
-  A blogger's page and a team's read their own page of posts and draw it with the list's own
-  `blog-post-card` and `blog-pager`. They cannot draw `blog-post-list` itself: a component's markup
-  may not hold a live component (`MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement`).
+  A blogger's page and a team's read their own page of posts and draw it with `blog-pager` and, for
+  each post, `person_post_card`: a markup helper inside each of the two, the card the design draws on
+  a person's page (a 16:8 cover, the category and the date, the title in the serif, two lines of the
+  summary, one link over the whole of it). It is its own markup rather than `blog-post-card`, because
+  the list's card and this one are not yet the same card. They cannot draw `blog-post-list` itself: a
+  component's markup may not hold a live component
+  (`MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement`).
 
   ### The six pieces, which are function components
 
@@ -31,7 +35,8 @@ defmodule MishkaBlog.Kit do
   them. They are components rather than markup inside one block because more than one block draws
   them — the card is drawn by the paged list and by the featured strip, the profile card by both
   profiles and by `blog-people`, the notice by every block but the search box — and an admin who
-  restyles a card restyles it once.
+  restyles a card restyles it once. The profile card is also where a person's picture is drawn, as a
+  tile, a pill or the picture alone at four sizes, in the tint their slug picks.
 
   ### Who they read as
 

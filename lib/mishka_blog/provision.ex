@@ -84,7 +84,9 @@ defmodule MishkaBlog.Provision do
   and which marks the one the reader is in; the colours, type and radii of everything below are the
   tokens of the site's theme, with a `dark:` twin for each, and the screen is the design's: the
   search box with its count, the featured strip, the row of categories above the cards, and the
-  pager that says which posts it shows.
+  pager that says which posts it shows. A site that skipped the starter content has neither the
+  layout nor the theme tokens the markup is written in (`bg-surface`, `text-dim`, `font-newsreader`
+  and the rest), and these pages are plain on it.
 
   No static route in the host application's router answers any of them, which is the point of the
   `/:lang` prefix: `/mish-blog/*` is hand-written marketing the user keeps, and a runtime page
@@ -543,13 +545,17 @@ defmodule MishkaBlog.Provision do
     """)
   end
 
-  # A BLOGGER'S PAGE AND A TEAM'S ARE THE CATEGORY PAGE'S SHAPE: the row the capture names, read by
-  # the block that draws it, and its posts paged under it at this page's own URL. A blogger and a team
-  # are one row in every language, so `language` decides only which of their posts are listed and the
-  # language the links out of them are built in. The sidebar is handed `:nothing`, since this
-  # `:slug` names none of the rows it marks.
+  # A BLOGGER'S PAGE AND A TEAM'S ARE ONE PERSON'S PAGE IN THE DESIGN, so they are the same shape: the
+  # row the capture names, read by the block that draws it with its head, its numbers and its posts as
+  # cards, paged under it at this page's own URL. A blogger and a team are one row in every language, so
+  # `language` decides only which of their posts are listed and the language the links out of them are
+  # built in. There is no sidebar: the design's person page is the whole width, and this `:slug` names
+  # none of the rows the sidebar marks anyway.
+  #
+  # `back_href` IS THE ADDRESS OF THE PEOPLE PAGE, built here because a page is what knows its own
+  # neighbours; the block draws the way back above the profile and only knows where it was told to go.
   defp blog_author(site) do
-    chrome(
+    column(
       """
       <.component
         component_name="blog-author-profile"
@@ -557,8 +563,13 @@ defmodule MishkaBlog.Provision do
         id="blog-author"
         current_user={assigns[:current_user]}
         slug={@query_params["slug"]}
+        back_href={#{live_url(@people)}}
+        back_text={t("People")}
+        team_text={t("Team")}
         teams_text={t("Teams")}
-        posts_heading={t("Posts")}
+        post_text={t("post")}
+        posts_text={t("posts")}
+        posts_heading={t("Posts by %{name}")}
         per_page={9}
         language={@page.language}
         base={#{live_url(@author, "slug")}}
@@ -569,12 +580,12 @@ defmodule MishkaBlog.Provision do
         empty_text={t("Nothing published yet.")}
       />
       """,
-      sidebar(site, :nothing)
+      :person
     )
   end
 
   defp blog_team(site) do
-    chrome(
+    column(
       """
       <.component
         component_name="blog-team-profile"
@@ -582,8 +593,17 @@ defmodule MishkaBlog.Provision do
         id="blog-team"
         current_user={assigns[:current_user]}
         slug={@query_params["slug"]}
+        back_href={#{live_url(@people)}}
+        back_text={t("People")}
+        team_text={t("Team")}
         members_heading={t("Members")}
-        posts_heading={t("Posts")}
+        member_text={t("member")}
+        members_text={t("members")}
+        post_text={t("post")}
+        posts_text={t("posts")}
+        post_count_text={t("%{count} post")}
+        posts_count_text={t("%{count} posts")}
+        posts_heading={t("Posts by %{name}")}
         per_page={9}
         language={@page.language}
         base={#{live_url(@team, "slug")}}
@@ -595,26 +615,43 @@ defmodule MishkaBlog.Provision do
         empty_text={t("Nothing published yet.")}
       />
       """,
-      sidebar(site, :nothing)
+      :person
     )
   end
 
+  # THE PAGE'S TITLE IS THE PAGE'S, NOT THE BLOCK'S. The design heads the people page with a small line
+  # over a large `People`, which belongs to the page the way the layout's header does, so it is written
+  # here — and the block under it draws the teams and the writers with no heading of its own.
   defp blog_people(site) do
-    chrome("""
-    <.component
-      component_name="blog-people"
-      site="#{site}"
-      id="blog-people"
-      current_user={assigns[:current_user]}
-      heading={t("People")}
-      unteamed_heading={t("Writers")}
-      language={@page.language}
-      author_base="#{@author}"
-      team_base="#{@team}"
-      members_empty_text={t("Nobody is in this team yet.")}
-      empty_text={t("Nobody writes here yet.")}
-    />
-    """)
+    column(
+      """
+      <section class="flex flex-col gap-3 pb-10">
+        <span class="text-[12px] font-semibold tracking-[0.16em] text-subtle uppercase rtl:tracking-normal dark:text-subtle-dark">
+          {t("The people behind it")}
+        </span>
+        <h1 class="font-newsreader text-[length:clamp(40px,5vw,60px)] font-normal tracking-[-0.03em] rtl:tracking-normal">
+          {t("People")}
+        </h1>
+      </section>
+
+      <.component
+        component_name="blog-people"
+        site="#{site}"
+        id="blog-people"
+        current_user={assigns[:current_user]}
+        unteamed_heading={t("Writers")}
+        team_text={t("Team")}
+        post_text={t("%{count} post")}
+        posts_text={t("%{count} posts")}
+        language={@page.language}
+        author_base="#{@author}"
+        team_base="#{@team}"
+        members_empty_text={t("Nobody is in this team yet.")}
+        empty_text={t("Nobody writes here yet.")}
+      />
+      """,
+      :people
+    )
   end
 
   # The sidebar the lists and the post page carry, and the snippet's own source. The card chrome is
@@ -716,80 +753,26 @@ defmodule MishkaBlog.Provision do
     ~s|site_path("#{address}/:#{name}", #{captures})|
   end
 
-  # THE LANGUAGE NAV IS BUILT FROM `@page_languages`, never from the first path segment. The capture
-  # may sit anywhere in a page's path — see `MishkaCmsCore.Runtime.PageEditions` — and that assign is
-  # this same page's URL in each of the site's languages, whichever segment holds it. An `<a href>`
-  # rather than a `<.link navigate>`, because `<html lang dir>` is drawn once per HTTP response and a
-  # live navigation into another language would keep the first one's direction.
-  defp chrome(body, aside \\ nil) do
+  # THE DESIGN'S COLUMN, FOR A PAGE THE `site-main` LAYOUT FRAMES. The layout draws the header, the
+  # messages and the footer and gives its `<main>` the whole width, so what a page draws is its own
+  # centred column: 1160px with 32px at the sides, the 96px under it, and the space over its first
+  # line that its design gives it. One clause per top, written out in full: Tailwind reads source text,
+  # and a class with a hole in it gets no rule — see `MishkaCmsWeb.InterpolatedClassTest`.
+  defp column(body, :people) do
     """
-    <div class="min-h-screen bg-[#f6f5f2] text-[#1b1a18]">
-      <header class="border-b border-[#ecebe6] bg-white">
-        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-5">
-          <.link
-            navigate={#{live_url(@blog)}}
-            class="font-['Space_Grotesk'] text-[20px] font-bold tracking-[-0.01em]"
-          >
-            {t("Blog")}
-          </.link>
-
-          <nav class="flex flex-wrap items-center gap-2 text-[12.5px] font-semibold">
-            <.link
-              navigate={#{live_url(@categories)}}
-              class="rounded-full border border-[#ecebe6] px-3 py-1.5 text-[#3a382f] hover:bg-[#f6f5f2]"
-            >
-              {t("Categories")}
-            </.link>
-            <.link
-              navigate={#{live_url(@tags)}}
-              class="rounded-full border border-[#ecebe6] px-3 py-1.5 text-[#3a382f] hover:bg-[#f6f5f2]"
-            >
-              {t("Tags")}
-            </.link>
-            <.link
-              navigate={#{live_url(@people)}}
-              class="rounded-full border border-[#ecebe6] px-3 py-1.5 text-[#3a382f] hover:bg-[#f6f5f2]"
-            >
-              {t("People")}
-            </.link>
-
-            <a
-              :for={edition <- @page_languages}
-              href={edition.path}
-              hreflang={edition.language}
-              class={[
-                "rounded-full border px-3 py-1.5 uppercase",
-                (edition.language == @page.language &&
-                   "border-[#5b57d6] bg-[#f2f1fc] text-[#4f4bcc]") ||
-                  "border-[#ecebe6] text-[#6d6a63] hover:bg-[#f6f5f2]"
-              ]}
-            >
-              {edition.language}
-            </a>
-          </nav>
-        </div>
-      </header>
-
-      <main class="#{main_class(aside)}">
-        <div class="flex flex-col gap-8">
-    #{indent(body, 6)}
-        </div>#{aside_block(aside)}
-      </main>
+    <div class="mx-auto w-full max-w-[1160px] px-8 pt-16 pb-24">
+    #{indent(body, 2)}
     </div>
     """
   end
 
-  # WRITTEN OUT IN FULL, one clause per case, rather than a column track glued onto a shared prefix.
-  # Tailwind reads source text, and a class with a hole in it gets no rule — see
-  # `MishkaCmsWeb.InterpolatedClassTest`. The per-site compiler scans the STORED template, where this
-  # is already a literal, and only because the choice is made here rather than there.
-  defp main_class(nil), do: "mx-auto grid max-w-6xl grid-cols-1 gap-6 px-6 py-8"
-
-  defp main_class(_aside),
-    do: "mx-auto grid max-w-6xl grid-cols-1 gap-6 px-6 py-8 lg:grid-cols-[minmax(0,1fr)_320px]"
-
-  defp aside_block(nil), do: ""
-  defp aside_block(aside), do: "\n\n" <> indent(aside, 4)
+  defp column(body, :person) do
+    """
+    <div class="mx-auto w-full max-w-[1160px] px-8 pt-14 pb-24">
+    #{indent(body, 2)}
+    </div>
+    """
+  end
 
   defp indent(markup, spaces) do
     pad = String.duplicate(" ", spaces)

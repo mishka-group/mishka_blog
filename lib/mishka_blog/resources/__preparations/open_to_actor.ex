@@ -45,10 +45,10 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   A record asked for by itself (`get?`) is read with whether it opens for the reader beside it, and
   is left out of the result when it does not, so it is not found.
 
-  IN A READ OF CATEGORIES OR TAGS, what is counted, sorted by or asked of their posts is of the posts
-  the reader may open: an aggregate over them, such as `published_post_count`, in a list or asked for
-  alone, and an `exists(tenant_posts, …)` filter, such as a block's leaving out of rows with nothing
-  to read.
+  IN A READ OF CATEGORIES, TAGS OR BLOGGERS, what is counted, sorted by or asked of their posts is of
+  the posts the reader may open: an aggregate over them, such as a category's `published_post_count`
+  or a blogger's `post_count`, in a list or asked for alone, and an `exists(tenant_posts, …)` filter,
+  such as a block's leaving out of rows with nothing to read.
 
   ## Options
 
@@ -91,10 +91,13 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   defp reader(%{authorize?: false}), do: :system
   defp reader(%{actor: actor}), do: {:reader, actor}
 
-  # A blogger or a team opens with no lock of its own; only the page that serves it can close it.
+  # A blogger or a team opens with no lock of its own; only the page that serves it can close it. What
+  # a blogger's posts are counted as is the reader's, as a category's and a tag's are.
   defp keep(query, kind, reader) when kind in [:blogger, :team] do
     on_site(query, fn query, site_id ->
-      Ash.Query.filter(query, ^opens(kind, reader, ReaderLocks.site(site_id)))
+      query
+      |> Ash.Query.filter(^opens(kind, reader, ReaderLocks.site(site_id)))
+      |> counted(kind, site_id, reader)
     end)
   end
 
@@ -141,7 +144,7 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   defp admit(_query, records),
     do: {:ok, Enum.filter(records, &(&1.calculations[:open_to_reader?] == true))}
 
-  defp counted(query, kind, site_id, reader) when kind in [:category, :tag],
+  defp counted(query, kind, site_id, reader) when kind in [:category, :tag, :blogger],
     do: to_open_posts(query, ReaderLocks.post(reader, ReaderLocks.site(site_id)))
 
   defp counted(query, _kind, _site_id, _reader), do: query
