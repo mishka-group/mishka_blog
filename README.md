@@ -48,7 +48,7 @@ Mishka Blog is installed with [Mishka CMS](https://github.com/mishka-group/mishk
 
 Mishka CMS registers it in three places: `MishkaBlog` in `ash_domains` and `MishkaBlogWeb` in the core's `extensions` list, both in `config/config.exs`, and `MishkaBlog` in the domains of the JSON:API router.
 
-Then install the blog onto a site. Tick Blog in the install wizard, or open the Blog dashboard of a site that does not have it yet and press Set up. Either way the site gets the seventeen components, the nine sample pages and a sidebar snippet. Running it again adds only what is missing and leaves anything you edited.
+Then install the blog onto a site. Tick Blog in the install wizard, or open the Blog dashboard of a site that does not have it yet and press Set up. Either way the site gets the seventeen components, the nine sample pages and a sidebar snippet. Running it again adds only what is missing and leaves anything you edited. On a site set up by an earlier release, the same run gives the new design to the sample pages and components nobody edited, and says which in its report.
 
 For sample bloggers, posts and comments in development, run `mix run priv/repo/dev_seeds.exs` in `mishka_cms`.
 

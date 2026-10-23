@@ -24,11 +24,15 @@ defmodule MishkaBlog.ProvisionTest do
 
   alias MishkaBlog.Plugins.{Installer, PageFrame}
   alias MishkaBlog.Provision
+  alias MishkaBlog.Provision.Earlier
   alias MishkaCmsCore.Install
   alias MishkaCmsCore.Install.{Bootstrap, Extensions}
   alias MishkaCmsCore.Runtime.Component
   alias MishkaCmsCore.Runtime.ExtensionProvision
+  alias MishkaCmsCore.Runtime.Handlers.UiKitUpgrade
+  alias MishkaCmsCore.Runtime.Helpers
   alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.Media
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.PageProvision
   alias MishkaCmsCore.Runtime.SiteLayout
@@ -688,6 +692,302 @@ defmodule MishkaBlog.ProvisionTest do
     end
   end
 
+  # THE PAGES AS THE RELEASE BEFORE WROTE THEM: its templates, and no layout, which is what a site set
+  # up then holds.
+  defp age_pages!(site, paths \\ Provision.page_paths()) do
+    for path <- paths do
+      page = page(site, path)
+
+      Ash.update!(
+        page,
+        %{
+          template: Earlier.template(path, site.name),
+          layout_id: nil,
+          extra: Map.put(page.extra, "provisioned_version", "3.9.0")
+        },
+        action: :master_update,
+        authorize?: false,
+        tenant: site.id
+      )
+    end
+  end
+
+  defp edit_page!(site, path, template) do
+    site
+    |> page(path)
+    |> Ash.update!(%{template: template},
+      action: :master_update,
+      authorize?: false,
+      tenant: site.id
+    )
+  end
+
+  # A page is stored without the newline its template ends in, so both are read that way.
+  defp shipped(site),
+    do: Map.new(Provision.sample_pages(site), &{&1.path, String.trim(&1.template)})
+
+  defp earlier(site, path), do: site.name |> then(&Earlier.template(path, &1)) |> String.trim()
+
+  # A SITE THE RELEASE BEFORE SET UP. Its pages hold the templates that release wrote, each with a
+  # header of its own, and no layout: the state `Provision.ensure!/3` finds on a production site.
+  # The site has the `site-main` layout its starter content wrote, unless a test says it does not.
+  describe "a site the release before set up" do
+    setup %{site: site} do
+      layout = create_layout!(site_id: site.id, name: "site-main")
+      Provision.ensure!(site)
+      age_pages!(site)
+
+      {:ok, layout: layout}
+    end
+
+    test "takes the new design on every page nobody edited, and says which", %{
+      site: site,
+      layout: layout
+    } do
+      shipped = shipped(site)
+      assert Enum.all?(Provision.page_paths(), &(page(site, &1).template == earlier(site, &1)))
+
+      report = Provision.ensure!(site)
+
+      assert Enum.sort(report.upgraded_pages) == Enum.sort(Provision.page_paths())
+      assert Enum.sort(report.adopted_pages) == Enum.sort(Provision.page_paths())
+
+      for path <- Provision.page_paths() do
+        upgraded = page(site, path)
+
+        assert upgraded.template == shipped[path], "#{path} did not take the new template"
+        assert upgraded.layout_id == layout.id
+
+        # nothing of the page but its markup moved: where it answers, what it shows, who gave it
+        assert upgraded.path == path
+        assert upgraded.section == "blog"
+        assert upgraded.extra["serves_all_languages"] == true
+        assert PageProvision.ours?(upgraded, :mishka_blog)
+        assert PageProvision.provisioned_version(upgraded) == Provision.bundle_version()
+
+        # the header and the column of their own are the layout's now, so the page has neither
+        refute upgraded.template =~ "max-w-6xl"
+        refute upgraded.template =~ ~s(<header)
+        refute upgraded.template =~ "bg-[#f6f5f2]"
+      end
+
+      assert page(site, Provision.item_paths().post).extra["record"] == "blog:post"
+    end
+
+    test "leaves a page alone that was edited, and the others still take it", %{site: site} do
+      post = Provision.item_paths().post
+      edited_tail = earlier(site, "/:lang/blog") <> "\n<p>My own footnote.</p>"
+      edited_word = String.replace(earlier(site, post), "Recent posts", "Newest posts")
+      assert edited_word != earlier(site, post)
+
+      edit_page!(site, "/:lang/blog", edited_tail)
+      edit_page!(site, post, edited_word)
+
+      report = Provision.ensure!(site)
+
+      assert Enum.sort(report.upgraded_pages) ==
+               Enum.sort(Provision.page_paths() -- ["/:lang/blog", post])
+
+      assert page(site, "/:lang/blog").template == edited_tail
+      assert page(site, post).template == edited_word
+
+      shipped = shipped(site)
+
+      for path <- Provision.page_paths() -- ["/:lang/blog", post] do
+        assert page(site, path).template == shipped[path]
+      end
+    end
+
+    test "leaves a page alone that an admin moved to another layout", %{site: site} do
+      other = create_layout!(site_id: site.id, name: "another")
+      path = "/:lang/blog/people"
+
+      site
+      |> page(path)
+      |> Ash.update!(%{layout_id: other.id},
+        action: :master_update,
+        authorize?: false,
+        tenant: site.id
+      )
+
+      report = Provision.ensure!(site)
+
+      assert Enum.sort(report.upgraded_pages) == Enum.sort(Provision.page_paths() -- [path])
+      assert page(site, path).template == earlier(site, path)
+      assert page(site, path).layout_id == other.id
+    end
+
+    test "leaves a page alone that another extension gave the site", %{site: site} do
+      path = "/:lang/blog/tags"
+      row = page(site, path)
+
+      Ash.update!(row, %{extra: Map.put(row.extra, "provisioned_by", "mishka_document")},
+        action: :master_update,
+        authorize?: false,
+        tenant: site.id
+      )
+
+      report = Provision.ensure!(site)
+
+      assert path not in report.upgraded_pages
+      assert page(site, path).template == earlier(site, path)
+    end
+
+    test "takes a page of a site that was renamed since, and one given another path", %{
+      site: site
+    } do
+      path = "/:lang/blog/tags"
+
+      site
+      |> page(path)
+      |> Ash.update!(%{path: "/:lang/journal/tags"},
+        action: :master_update,
+        authorize?: false,
+        tenant: site.id
+      )
+
+      report = Provision.ensure!(site)
+
+      assert "/:lang/journal/tags" in report.upgraded_pages
+      assert page(site, "/:lang/journal/tags").template == shipped(site)[path]
+    end
+
+    test "changes nothing when it is run again", %{site: site} do
+      first = Provision.ensure!(site)
+      assert length(first.upgraded_pages) == length(Provision.page_paths())
+
+      before = pages(site)
+      second = Provision.ensure!(site)
+
+      assert %{
+               upgraded_pages: [],
+               upgraded_components: [],
+               adopted_pages: [],
+               pages: [],
+               components: []
+             } = second
+
+      assert Enum.map(pages(site), &{&1.id, &1.template, &1.updated_at}) ==
+               Enum.map(before, &{&1.id, &1.template, &1.updated_at})
+    end
+
+    test "writes a page nobody edited as the admin who asked, a master or a site's own", %{
+      site: site
+    } do
+      names = ExtensionProvision.required(Provision.manifest())
+      master = create_user_with_permissions!(names, site_id: nil)
+      tenant = create_user_with_permissions!(names, site_id: site.id)
+
+      first = Provision.ensure!(site.id, %{}, actor: tenant)
+
+      assert Enum.sort(first.upgraded_pages) == Enum.sort(Provision.page_paths())
+      assert page(site, "/:lang/blog").template == shipped(site)["/:lang/blog"]
+
+      age_pages!(site, ["/:lang/blog/tags"])
+      second = Provision.ensure!(site.id, %{}, actor: master)
+
+      assert second.upgraded_pages == ["/:lang/blog/tags"]
+      assert page(site, "/:lang/blog/tags").template == shipped(site)["/:lang/blog/tags"]
+    end
+  end
+
+  describe "a site the release before set up, with no site-main layout" do
+    test "keeps its pages as they are, each complete in itself", %{site: site} do
+      Provision.ensure!(site)
+      age_pages!(site)
+
+      report = Provision.ensure!(site)
+
+      assert report.upgraded_pages == []
+      assert report.adopted_pages == []
+
+      for path <- Provision.page_paths() do
+        assert page(site, path).template == earlier(site, path)
+        assert page(site, path).layout_id == nil
+      end
+    end
+  end
+
+  # THE COMPONENTS THE NEW PAGES ARE WRITTEN FOR. A site installed from an older bundle is aged the
+  # only way a test can age one: its rows put back to what an older bundle wrote and stamped as
+  # though that bundle had written them (the same state `MishkaBlogWeb.Test.KitUpgradeButtonTest`
+  # makes), so only the version is behind and nobody here touched them.
+  describe "the kit components of a site set up from an older bundle" do
+    setup %{site: site} do
+      Provision.ensure!(site)
+
+      for component <- components(site) do
+        older = %{component | description: "as #{component.name} read at 3.9.0"}
+
+        Ash.update!(
+          component,
+          %{
+            description: older.description,
+            extra:
+              component.extra
+              |> Map.put("ui_kit_version", "3.9.0")
+              |> Map.put("ui_kit_digest", UiKitUpgrade.digest(older))
+          },
+          action: :master_update,
+          authorize?: false,
+          tenant: site.id
+        )
+      end
+
+      :ok
+    end
+
+    test "are brought forward when nobody edited them, and said so", %{site: site} do
+      report = Provision.ensure!(site)
+
+      assert Enum.sort(report.upgraded_components) == Enum.sort(Provision.component_names())
+
+      for component <- components(site) do
+        assert component.extra["ui_kit_version"] == Provision.bundle_version()
+        assert UiKitUpgrade.digest(component) == component.extra["ui_kit_digest"]
+        refute component.description =~ "3.9.0"
+      end
+
+      assert Provision.ensure!(site).upgraded_components == []
+    end
+
+    test "are left where they are when an admin edited them, and the rest still move", %{
+      site: site
+    } do
+      mine = ~S(<div id={@id}>mine</div>)
+
+      site
+      |> component("blog-post-list")
+      |> Ash.update!(%{template: mine},
+        action: :master_update,
+        authorize?: false,
+        tenant: site.id
+      )
+
+      report = Provision.ensure!(site)
+
+      assert "blog-post-list" not in report.upgraded_components
+
+      assert Enum.sort(report.upgraded_components) ==
+               Enum.sort(Provision.component_names() -- ["blog-post-list"])
+
+      kept = component(site, "blog-post-list")
+      assert kept.template == mine
+      assert kept.extra["ui_kit_version"] == "3.9.0"
+    end
+
+    test "are left where they are when an admin archived them", %{site: site} do
+      archived = component(site, "blog-tag-cloud")
+      :ok = Ash.destroy!(archived, action: :master_destroy, authorize?: false, tenant: site.id)
+
+      report = Provision.ensure!(site)
+
+      assert "blog-tag-cloud" not in report.upgraded_components
+      assert "blog-tag-cloud" in Enum.map(archived_components(site), & &1.name)
+      assert "blog-tag-cloud" not in Enum.map(components(site), & &1.name)
+    end
+  end
+
   describe "a path that is not free" do
     test "is left to whoever holds it, and the rest are still created", %{site: site} do
       taken = List.last(Provision.page_paths())
@@ -1076,7 +1376,14 @@ defmodule MishkaBlog.ProvisionTest do
                  extensions: ["mishka_blog"]
                })
 
-      on_exit(fn -> SiteState.delete(first.id) end)
+      # THE RUN COMPILES THE SITE ONTO DISK, as it does for a real one: its templates under
+      # `priv/static/temp/runtime/<name>` and the media the starter content saves under
+      # `uploads/<id>`. Neither goes away with the database's rollback, so each is removed here.
+      on_exit(fn ->
+        SiteState.delete(first.id)
+        File.rm_rf(Helpers.static_temp_dir(["runtime", first.name]))
+        File.rm_rf(Path.join([Media.static_dir(), "uploads", first.id]))
+      end)
 
       assert Install.installed?()
       assert Extensions.installed?(first.id, :mishka_blog)

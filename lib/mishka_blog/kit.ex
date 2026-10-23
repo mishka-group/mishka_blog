@@ -139,7 +139,9 @@ defmodule MishkaBlog.Kit do
   what a seed wants and what an admin does not. The "Blog components" card on the blog dashboard is
   the other way: `MishkaCmsCore.Runtime.Handlers.UiKitUpgrade` compares each installed row with the
   version and the fingerprint the installer stamped on it, reports what is behind and what carries
-  an edit, and writes only what the admin chooses.
+  an edit, and writes only what the admin chooses. `MishkaBlog.Provision.ensure!/3` runs the safe
+  half of it, the rows nobody edited, so the pages it upgrades find the components they are
+  written for.
 
   ## What this module is not
 
