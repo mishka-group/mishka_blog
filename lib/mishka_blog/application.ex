@@ -79,9 +79,11 @@ defmodule MishkaBlog.Application do
   ]
 
   # Hands the `site-main` layout the blog's bar and the languages of the record a blog page shows
-  # (a `runtime:page:frame` plugin).
+  # (a `runtime:page:frame` plugin), and keeps the words that bar looks up from "Remove unused" (a
+  # `runtime:translations:used_keys` plugin).
   @frame_plugins [
-    MishkaBlog.Plugins.PageFrame
+    MishkaBlog.Plugins.PageFrame,
+    MishkaBlog.Plugins.TranslationKeys
   ]
 
   # Each code block of a post being written is lexed in a task of its own under this supervisor — see

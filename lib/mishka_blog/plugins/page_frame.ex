@@ -41,15 +41,22 @@ defmodule MishkaBlog.Plugins.PageFrame do
     * a list page, `/:lang/blog` or the archive, keeps what the layout would offer without a
       plugin: the same path in each language.
 
-  An edition other than the one being read is offered only to a reader who can open it. The hook is
-  handed no visitor, so the rule is the safe one: an edition that names no permission is offered,
-  and so is one that names every permission the edition being read names, since whoever opened that
-  one holds one of them. Any other would show its address and its title to readers the blog keeps it
-  from.
+  The other editions are read as the visitor the frame names (`current_user`, `nil` for a guest),
+  through `:public_list`, as the blog's components read for the page: an edition the visitor may
+  open, by its own lock or the one it inherits, is offered, and a guest is offered only what a
+  guest can read. An edition the visitor may not open is not offered, so its address and its title
+  are not shown to a reader the blog keeps it from.
 
-  Read as the system, as `MishkaBlog.Plugins.PageSeo` reads: the lock is the page's gate, not a
-  reason for the record to be missing from its own page's frame. Registered in
-  `MishkaBlog.Application`.
+  The edition being read is read as the system, as `MishkaBlog.Plugins.PageSeo` reads: the lock is
+  the page's gate, not a reason for the record to be missing from its own page's frame.
+
+  ## The words
+
+  `words/0` is what the bar asks the site's translations for. No template holds them, so the
+  plugin names them on `runtime:translations:used_keys` (`MishkaBlog.Plugins.TranslationKeys`),
+  where "Remove unused" would otherwise delete them.
+
+  Registered in `MishkaBlog.Application`.
   """
 
   use MishkaInstaller.Event.Hook, event: "runtime:page:frame", initial: %{priority: 50}
@@ -81,9 +88,13 @@ defmodule MishkaBlog.Plugins.PageFrame do
   # More than a site has languages; a group is one row per language.
   @editions 50
 
+  # A read made as the system: the lock is the page's gate, not a reason for the record to be
+  # missing from its own page's frame.
+  @system [authorize?: false]
+
   @doc """
-  The words the bar asks the site's translations for, for `MishkaBlog.Provision` to register: the
-  blog's name, then the name of each place.
+  The words the bar asks the site's translations for, for `MishkaBlog.Provision` to register and
+  `MishkaBlog.Plugins.TranslationKeys` to keep: the blog's name, then the name of each place.
   """
   @spec words() :: [String.t()]
   def words, do: [@title | Keyword.values(@labels)]
@@ -138,14 +149,9 @@ defmodule MishkaBlog.Plugins.PageFrame do
   # The languages
   # ---------------------------------------------------------------------------
 
-  defp translations(%{record: "blog:post"} = frame),
-    do: editions(frame, BlogPost, :title, [:permissions], [:effective_permissions])
-
-  defp translations(%{record: "blog:category"} = frame),
-    do: editions(frame, Collection, :name, [:permissions], [:effective_permissions])
-
-  defp translations(%{record: "blog:tag"} = frame),
-    do: editions(frame, Tag, :name, [:permissions], [])
+  defp translations(%{record: "blog:post"} = frame), do: editions(frame, BlogPost, :title)
+  defp translations(%{record: "blog:category"} = frame), do: editions(frame, Collection, :name)
+  defp translations(%{record: "blog:tag"} = frame), do: editions(frame, Tag, :name)
 
   defp translations(%{record: "blog:author"} = frame), do: person(frame, Blogger, :display_name)
   defp translations(%{record: "blog:team"} = frame), do: person(frame, Team, :name)
@@ -154,76 +160,66 @@ defmodule MishkaBlog.Plugins.PageFrame do
   defp translations(frame), do: frame.translations
 
   # Every edition of the record the slug names in this response's language: its own row, then the
-  # rows of its group. The group's key is the master's own id, and the master itself may carry no
-  # `language_group_id` (`MishkaCmsCore.LanguageEditions`), so a row without one is its group's key.
+  # rows of its group the visitor may open. The group's key is the master's own id, and the master
+  # itself may carry no `language_group_id` (`MishkaCmsCore.LanguageEditions`), so a row without one
+  # is its group's key.
   defp editions(
          %{params: params, site_id: site_id, language: language} = frame,
          resource,
-         title,
-         fields,
-         loads
+         title
        )
        when is_binary(site_id) and is_binary(language) do
-    fields = [:id, :slug, :language, :language_group_id, title | fields]
+    fields = [:id, :slug, :language, :language_group_id, title]
 
     with slug when is_binary(slug) and slug != "" <- Map.get(params, "slug"),
-         [read | _rest] <- current(resource, fields, loads, site_id, slug, language) do
-      resource
-      |> siblings(fields, loads, site_id, read.language_group_id || read.id)
-      |> Enum.filter(&reachable?(&1, read))
+         [read | _rest] <- current(resource, fields, site_id, slug, language) do
+      others = siblings(resource, fields, site_id, Map.get(frame, :current_user), group(read))
+
+      [read | others]
+      |> Enum.uniq_by(& &1.id)
       |> Enum.flat_map(&translation(frame, &1, Map.fetch!(&1, title)))
     else
       _not_here -> []
     end
   end
 
-  defp editions(_frame, _resource, _title, _fields, _loads), do: []
+  defp editions(_frame, _resource, _title), do: []
 
-  defp current(resource, fields, loads, site_id, slug, language) do
+  defp group(row), do: row.language_group_id || row.id
+
+  # THE EDITION BEING READ, as the system.
+  defp current(resource, fields, site_id, slug, language) do
     resource
-    |> published(fields, loads, site_id)
+    |> published(fields, site_id, @system)
     |> Ash.Query.filter(slug == ^slug and language == ^language)
-    |> rows(site_id)
+    |> rows(site_id, @system)
   end
 
-  defp siblings(resource, fields, loads, site_id, group) do
+  # THE REST OF ITS GROUP, as the visitor: `:public_list` keeps the rows they may not open out of
+  # the read, by the lock of the row or the one it inherits and by the page that shows it.
+  defp siblings(resource, fields, site_id, visitor, group) do
+    as = [actor: visitor]
+
     resource
-    |> published(fields, loads, site_id)
+    |> published(fields, site_id, as)
     |> Ash.Query.filter(language_group_id == ^group or id == ^group)
     |> Ash.Query.sort(language: :asc)
-    |> rows(site_id)
+    |> rows(site_id, as)
   end
 
   # `:public_list` keeps a post to the published and a category to the active ones.
-  defp published(resource, fields, loads, site_id) do
+  defp published(resource, fields, site_id, as) do
     resource
-    |> Ash.Query.for_read(:public_list, %{}, tenant: site_id, authorize?: false)
+    |> Ash.Query.for_read(:public_list, %{}, [tenant: site_id] ++ as)
     |> Ash.Query.select(fields)
-    |> Ash.Query.load(loads)
   end
 
-  defp rows(query, site_id) do
-    case Ash.read(query, tenant: site_id, authorize?: false, page: [limit: @editions]) do
+  defp rows(query, site_id, as) do
+    case Ash.read(query, [tenant: site_id, page: [limit: @editions]] ++ as) do
       {:ok, %{results: rows}} -> rows
       _unreadable -> []
     end
   end
-
-  # Whoever opened `read` holds one of the permissions it names, so they can open an edition that
-  # names none, or names all of them and more.
-  defp reachable?(%{id: id}, %{id: id}), do: true
-
-  defp reachable?(edition, read) do
-    case {locks(edition), locks(read)} do
-      {[], _read} -> true
-      {_edition, []} -> false
-      {edition, read} -> Enum.all?(read, &(&1 in edition))
-    end
-  end
-
-  defp locks(%{effective_permissions: permissions}) when is_list(permissions), do: permissions
-  defp locks(%{permissions: permissions}) when is_list(permissions), do: permissions
-  defp locks(_open), do: []
 
   # A blogger or a team is one row in every language: each language the site publishes in, at the
   # same slug.
@@ -244,10 +240,9 @@ defmodule MishkaBlog.Plugins.PageFrame do
 
   defp people(resource, name, site_id, slug) do
     resource
-    |> Ash.Query.for_read(:public_list, %{}, tenant: site_id, authorize?: false)
-    |> Ash.Query.select([:id, :slug, name])
+    |> published([:id, :slug, name], site_id, @system)
     |> Ash.Query.filter(slug == ^slug)
-    |> rows(site_id)
+    |> rows(site_id, @system)
   end
 
   defp translation(frame, %{language: language, slug: slug}, title),

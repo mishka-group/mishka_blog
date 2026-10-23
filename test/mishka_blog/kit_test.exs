@@ -416,13 +416,9 @@ defmodule MishkaBlog.KitTest do
       assert map_size(theme) > 40, "the theme was not read, so nothing is asserted of the blog"
 
       shared =
-        ~r/^(tint-\d.*|chip-wash.*|brand-dark|body.*|edge-hover|warn-ink.*)$/
+        ~r/^(tint-\d.*|chip-wash.*|brand-dark|body.*|edge-hover|warn-ink.*|warn-wash.*)$/
 
-      # a hex value the blog draws that is not a token, on purpose: the warning wash of a featured
-      # mark, which the theme has no token of
-      warn_wash = ~w(#fbf0dc #2e2618)
-
-      held = for {name, value} <- theme, name =~ shared, value not in warn_wash, do: value
+      held = for {name, value} <- theme, name =~ shared, do: value
       assert length(held) > 20
 
       for component <- components() do
@@ -434,7 +430,7 @@ defmodule MishkaBlog.KitTest do
         end
 
         used =
-          ~r/(?:bg|text|border|divide|ring|from|to)-((?:tint-[1-6](?:-ink)?|chip-wash|brand|body|edge-hover|warn-ink)(?:-dark)?)(?![\w-])/
+          ~r/(?:bg|text|border|divide|ring|from|to)-((?:tint-[1-6](?:-ink)?|chip-wash|brand|body|edge-hover|warn-ink|warn-wash)(?:-dark)?)(?![\w-])/
           |> Regex.scan(source, capture: :all_but_first)
           |> List.flatten()
 

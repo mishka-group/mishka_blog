@@ -10,17 +10,18 @@ defmodule MishkaBlog.Plugins.PageFrameTest do
   Each test builds the map `MishkaCmsCore.Runtime.SiteLayout.given/2` hands the plugins for one of
   the pages `MishkaBlog.Provision` writes, lets the plugin answer, and reads the answer the way the
   layout does (`SiteLayout.accept/2`): a language the site does not publish is dropped there, and
-  fewer than two languages is none.
+  fewer than two languages is none. The map names the visitor, a guest unless a test says who.
   """
   use MishkaBlog.DataCase, async: false
 
   import Phoenix.Component, only: [sigil_H: 2]
   import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
 
-  alias MishkaBlog.Plugins.PageFrame
+  alias MishkaBlog.Plugins.{PageFrame, TranslationKeys}
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Runtime.SiteLayout
   alias MishkaCmsCore.Runtime.States.{SettingsState, TranslationsState}
+  alias MishkaCmsCore.Runtime.Translations
   alias MishkaCmsCore.Settings
 
   @blog_path "/:lang/blog"
@@ -54,6 +55,7 @@ defmodule MishkaBlog.Plugins.PageFrameTest do
       site_id: site.id,
       extra: sample.extra,
       params: Map.put(params, "lang", language),
+      current_user: Keyword.get(opts, :as),
       translations: Keyword.get(opts, :translations, [])
     )
   end
@@ -204,37 +206,91 @@ defmodule MishkaBlog.Plugins.PageFrameTest do
              }
     end
 
-    # THE HOOK IS HANDED NO VISITOR. An edition other than the one being read is offered only when
-    # whoever opened this one can open that one, so a locked edition's address and title are not
-    # shown to readers the blog keeps it from.
-    test "leave out a locked edition of an open post", %{site: site} do
+    # THE OTHER EDITIONS ARE READ AS THE VISITOR THE FRAME NAMES. An edition is offered to a reader
+    # who may open it and to no one else, so a locked edition's address and title are not shown to
+    # a reader the blog keeps it from.
+    test "leave out a locked edition of an open post for a guest and for a reader without the lock",
+         %{site: site} do
       open = published!(site, "en", "open-post", "Open")
       published!(site, "fa", "ghofl-post", "قفل", group(open), permissions: ["members:read"])
       published!(site, "ar", "maftuh-post", "مفتوح", group(open))
 
-      reading = frame(site, @post_path, %{"slug" => "open-post"})
+      for visitor <- [nil, create_user!(site_id: site.id)] do
+        reading = frame(site, @post_path, %{"slug" => "open-post"}, as: visitor)
 
-      assert languages(reading) == ["en", "ar"]
-      refute "قفل" in Enum.map(reading.translations, & &1.title)
+        assert languages(reading) == ["en", "ar"]
+        refute "قفل" in Enum.map(reading.translations, & &1.title)
+        refute "/fa/blog/ghofl-post" in Map.values(addresses(reading))
+      end
     end
 
-    test "offer a locked post the editions its readers can open as well", %{site: site} do
+    test "offer a locked edition to the reader who holds its permission", %{site: site} do
+      open = published!(site, "en", "open-post", "Open")
+      published!(site, "fa", "ghofl-post", "قفل", group(open), permissions: ["members:read"])
+      published!(site, "ar", "maftuh-post", "مفتوح", group(open))
+
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+      reading = frame(site, @post_path, %{"slug" => "open-post"}, as: member)
+
+      assert languages(reading) == ["en", "fa", "ar"]
+      assert addresses(reading)["fa"] == "/fa/blog/ghofl-post"
+      assert titles(reading)["fa"] == "قفل"
+    end
+
+    test "offer a wildcard holder the editions the wildcard covers", %{site: site} do
+      open = published!(site, "en", "open-post", "Open")
+      published!(site, "fa", "ghofl-post", "قفل", group(open), permissions: ["members:read"])
+
+      holder = create_user_with_permissions!(["members:*"], site_id: site.id)
+
+      assert languages(frame(site, @post_path, %{"slug" => "open-post"}, as: holder)) ==
+               ["en", "fa"]
+    end
+
+    test "always offer the edition being read, locked or not", %{site: site} do
       {:ok, _} = Settings.put("site.languages", ["en", "fa", "ar", "tr", "de"], site_id: site.id)
       locked = published!(site, "en", "locked-post", "Locked", nil, permissions: ["members:read"])
 
-      # the same lock, no lock, a lock of another permission, a lock of the same one and more
-      published!(site, "fa", "ghofl-post", "قفل", group(locked), permissions: ["members:read"])
+      # no lock, the same lock, a lock of another permission, a lock of the same one and more
       published!(site, "ar", "maftuh-post", "مفتوح", group(locked))
+      published!(site, "fa", "ghofl-post", "قفل", group(locked), permissions: ["members:read"])
       published!(site, "tr", "personel", "Personel", group(locked), permissions: ["staff:read"])
 
       published!(site, "de", "beides", "Beides", group(locked),
         permissions: ["members:read", "staff:read"]
       )
 
-      reading = frame(site, @post_path, %{"slug" => "locked-post"})
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+      staff = create_user_with_permissions!(["members:read", "staff:read"], site_id: site.id)
 
+      # a guest is on the page the lock closes only through the page's gate: the page's own record
+      # is still in its frame, and the one edition a guest can read beside it
+      assert languages(frame(site, @post_path, %{"slug" => "locked-post"})) == ["en", "ar"]
+
+      reading = frame(site, @post_path, %{"slug" => "locked-post"}, as: member)
       assert languages(reading) == ["en", "fa", "ar", "de"]
       refute "Personel" in Enum.map(reading.translations, & &1.title)
+
+      assert languages(frame(site, @post_path, %{"slug" => "locked-post"}, as: staff)) ==
+               ["en", "fa", "ar", "tr", "de"]
+    end
+
+    # A POST IS KEPT BY THE LOCK OF THE CATEGORY IT IS FILED UNDER when it names none, which the
+    # edition's own permissions do not say.
+    test "leave out an edition that is locked by its category", %{site: site} do
+      open = published!(site, "en", "filed-post", "Filed")
+      inherits = published!(site, "fa", "dar-pushe", "در پوشه", group(open))
+      published!(site, "ar", "maftuh-post", "مفتوح", group(open))
+
+      locked = category!(site, "fa", "ghofl", "قفل", nil, permissions: ["members:read"])
+      create_post_collection!(post_id: inherits.id, collection_id: locked.id)
+
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+
+      assert languages(frame(site, @post_path, %{"slug" => "filed-post"})) == ["en", "ar"]
+
+      assert languages(frame(site, @post_path, %{"slug" => "filed-post"}, as: member)) ==
+               ["en", "fa", "ar"]
     end
   end
 
@@ -266,6 +322,20 @@ defmodule MishkaBlog.Plugins.PageFrameTest do
       assert languages(frame(site, @category_path, %{"slug" => "news"})) == ["en", "fa"]
     end
 
+    test "leave out a locked edition for a guest, and offer it to a reader who holds the lock",
+         %{site: site} do
+      news = category!(site, "en", "news", "News")
+      category!(site, "fa", "akhbar", "اخبار", group(news), permissions: ["members:read"])
+      category!(site, "ar", "al-akhbar", "الأخبار", group(news))
+
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+
+      assert languages(frame(site, @category_path, %{"slug" => "news"})) == ["en", "ar"]
+
+      assert languages(frame(site, @category_path, %{"slug" => "news"}, as: member)) ==
+               ["en", "fa", "ar"]
+    end
+
     test "are none for a category written in one language only", %{site: site} do
       category!(site, "en", "lonely", "Lonely")
 
@@ -286,6 +356,19 @@ defmodule MishkaBlog.Plugins.PageFrameTest do
              }
 
       assert titles(reading) == %{"en" => "Elixir", "fa" => "الکسیر"}
+    end
+
+    test "leave out a locked edition for a guest, and offer it to a reader who holds the lock",
+         %{site: site} do
+      elixir = tag!(site, "en", "elixir", "Elixir")
+      tag!(site, "fa", "alixir", "الکسیر", group(elixir), permissions: ["members:read"])
+
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+
+      assert languages(frame(site, @tag_path, %{"slug" => "elixir"})) == []
+
+      assert languages(frame(site, @tag_path, %{"slug" => "elixir"}, as: member)) ==
+               ["en", "fa"]
     end
 
     test "are none for a tag written in one language only", %{site: site} do
@@ -527,6 +610,18 @@ defmodule MishkaBlog.Plugins.PageFrameTest do
       assert PageFrame in MishkaBlog.Application.plugins()
     end
 
+    # THE BAR'S WORDS ARE IN NO TEMPLATE, so the translations screen would call them unused and
+    # "Remove unused" would delete them and what a translator wrote.
+    test "the bar's words are among the keys the site still uses", %{site: site} do
+      assert TranslationKeys.config(:__event__) == Translations.used_keys_event()
+      assert TranslationKeys in MishkaBlog.Application.plugins()
+
+      used = Translations.used_keys(site.id)
+
+      assert PageFrame.words() -- MapSet.to_list(used) == []
+      assert Enum.sort(PageFrame.words()) == ["Blog", "Categories", "People", "Posts", "Tags"]
+    end
+
     test "so the layout's own call reaches it and its answer is the page's", %{site: site} do
       english = published!(site, "en", "through-the-chain", "Through the chain")
       published!(site, "fa", "az-zanjir", "از زنجیر", group(english))
@@ -553,9 +648,10 @@ defmodule MishkaBlog.Plugins.PageFrameTest do
     |> create_collection!()
   end
 
-  defp tag!(site, language, slug, name, group \\ nil) do
+  defp tag!(site, language, slug, name, group \\ nil, overrides \\ []) do
     [site_id: site.id, name: name, slug: slug, language: language]
     |> in_group(group)
+    |> Keyword.merge(overrides)
     |> create_blog_tag!()
   end
 end
