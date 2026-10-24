@@ -407,7 +407,7 @@ defmodule MishkaBlog.KitTest do
         for [name, value] <-
               Regex.scan(
                 ~r/--color-([a-z0-9-]+):\s*(#[0-9a-f]{6});/,
-                MishkaCmsCore.Install.StarterContent.missing_theme(""),
+                MishkaCmsCore.Install.StarterContent.theme_css(),
                 capture: :all_but_first
               ),
             into: %{},
