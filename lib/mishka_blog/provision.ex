@@ -41,38 +41,25 @@ defmodule MishkaBlog.Provision do
       archived is an answer, not an absence.
     * **The snippet.** Only when nothing of that name is saved for this site's page editor.
 
-  Only two kinds of row are ever updated, and only when they are exactly what an earlier release
-  wrote, so nothing an author touched can be lost:
-
-    * **Sample pages.** A page whose template is, character for character, the one the release
-      before the blog drew its pages in the site's frame wrote (`MishkaBlog.Provision.Earlier`)
-      takes the template this release writes. That release's page carried a header of its own, and
-      `SiteLayout.adopt_pages/3` hangs it on `site-main`, which draws one too: left alone it would
-      be drawn with two bars and two gutters. A page that was edited anywhere, one an admin moved to
-      another layout, and every page of a site with no `site-main` are left exactly as they are.
-      The earlier texts are held in code rather than as a stored fingerprint, as
-      `MishkaCmsCore.Install.StarterContent.upgrade/1` holds the layout and the home page an
-      earlier release wrote. The paths are in the report's `upgraded_pages`.
-    * **Components.** The pages above are written for the bundle in this checkout, and an attribute
-      added to a component since a site was seeded reaches a row that does not declare it:
-      `MishkaCmsCore.Runtime.Compilers.ComponentCompiler` sweeps every undeclared key into the
-      component's global attr, which is rendered onto the element as an HTML attribute and read by
-      nothing, so the behaviour the page asked for is silently the old one. So the components that
-      are behind the bundle and are still byte for byte what the kit installed are brought forward
-      with the pages (`MishkaCmsCore.Runtime.Handlers.UiKitUpgrade.upgrade!/3` with
-      `include: :safe`, the "Update" button of the "Blog components" card, which also installs the
-      pieces they declare), and their names are in the report's `upgraded_components`. A component
-      that carries an edit, or no fingerprint of what it was installed from (a row written before
-      the kit was stamped), stays where it is and is left to that card, where the admin chooses it
-      by name; the report names those in `components_waiting`. What this does NOT do is what
-      `MishkaBlog.Kit.install!/1` does: upsert every component the bundle ships over whatever is
-      there, the dev seed's own call.
-
-  What a site that was set up months ago does about every OTHER page having moved on since is
+  Nothing is ever updated, so nothing an author touched can be lost. What a site that was set up
+  months ago does about the sample pages having moved on since is
   `MishkaCmsCore.Runtime.PageSamples`, behind the same card as the component update: it offers each
   outdated page as a DRAFT of itself, which the admin previews in the builder and publishes when
-  they want it. `sample_pages/1` is what both read the pages from. `MishkaBlog.ProvisionTest` holds
-  the templates and the bundle together; no test can see a row installed months ago.
+  they want it. `sample_pages/1` is what both read the pages from.
+
+  WHICH MEANS A SITE PROVISIONED TODAY CAN GET PAGES NEWER THAN ITS COMPONENTS. The pages below are
+  written against the bundle in this checkout, and a site that already has the components keeps the
+  ones it has — so an attribute added to a component since that site was seeded reaches a row that
+  does not declare it, and `MishkaCmsCore.Runtime.Compilers.ComponentCompiler` sweeps every
+  undeclared key into the component's global attr: it is rendered onto the element as an HTML
+  attribute, read by nothing, and the behaviour the page asked for is silently the old one. Such a
+  site takes the newer components from the "Blog components" card on the blog dashboard, which is
+  `MishkaCmsCore.Runtime.Handlers.UiKitUpgrade`: it says which rows are behind the bundle and which
+  of them carry an edit, and writes only the ones the admin chooses. What it does NOT do is what
+  `MishkaBlog.Kit.install!/1` does — upsert every component the bundle ships over whatever is there,
+  the dev seed's own call — and neither does the button here, because an admin asking for pages has
+  not asked to lose an edit. `MishkaBlog.ProvisionTest` holds the templates and the bundle together;
+  no test can see a row installed months ago.
 
   ## The pages, and why they look the way they do
 
@@ -154,17 +141,10 @@ defmodule MishkaBlog.Provision do
   `assigns[:page_source]` and `|| ""` on everything captured.
   """
 
-  require Ash.Query
-
   alias MishkaBlog.Kit
   alias MishkaBlog.Plugins.PageFrame
-  alias MishkaBlog.Provision.Earlier
-  alias MishkaCmsCore.Install.StarterContent
   alias MishkaCmsCore.Runtime.ExtensionProvision
-  alias MishkaCmsCore.Runtime.Handlers.UiKitUpgrade
   alias MishkaCmsCore.Runtime.Languages
-  alias MishkaCmsCore.Runtime.Page
-  alias MishkaCmsCore.Runtime.PageProvision
   alias MishkaCmsCore.Runtime.SiteLayout
   alias MishkaCmsCore.Runtime.Translations
 
@@ -212,37 +192,8 @@ defmodule MishkaBlog.Provision do
   @app :mishka_blog
   @section "blog"
 
-  # The pages of the section, a handful, read in one page of results.
-  @row_limit 100
-
-  # THE MARKUP IS THE EXTENSION'S, not typed by whoever pressed the button: the same mark
-  # `ExtensionProvision` writes its pages with
-  # (`MishkaCmsCore.Runtime.Resources.Validations.CodeChange`).
-  @package %{page_code: :package}
-
-  @typedoc """
-  `MishkaCmsCore.Runtime.ExtensionProvision.report/0`, and what this extension upgrades besides,
-  each always a list, empty when there is nothing to name:
-
-    * `upgraded_pages`, the paths of the sample pages that took this release's template;
-    * `upgraded_components`, the names of the components brought forward to the bundle;
-    * `components_waiting`, the names of the components left on the older kit because a site edited
-      them, or because nothing says what they were installed from.
-  """
-  @type report :: %{
-          version: String.t() | nil,
-          permissions: [String.t()],
-          components: [String.t()],
-          pages: [String.t()],
-          snippets: [String.t()],
-          renamed_pages: [PageProvision.renamed()],
-          skipped_pages: [PageProvision.held()],
-          upgraded: StarterContent.upgraded(),
-          adopted_pages: [String.t()],
-          upgraded_pages: [String.t()],
-          upgraded_components: [String.t()],
-          components_waiting: [String.t()]
-        }
+  @typedoc "See `MishkaCmsCore.Runtime.ExtensionProvision.report/0`."
+  @type report :: ExtensionProvision.report()
 
   # THE BLOG'S OWN AREAS, created when the blog is installed — with its components and its pages,
   # not with the core's names — so a site that never installs it has none to grant.
@@ -280,17 +231,11 @@ defmodule MishkaBlog.Provision do
   @doc """
   Gives `site` everything the blog ships and it is missing, and returns what happened as
   `%{permissions: names, components: names, pages: paths, snippets: names, renamed_pages: renamed,
-  skipped_pages: held, upgraded_pages: paths, upgraded_components: names,
-  components_waiting: names}`, and what `MishkaCmsCore.Runtime.ExtensionProvision.ensure!/4` adds.
+  skipped_pages: held}`, `MishkaCmsCore.Runtime.ExtensionProvision.ensure!/4`'s report.
   `permissions` is empty once any site has installed it, the next three are empty on a site that
   already has it all, `renamed_pages` names every sample page written under a name of its own
   because the one it asked for was taken, and `skipped_pages` names every one something already
   there holds, so the caller can say which rather than leave it to the logs.
-
-  `upgraded_pages` and `upgraded_components` are the rows an earlier release wrote that nobody
-  edited, which now hold this release's (see "Idempotent" above); both are empty once they have,
-  and on a run that finds nothing behind. `components_waiting` are the components that stay on the
-  older kit, an edited one or one with no stamp. All three are always in the report, as lists.
 
   Takes the site record the hook is handed, or its id. Raises when the site is not there, or when a
   write is refused for any reason but a page being taken.
@@ -304,128 +249,17 @@ defmodule MishkaBlog.Provision do
   @spec ensure!(map() | String.t(), map(), keyword()) :: report()
   def ensure!(site, answers \\ %{}, opts \\ []) do
     report = ExtensionProvision.ensure!(manifest(), site, answers, opts)
-    site_id = site_id(site)
-    actor = Keyword.get(opts, :actor)
 
     # THE BAR'S WORDS ARE ASKED FOR BY A PLUGIN, not by a template that saving a page could register
     # them from, so they are registered here, in every language of the site, for a translator to
     # find among the site's words. A row that is there is left as it is.
-    :ok = Translations.register(site_id, PageFrame.words())
+    :ok = Translations.register(site_id(site), PageFrame.words())
 
-    # THE COMPONENTS BEFORE THE PAGES THAT ARE WRITTEN FOR THEM, and both after everything
-    # `ExtensionProvision` does: the theme the new markup is written in is brought up to date and
-    # the pages with no layout are on `site-main` by now, which is what an old page is upgraded
-    # beside.
-    {upgraded, waiting} = upgrade_components(site_id, actor)
-
-    Map.merge(report, %{
-      upgraded_components: upgraded,
-      components_waiting: waiting,
-      upgraded_pages: upgrade_pages(site, actor)
-    })
+    report
   end
 
   defp site_id(%{id: site_id}), do: site_id
   defp site_id(site_id) when is_binary(site_id), do: site_id
-
-  # THE COMPONENTS THAT ARE BEHIND THE BUNDLE AND ARE STILL WHAT THE KIT INSTALLED, which is the
-  # "Update" button of the blog dashboard's kit card without the choice: a row with an edit, or with
-  # nothing saying what it was installed from, is not in this group (`UiKitUpgrade`'s `:safe`), so
-  # taking them loses nothing. The pieces an updated component declares come with it. Returns the
-  # names brought forward and the names that wait for the admin's choice.
-  defp upgrade_components(site_id, actor) do
-    {:ok, %{updated: updated, added: added, left: left}} =
-      UiKitUpgrade.upgrade!(Kit.bundle_path(), site_id, include: :safe, actor: actor)
-
-    {updated ++ added, left}
-  end
-
-  # THE PAGES AN EARLIER RELEASE WROTE AND NOBODY EDITED take this release's template; see
-  # `MishkaBlog.Provision.Earlier`. Each of these is true of a page that is upgraded:
-  #
-  #   * the site has a `site-main` layout, and the page hangs on it. Without one the new markup
-  #     would have no header, bar or column around it, where the old page was complete in itself;
-  #     and a page an admin moved to another layout chose that layout for the old markup.
-  #   * the page is this extension's, or nothing says whose it is
-  #     (`PageProvision.provisioned_by/1`), as `SiteLayout.adopt_pages/3` takes it.
-  #   * its template IS what the earlier release wrote, whatever path the page was later given.
-  #
-  # The page keeps everything else it has, its path, its title and what it shows, and is stamped
-  # with the bundle it is now written against.
-  defp upgrade_pages(site, actor) do
-    site_id = site_id(site)
-
-    case SiteLayout.layout_id(site_id) do
-      nil ->
-        []
-
-      layout_id ->
-        shipped = Map.new(sample_pages(site, actor), &{&1.path, &1.template})
-
-        for page <- section_pages(site_id, layout_id),
-            PageProvision.provisioned_by(page) in [nil, to_string(@app)],
-            template = shipped_for(page, shipped),
-            do: upgrade_page!(page, template, site_id, actor)
-    end
-  end
-
-  # The template this release writes for a page, when the page holds what the earlier one wrote.
-  defp shipped_for(%{template: template}, shipped),
-    do: Map.get(shipped, Earlier.page_of(template) || before_source(template, shipped))
-
-  # THE DESIGN'S OWN TEXT BEFORE ITS BLOCKS WERE HANDED THE PAGE'S ROWS: what this module writes now
-  # without the `page_source` line on each block (`MishkaBlog.PageSource`). A page that holds exactly
-  # that was written by this provision and edited by nobody, and takes the line; one edited anywhere
-  # keeps reading for itself, as it did. A page whose blocks take no rows has no older text.
-  defp before_source(template, shipped) when is_binary(template) do
-    stored = String.trim(template)
-
-    Enum.find_value(shipped, fn {path, text} ->
-      before = without_source(text)
-      before != text and String.trim(before) == stored and path
-    end)
-  end
-
-  defp before_source(_template, _shipped), do: nil
-
-  defp without_source(template),
-    do: String.replace(template, ~r/\n *page_source=\{assigns\[:page_source\]\}/, "")
-
-  defp section_pages(site_id, layout_id) do
-    Page
-    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
-    |> Ash.Query.filter(site_id == ^site_id and section == ^@section and layout_id == ^layout_id)
-    |> Ash.Query.sort(:path)
-    |> Ash.read!(authorize?: false, page: [limit: @row_limit])
-    |> Map.fetch!(:results)
-  end
-
-  defp upgrade_page!(page, template, site_id, actor) do
-    %{extra: extra} = PageProvision.stamp(%{extra: page.extra}, @app, bundle_version())
-
-    page
-    |> upgrade_changeset(%{template: template, extra: extra}, site_id, actor)
-    |> Ash.update!()
-
-    page.path
-  end
-
-  # THE THREE ANSWERS `ExtensionProvision` WRITES BY: nobody is the system, a master writes the
-  # master action, a site's admin their own site's under its tenant.
-  defp upgrade_changeset(page, attrs, _site_id, nil),
-    do:
-      Ash.Changeset.for_update(page, :master_update, attrs, authorize?: false, context: @package)
-
-  defp upgrade_changeset(page, attrs, _site_id, %{site_id: nil} = actor),
-    do: Ash.Changeset.for_update(page, :master_update, attrs, actor: actor, context: @package)
-
-  defp upgrade_changeset(page, attrs, site_id, actor) do
-    Ash.Changeset.for_update(page, :update, attrs,
-      actor: actor,
-      tenant: site_id,
-      context: @package
-    )
-  end
 
   @doc """
   Creates the blog's permission names that are not stored yet, and returns the ones it created —
@@ -506,9 +340,7 @@ defmodule MishkaBlog.Provision do
     # hands it the blog's) and the footer around them, in one column — so a blog page is the page and
     # nothing else. `MishkaCmsCore.Install.StarterContent` writes the layout, and the install wizard runs
     # it before the extensions' step, as do the dev seeds. A site that has none, one that started empty,
-    # gets `nil`, which is the page with no layout of its own, drawn in the application's frame as it
-    # always was; `ExtensionProvision` hangs such a page on the layout once the site has one
-    # (`SiteLayout.adopt_pages/3`), as it does a page written before pages carried one.
+    # gets `nil`, which is the page with no layout of its own, drawn in the application's frame.
     layout_id = SiteLayout.layout_id(site_id)
 
     Enum.map(page_definitions(), fn definition ->

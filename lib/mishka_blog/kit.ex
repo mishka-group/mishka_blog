@@ -66,7 +66,7 @@ defmodule MishkaBlog.Kit do
   strip is `blog-featured-posts` now: it is its own query, so it is its own load and its own place
   on a page, and an author who wants only it no longer carries a pager, a sort button and a page
   size to turn off one at a time. The switch stays on the list, because "the featured archive,
-  paged" is a list and because a site provisioned before this still has a page that sets it.
+  paged" is a list.
 
   The sidebar's "Recent posts" is NOT a component of its own, and that is the same rule read the
   other way. It is the same query, the same paging and the same card as the list — `variant`
@@ -139,9 +139,7 @@ defmodule MishkaBlog.Kit do
   what a seed wants and what an admin does not. The "Blog components" card on the blog dashboard is
   the other way: `MishkaCmsCore.Runtime.Handlers.UiKitUpgrade` compares each installed row with the
   version and the fingerprint the installer stamped on it, reports what is behind and what carries
-  an edit, and writes only what the admin chooses. `MishkaBlog.Provision.ensure!/3` runs the safe
-  half of it, the rows nobody edited, so the pages it upgrades find the components they are
-  written for.
+  an edit, and writes only what the admin chooses.
 
   ## What this module is not
 

@@ -305,8 +305,8 @@ defmodule MishkaBlog.Dev.Seeds do
 
     # AND THE SAMPLE PAGES, here rather than only in the Oban job a site create enqueues: a dev seed
     # that left them to the queue seeded three sites whose blog had no page to read it on until a
-    # worker happened to run. `ensure!/1` writes what the site is missing and touches only what an
-    # earlier release wrote and nobody edited, so a site that has them keeps the ones it has.
+    # worker happened to run. `ensure!/1` writes only what the site is missing, so a site that has
+    # them keeps the ones it has.
     progress.("Writing the blog's sample pages…")
     MishkaBlog.Provision.ensure!(site_id)
 
