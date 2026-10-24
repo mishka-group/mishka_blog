@@ -124,9 +124,10 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     end
   end
 
-  # SEVERAL DIFFERENT BLOCKS ON ONE PAGE, which is what a real blog page is: the featured strip, the
-  # paged list and the sidebar, each with its own read. `Host` above draws one component twice; this
-  # draws whichever ones a test names, so what one of them does to another can be asserted.
+  # SEVERAL DIFFERENT BLOCKS ON ONE PAGE, which is what a real blog page is: the search box, the
+  # featured strip and the paged list, each with its own read. `Host` above draws one component
+  # twice; this draws whichever ones a test names, so what one of them does to another can be
+  # asserted.
   defmodule Several do
     use Phoenix.LiveView
 
@@ -2594,8 +2595,8 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
                ["Empty", "Full"]
     end
 
-    # THE SIDEBAR THE TODO ASKS FOR: categories, each with what it most recently holds. It is the
-    # block that makes a category list something a reader uses rather than a table of contents.
+    # CATEGORIES, EACH WITH WHAT IT MOST RECENTLY HOLDS. It is what makes a category list
+    # something a reader uses rather than a table of contents.
     test "carries each category's own latest posts when the author asks for them", %{site: site} do
       category = category!(site, name: "OTP", slug: "otp")
       [first, second, third] = publish!(site, ["First", "Second", "Third"])
@@ -2620,8 +2621,9 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert text_of(view, ~s([data-role="blog-category-post"])) == []
     end
 
-    # THE ARTICLE THE READER ALREADY HAS OPEN. On a post page this block sits beside it, and the
-    # category that article is filed under spent one of its three lines offering it back.
+    # THE ARTICLE THE READER ALREADY HAS OPEN. Beside a post, as in the sidebar of the release
+    # before's post page, the category that article is filed under spent one of its three lines
+    # offering it back.
     test "and leaves out the one post the page is already showing", %{site: site} do
       category = category!(site, name: "OTP", slug: "otp")
       [open_one, other] = publish!(site, ["Open", "Another"])
@@ -2923,8 +2925,8 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
   # A SLUG BELONGS TO ONE EDITION, and a page in one language answers for that edition alone.
   describe "blog-post-detail in one language" do
     # Without this the English article also answers at /fa/blog/<its slug> — the same piece writing
-    # itself out inside a Persian page, right to left, with a Persian sidebar beside it, and nothing
-    # anywhere saying the URL was wrong.
+    # itself out inside a Persian page, right to left, and nothing anywhere saying the URL was
+    # wrong.
     test "does not serve a post written in another one", %{site: site} do
       [english] = publish!(site, ["English post"])
 

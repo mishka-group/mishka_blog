@@ -147,10 +147,11 @@ defmodule MishkaBlog.Provision do
   the component whose kind of row it holds, and the sidebar snippet, which an author drops on a page
   this module knows nothing about, is handed none and marks none.
 
-  Every template stays inside what BOTH renderers assign: `@page`, `@query_params`, `@page_languages`
-  and `assigns[:current_user]`. The admin's Preview tab assigns no visitor and no captures (see
-  `MishkaCmsCore.Runtime.RuntimePreview`), so `@current_user` would raise there and a nil slug reached
-  by `<>` would too — hence `assigns[:current_user]` and `|| ""` on everything captured.
+  Every template stays inside what BOTH renderers assign: `@page`, `@query_params`,
+  `assigns[:current_user]` and `assigns[:page_source]`. The admin's Preview tab assigns no visitor, no
+  rows and no captures (see `MishkaCmsCore.Runtime.RuntimePreview`), so `@current_user` would raise
+  there and a nil slug reached by `<>` would too — hence `assigns[:current_user]`,
+  `assigns[:page_source]` and `|| ""` on everything captured.
   """
 
   require Ash.Query
