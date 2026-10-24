@@ -677,7 +677,8 @@ defmodule MishkaBlog.Provision do
       posts_per_category={3}
       show_count={true}
       show_description={true}
-      count_text={t("posts")}
+      post_text={t("post")}
+      posts_text={t("posts")}
       view_all_text={t("View all in")}
       language={@page.language}
       category_base="#{@category}"
@@ -943,8 +944,10 @@ defmodule MishkaBlog.Provision do
         current_user={assigns[:current_user]}
         variant="bar"
         placeholder={t("Search posts…")}
-        count_text={t("posts")}
+        post_text={t("post")}
+        posts_text={t("posts")}
         language={@page.language}
+    #{counted(filter)}
         action={#{live_url(address, captured)}}
         params={Map.drop(@query_params, ["lang", "slug"])}
       />
@@ -980,6 +983,17 @@ defmodule MishkaBlog.Provision do
     />
     """
   end
+
+  # WHAT THE SEARCH BOX COUNTS. On the home, every post the reader may open in this language: the
+  # strip's and the list's. The list's own pager says fewer, because it counts the posts it pages
+  # through and leaves out the ones the strip above it draws, which is what the design's box and
+  # pager say too (13 posts, and Showing 9 of 10). A category's page and a tag's count that category's
+  # or tag's posts alone, the ones their list holds, so the box says what the list pages through and
+  # what the page of categories says for that category. `collection` and `tag` are one line each,
+  # and a blank one where the page names neither.
+  defp counted(:everything), do: ""
+  defp counted(:category), do: ~S'    collection={@query_params["slug"] || ""}'
+  defp counted(:tag), do: ~S'    tag={@query_params["slug"] || ""}'
 
   # WHERE EACH VERSION OF THE SCREEN LIVES, and the capture its address ends in.
   defp index_address(:everything), do: %{address: @blog, captured: nil}

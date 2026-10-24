@@ -110,7 +110,11 @@ defmodule MishkaBlog.ListPagesTest do
 
   defp titles(html), do: text(html, ~s([data-role="blog-list-title"]))
 
-  defp publish!(site, title, opts) do
+  # THE NUMBER IN THE SEARCH BOX, and the line under the list that says which posts it shows.
+  defp counted(html), do: text(html, ~s([data-role="blog-search-count"]))
+  defp showing(html), do: text(html, ~s([data-role="blog-list-showing"]))
+
+  defp publish!(site, title, opts \\ []) do
     create_blog_post!(
       Keyword.merge(
         [
@@ -260,6 +264,43 @@ defmodule MishkaBlog.ListPagesTest do
       # THE BAR UNDER THE HEADER IS THE LAYOUT'S, handed it by `MishkaBlog.Plugins.PageFrame`
       assert count(html, ~s([data-role="blog-section-nav"])) == 0
       assert html |> String.trim_leading() |> String.starts_with?("<section")
+    end
+
+    # THE BOX COUNTS EVERY POST THE READER MAY OPEN IN THIS LANGUAGE: not a draft, not a post written in
+    # another language, and not a locked one to a reader who does not hold the lock. The list under the
+    # strip leaves out the posts of the strip, which are on the page above it, so its pager is those
+    # fewer; together they are the box's number, which is also the design's (13 posts over "Showing 9
+    # of 10", the three featured ones in the strip).
+    test "counts the posts the reader may open in this language, and the pager those under the strip",
+         %{site: site} do
+      %{member: member} = the_design!(site)
+
+      publish!(site, "A draft", status: :draft, published_at: nil)
+      publish!(site, "In Persian", language: "fa")
+      for index <- 1..12, do: publish!(site, "Plain #{index}")
+
+      # three featured, "Issue 103 blocks e2e" and twelve more; the locked post is not a guest's
+      guest = render_page(site, "/:lang/blog")
+      assert counted(guest) == ["16 posts"]
+      assert showing(guest) == ["Showing 1–9 of 13"]
+
+      strip = text(guest, ~s([data-role="blog-featured-items"] [data-role="blog-list-title"]))
+      assert length(strip) == 3
+
+      # a member of the lock is shown one more, in the box and in the list
+      members = render_page(site, "/:lang/blog", %{}, user: member)
+      assert counted(members) == ["17 posts"]
+      assert showing(members) == ["Showing 1–9 of 14"]
+    end
+
+    test "says 1 post, and none at all when there is nothing to search", %{site: site} do
+      assert counted(render_page(site, "/:lang/blog")) == []
+
+      publish!(site, "Only", [])
+      assert counted(render_page(site, "/:lang/blog")) == ["1 post"]
+
+      publish!(site, "Second", [])
+      assert counted(render_page(site, "/:lang/blog")) == ["2 posts"]
     end
 
     test "draws the newest featured post large and the next two beside it, with their authors",
@@ -522,6 +563,40 @@ defmodule MishkaBlog.ListPagesTest do
              ]
     end
 
+    # THE BOX COUNTS THE CATEGORY'S POSTS, the ones its list holds and the page of categories counts
+    # for it, and not the blog's: a draft filed under it, an edition in another language and a post a
+    # reader may not open are not in it.
+    test "counts that category's posts in the box, as the page of categories counts them",
+         %{site: site} do
+      %{elixir: elixir, ideas: ideas, members: members, member: member} = the_design!(site)
+
+      draft = publish!(site, "A draft", status: :draft, published_at: nil)
+      file!(draft, elixir)
+
+      box = fn category, opts ->
+        html =
+          render_page(site, "/:lang/blog/category/:slug", %{"slug" => category.slug}, opts)
+
+        {counted(html), length(titles(html))}
+      end
+
+      assert box.(elixir, []) == {["3 posts"], 3}
+      assert box.(ideas, []) == {["1 post"], 1}
+
+      # the page of categories says the same for each of them, in the same words
+      cards = render_page(site, "/:lang/blog/categories")
+      assert text(cards, ~s([data-role="blog-category-count"])) == ["3 posts", "1 post"]
+
+      # an edition in another language is not a post of this page's list, nor of its box
+      persian = publish!(site, "In Persian", language: "fa")
+      file!(persian, elixir)
+      assert box.(elixir, []) == {["3 posts"], 3}
+
+      # a locked category is nothing to count for a guest, and one post to a reader holding the lock
+      assert box.(members, []) == {[], 0}
+      assert box.(members, user: member) == {["1 post"], 1}
+    end
+
     test "says nothing is published in a category that holds nothing, with the way back",
          %{site: site} do
       the_design!(site)
@@ -548,6 +623,46 @@ defmodule MishkaBlog.ListPagesTest do
     end
   end
 
+  describe "a tag's page, counted" do
+    # THE SAME FOR A TAG: the box counts the posts carrying it that the reader may open.
+    test "counts that tag's posts in the box, and says 1 post for one", %{site: site} do
+      %{phoenix: phoenix, testing: testing} = the_design!(site)
+
+      draft = publish!(site, "A draft", status: :draft, published_at: nil)
+      tag_post!(draft, phoenix)
+
+      box = fn tag ->
+        html = render_page(site, "/:lang/blog/tag/:slug", %{"slug" => tag.slug})
+        {counted(html), length(titles(html))}
+      end
+
+      assert box.(phoenix) == {["2 posts"], 2}
+      assert box.(testing) == {["1 post"], 1}
+
+      # the cloud says the same for each of them
+      cloud = render_page(site, "/:lang/blog/tags")
+
+      assert text(cloud, ~s([data-role="blog-tag"])) == [
+               "phoenix 2",
+               "performance 1",
+               "testing 1"
+             ]
+
+      # an edition in another language is not a post of this page's list, nor of its box
+      persian = publish!(site, "In Persian", language: "fa")
+      tag_post!(persian, phoenix)
+      assert box.(phoenix) == {["2 posts"], 2}
+    end
+
+    test "counts nothing for a tag that is not there", %{site: site} do
+      the_design!(site)
+      html = render_page(site, "/:lang/blog/tag/:slug", %{"slug" => "no-such-tag"})
+
+      assert counted(html) == []
+      assert titles(html) == []
+    end
+  end
+
   describe "the categories page" do
     test "draws a card for each category: tile, count, name, description, latest posts and a link",
          %{site: site} do
@@ -562,7 +677,7 @@ defmodule MishkaBlog.ListPagesTest do
                "Ideas in progress"
              ]
 
-      assert text(html, ~s([data-role="blog-category-count"])) == ["3 posts", "1 posts"]
+      assert text(html, ~s([data-role="blog-category-count"])) == ["3 posts", "1 post"]
 
       assert text(html, ~s([data-role="blog-category-post"])) == [
                "Phoenix LiveView Deep Dive — Part 2",

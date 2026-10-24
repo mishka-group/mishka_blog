@@ -451,13 +451,13 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
          %{site: site, member: member} do
       {:ok, guest, _html} = mount_page(site, "blog-post-list", %{per_page: 10, show_total: true})
       assert titles(guest) == ["Public"]
-      assert [<<"1 ", _posts::binary>>] = text_of(guest, ~s([data-role="blog-list-total"]))
+      assert text_of(guest, ~s([data-role="blog-list-total"])) == ["1 post"]
 
       {:ok, shown, _html} =
         mount_page(site, "blog-post-list", %{per_page: 10, show_total: true, current_user: member})
 
       assert titles(shown) == ["Public", "Locked"]
-      assert [<<"2 ", _posts::binary>>] = text_of(shown, ~s([data-role="blog-list-total"]))
+      assert text_of(shown, ~s([data-role="blog-list-total"])) == ["2 posts"]
     end
 
     test "is left out of the categories and the tags", %{site: site, member: member} do
@@ -1961,6 +1961,99 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     end
   end
 
+  # THE BAR OF A PAGE SAYS HOW MANY POSTS ITS READER MAY OPEN, and a category's page or a tag's says
+  # how many of theirs: the number is read as the visitor, through the public read, in the page's
+  # language, and narrowed the way the list under the bar is.
+  describe "blog-post-search as the bar of a page" do
+    @count ~s([data-role="blog-search-count"])
+
+    defp bar_count(site, attrs \\ %{}) do
+      {:ok, view, _html} = mount_page(site, "blog-post-search", Map.put(attrs, :variant, "bar"))
+      text_of(view, @count)
+    end
+
+    test "counts the published posts, says 1 post for one, and says nothing for none",
+         %{site: site} do
+      create_blog_post!(site_id: site.id, title: "Draft", status: :draft)
+      assert bar_count(site) == []
+
+      publish!(site, ["One"])
+      assert bar_count(site) == ["1 post"]
+
+      publish!(site, ["Two"])
+      assert bar_count(site) == ["2 posts"]
+    end
+
+    test "says its count in the words the page gives for one and for the others", %{site: site} do
+      words = %{post_text: "maqale", posts_text: "maqale-ha"}
+
+      publish!(site, ["One"])
+      assert bar_count(site, words) == ["1 maqale"]
+
+      publish!(site, ["Two"])
+      assert bar_count(site, words) == ["2 maqale-ha"]
+    end
+
+    test "leaves out the posts the reader may not open and the other editions", %{site: site} do
+      members = category!(site, name: "Members", slug: "members", permissions: ["members:read"])
+      [open, locked] = publish!(site, ["Open", "Locked"])
+      categorize!(locked, members)
+      persian!(site, "In Persian")
+
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+
+      assert bar_count(site, %{language: "en"}) == ["1 post"]
+      assert bar_count(site, %{language: "en", current_user: member}) == ["2 posts"]
+      assert bar_count(site, %{language: "fa"}) == ["1 post"]
+      assert bar_count(site, %{language: "all"}) == ["2 posts"]
+      assert open.id != locked.id
+    end
+
+    test "counts a category's posts when it is given the category, and a tag's the tag",
+         %{site: site} do
+      [first, second, third] = publish!(site, ["A", "B", "C"])
+      draft = create_blog_post!(site_id: site.id, title: "Draft", status: :draft)
+
+      otp = category!(site, name: "OTP", slug: "otp")
+      for post <- [first, second, draft], do: categorize!(post, otp)
+
+      hidden = category!(site, name: "Hidden", slug: "hidden", status: :draft)
+      categorize!(first, hidden)
+
+      elixir = tag!(site, name: "Elixir", slug: "elixir")
+      tag_post!(third, elixir)
+
+      assert bar_count(site) == ["3 posts"]
+      assert bar_count(site, %{collection: "otp"}) == ["2 posts"]
+      assert bar_count(site, %{tag: "elixir"}) == ["1 post"]
+
+      # both narrow, as they do the list; a category that is not active and one that is not there
+      # hold nothing
+      assert bar_count(site, %{collection: "otp", tag: "elixir"}) == []
+      assert bar_count(site, %{collection: "hidden"}) == []
+      assert bar_count(site, %{collection: "no-such-category"}) == []
+    end
+
+    test "counts a category the reader may not open as none, and as theirs for one who may",
+         %{site: site} do
+      members = category!(site, name: "Members", slug: "members", permissions: ["members:read"])
+      [post] = publish!(site, ["Locked"])
+      categorize!(post, members)
+
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+
+      assert bar_count(site, %{collection: "members"}) == []
+      assert bar_count(site, %{collection: "members", current_user: member}) == ["1 post"]
+    end
+
+    # `?tag[]=x` arrives as a list and `?tag[a]=b` as a map: neither is a tag, so nothing is asked.
+    test "reads a category or a tag that is not text as nothing asked", %{site: site} do
+      publish!(site, ["A", "B"])
+
+      assert bar_count(site, %{collection: %{"a" => "b"}, tag: ["x"]}) == ["2 posts"]
+    end
+  end
+
   # A LIST THAT HOLDS ONE SUBJECT, which is what a category page and a sidebar block both are. The
   # narrowing is done in the query rather than by a template that renders everything and hides most
   # of it: page two of a category has to be page two of that category.
@@ -2116,6 +2209,22 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert text_of(view, ~s([data-role="blog-list-total"])) == ["3 neveshte"]
       assert text_of(view, ~s([data-role="blog-list-sort"])) == ["Tazetarin"]
       assert text_of(view, ~s([data-role="blog-list-showing"])) == ["Namayesh 1–2 az 3"]
+    end
+
+    test "its total says 1 post for one, in the words the page gives", %{site: site} do
+      publish!(site, ["A"])
+
+      {:ok, plain, _html} = mount_page(site, "blog-post-list", %{show_total: true})
+      assert text_of(plain, ~s([data-role="blog-list-total"])) == ["1 post"]
+
+      {:ok, worded, _html} =
+        mount_page(site, "blog-post-list", %{
+          show_total: true,
+          post_text: "neveshte-yek",
+          total_text: "neveshte"
+        })
+
+      assert text_of(worded, ~s([data-role="blog-list-total"])) == ["1 neveshte-yek"]
     end
   end
 
@@ -2443,6 +2552,29 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       {:ok, view, _html} = mount_page(site, "blog-category-list", %{show_count: true})
 
       assert text_of(view, ~s([data-role="blog-category-count"])) == ["2"]
+    end
+
+    # "1 posts" IS NOT ENGLISH. A card says 1 post, and any other number in the plural, in the words
+    # the page gives for each.
+    test "counts a card's posts in the singular for one", %{site: site} do
+      filed!(site, "Solo", "solo")
+
+      pair = category!(site, name: "Pair", slug: "pair")
+      for post <- publish!(site, ["P1", "P2"]), do: categorize!(post, pair)
+
+      cards = %{variant: "cards", show_count: true}
+      {:ok, view, _html} = mount_page(site, "blog-category-list", cards)
+
+      assert text_of(view, ~s([data-role="blog-category-count"])) == ["2 posts", "1 post"]
+
+      {:ok, worded, _html} =
+        mount_page(
+          site,
+          "blog-category-list",
+          Map.merge(cards, %{post_text: "maqale", posts_text: "maqale-ha"})
+        )
+
+      assert text_of(worded, ~s([data-role="blog-category-count"])) == ["2 maqale-ha", "1 maqale"]
     end
 
     test "leaves out the categories holding nothing published", %{site: site} do
