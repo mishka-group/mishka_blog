@@ -27,7 +27,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
   and the record below is the one there, with what that read loaded. A record the visitor's read
   left out is answered with its lock alone, read here as the system, so the address answers them
   404 and nothing else of it reaches them. An editor's preview and a share card hand no rows, and
-  the record is read here, once, as the system.
+  the record is read here, once: a post, a category or a tag as the system, and a blogger or a
+  team, which carry no lock of their own, as a guest, through the public action.
 
   ## A post, `"blog:post"`
 

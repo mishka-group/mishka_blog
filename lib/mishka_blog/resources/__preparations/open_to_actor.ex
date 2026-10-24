@@ -91,15 +91,10 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   defp reader(%{authorize?: false}), do: :system
   defp reader(%{actor: actor}), do: {:reader, actor}
 
-  # A blogger or a team opens with no lock of its own; only the page that serves it can close it. What
-  # a blogger's posts are counted as is the reader's, as a category's and a tag's are.
-  defp keep(query, kind, reader) when kind in [:blogger, :team] do
-    query
-    |> narrowed(kind, reader)
-    |> on_site(fn query, site_id -> counted(query, kind, site_id, reader) end)
-  end
-
-  defp keep(%{action: %{get?: true}} = query, kind, reader) do
+  # A blogger or a team opens with no lock of its own; only the page that serves it can close it, so
+  # one asked for alone is narrowed as a list is. What a blogger's posts are counted as is the
+  # reader's, as a category's and a tag's are.
+  defp keep(%{action: %{get?: true}} = query, kind, reader) when kind not in [:blogger, :team] do
     query
     |> Ash.Query.calculate(
       :open_to_reader?,
