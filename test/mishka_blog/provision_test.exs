@@ -914,6 +914,58 @@ defmodule MishkaBlog.ProvisionTest do
   # only way a test can age one: its rows put back to what an older bundle wrote and stamped as
   # though that bundle had written them (the same state `MishkaBlogWeb.Test.KitUpgradeButtonTest`
   # makes), so only the version is behind and nobody here touched them.
+  # A SITE THIS DESIGN SET UP BEFORE ITS BLOCKS WERE HANDED THE PAGE'S ROWS. Its pages hold the text
+  # this release writes, less the `page_source` line on each block that takes the page's rows
+  # (`MishkaBlog.PageSource`), on the site's `site-main`: the state a site set up from this branch
+  # before the line was added is in.
+  describe "a site set up before the blocks were handed the page's rows" do
+    setup %{site: site} do
+      layout = create_layout!(site_id: site.id, name: "site-main")
+      Provision.ensure!(site)
+
+      for path <- Provision.page_paths() do
+        edit_page!(site, path, without_source(page(site, path).template))
+      end
+
+      {:ok, layout: layout}
+    end
+
+    test "hands the rows to the blocks of every page nobody edited, and only those", %{site: site} do
+      shipped = shipped(site)
+      takes = for {path, text} <- shipped, text =~ "page_source=", do: path
+
+      assert Enum.sort(takes) ==
+               Enum.sort([
+                 "/:lang/blog",
+                 Provision.item_paths().post,
+                 Provision.item_paths().category,
+                 Provision.item_paths().tag,
+                 Provision.item_paths().author,
+                 Provision.item_paths().team
+               ])
+
+      edited = Provision.item_paths().tag
+      edit_page!(site, edited, page(site, edited).template <> "\n<p>My own footnote.</p>")
+
+      report = Provision.ensure!(site)
+
+      assert Enum.sort(report.upgraded_pages) == Enum.sort(takes -- [edited])
+
+      for path <- takes -- [edited] do
+        assert page(site, path).template == shipped[path], "#{path} did not take the rows"
+      end
+
+      # AN EDITED PAGE KEEPS ITS TEXT, AND ITS BLOCKS READ FOR THEMSELVES, as they did.
+      refute page(site, edited).template =~ "page_source="
+
+      # AND A PAGE WHOSE BLOCKS TAKE NO ROWS IS NOT WRITTEN AGAIN FOR NOTHING.
+      assert Provision.ensure!(site).upgraded_pages == []
+    end
+  end
+
+  defp without_source(template),
+    do: String.replace(template, ~r/\n *page_source=\{assigns\[:page_source\]\}/, "")
+
   describe "the kit components of a site set up from an older bundle" do
     setup %{site: site} do
       Provision.ensure!(site)

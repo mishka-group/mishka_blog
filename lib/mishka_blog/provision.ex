@@ -370,7 +370,25 @@ defmodule MishkaBlog.Provision do
 
   # The template this release writes for a page, when the page holds what the earlier one wrote.
   defp shipped_for(%{template: template}, shipped),
-    do: Map.get(shipped, Earlier.page_of(template))
+    do: Map.get(shipped, Earlier.page_of(template) || before_source(template, shipped))
+
+  # THE DESIGN'S OWN TEXT BEFORE ITS BLOCKS WERE HANDED THE PAGE'S ROWS: what this module writes now
+  # without the `page_source` line on each block (`MishkaBlog.PageSource`). A page that holds exactly
+  # that was written by this provision and edited by nobody, and takes the line; one edited anywhere
+  # keeps reading for itself, as it did. A page whose blocks take no rows has no older text.
+  defp before_source(template, shipped) when is_binary(template) do
+    stored = String.trim(template)
+
+    Enum.find_value(shipped, fn {path, text} ->
+      before = without_source(text)
+      before != text and String.trim(before) == stored and path
+    end)
+  end
+
+  defp before_source(_template, _shipped), do: nil
+
+  defp without_source(template),
+    do: String.replace(template, ~r/\n *page_source=\{assigns\[:page_source\]\}/, "")
 
   defp section_pages(site_id, layout_id) do
     Page
@@ -610,6 +628,11 @@ defmodule MishkaBlog.Provision do
   # same `:slug` capture, and a block that resolved it by slug alone published the English article's
   # conversation at /fa/blog/<its slug> under a detail block correctly saying that post is not here —
   # and offered a signed-in reader a box that writes onto the English post.
+  #
+  # `page_source` IS WHAT THE PAGE READ FOR THIS ADDRESS, once, as the visitor
+  # (`MishkaBlog.PageSource`): the post with its categories, tags, authors and count of comments. The
+  # three blocks take the post from it rather than each reading it again, and the same is true of
+  # every page below whose blocks are handed it.
   defp blog_post(site) do
     """
     <div class="flex w-full flex-col items-center pt-12">
@@ -618,6 +641,7 @@ defmodule MishkaBlog.Provision do
         site="#{site}"
         id="blog-post"
         current_user={assigns[:current_user]}
+        page_source={assigns[:page_source]}
         params={@query_params}
         post_param="slug"
         language={@page.language}
@@ -637,6 +661,7 @@ defmodule MishkaBlog.Provision do
           post_param="slug"
           language={@page.language}
           current_user={assigns[:current_user]}
+          page_source={assigns[:page_source]}
         />
       </div>
 
@@ -646,6 +671,7 @@ defmodule MishkaBlog.Provision do
           site="#{site}"
           id="blog-post-related"
           current_user={assigns[:current_user]}
+          page_source={assigns[:page_source]}
           params={@query_params}
           post_param="slug"
           heading={t("Keep reading")}
@@ -724,6 +750,7 @@ defmodule MishkaBlog.Provision do
         site="#{site}"
         id="blog-author"
         current_user={assigns[:current_user]}
+        page_source={assigns[:page_source]}
         slug={@query_params["slug"]}
         back_href={#{live_url(@people)}}
         back_text={t("People")}
@@ -753,6 +780,7 @@ defmodule MishkaBlog.Provision do
         site="#{site}"
         id="blog-team"
         current_user={assigns[:current_user]}
+        page_source={assigns[:page_source]}
         slug={@query_params["slug"]}
         back_href={#{live_url(@people)}}
         back_text={t("People")}
@@ -904,6 +932,13 @@ defmodule MishkaBlog.Provision do
   # that no post is on the page twice.
   @featured_strip 3
 
+  @doc """
+  How many posts the featured strip on the blog's front page draws, and the list under it leaves
+  out: what `MishkaBlog.PageSource` reads for the two of them, once.
+  """
+  @spec featured_strip() :: pos_integer()
+  def featured_strip, do: @featured_strip
+
   # THE STRIP IS ITS OWN BLOCK, NOT THE LIST WITH A SWITCH. Both read posts and they read different
   # ones, so on this page they are two queries either way — and as two blocks they are also two
   # loads: whichever comes back first is drawn, and a slow read of one leaves the other standing.
@@ -942,6 +977,7 @@ defmodule MishkaBlog.Provision do
         site="#{site}"
         id="blog-search"
         current_user={assigns[:current_user]}
+        page_source={assigns[:page_source]}
         variant="bar"
         placeholder={t("Search posts…")}
         post_text={t("post")}
@@ -959,6 +995,7 @@ defmodule MishkaBlog.Provision do
       site="#{site}"
       id="blog-posts"
       current_user={assigns[:current_user]}
+      page_source={assigns[:page_source]}
     #{list_attributes(filter)}
       per_page={9}
       show_sort={true}
@@ -1016,6 +1053,7 @@ defmodule MishkaBlog.Provision do
       site="#{site}"
       id="blog-featured"
       current_user={assigns[:current_user]}
+      page_source={assigns[:page_source]}
       heading={""}
       limit={#{@featured_strip}}
       spaced={true}

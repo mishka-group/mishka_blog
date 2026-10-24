@@ -247,7 +247,7 @@ defmodule MishkaBlog.Plugins.PageFrameTest do
                ["en", "fa"]
     end
 
-    test "always offer the edition being read, locked or not", %{site: site} do
+    test "offer the edition being read only to a reader it opens for", %{site: site} do
       {:ok, _} = Settings.put("site.languages", ["en", "fa", "ar", "tr", "de"], site_id: site.id)
       locked = published!(site, "en", "locked-post", "Locked", nil, permissions: ["members:read"])
 
@@ -263,9 +263,16 @@ defmodule MishkaBlog.Plugins.PageFrameTest do
       member = create_user_with_permissions!(["members:read"], site_id: site.id)
       staff = create_user_with_permissions!(["members:read", "staff:read"], site_id: site.id)
 
-      # a guest is on the page the lock closes only through the page's gate: the page's own record
-      # is still in its frame, and the one edition a guest can read beside it
-      assert languages(frame(site, @post_path, %{"slug" => "locked-post"})) == ["en", "ar"]
+      # THE EDITION BEING READ IS READ AS THE VISITOR TOO. A guest on the locked post is answered 404
+      # by its page; its frame meanwhile names no edition of it, its own title least of all, and
+      # not the open one beside it either: a record the visitor may not read is offered in no
+      # language.
+      guest = frame(site, @post_path, %{"slug" => "locked-post"})
+      assert guest.translations == []
+      refute inspect(guest) =~ "Locked"
+
+      outsider = create_user!(site_id: site.id)
+      assert frame(site, @post_path, %{"slug" => "locked-post"}, as: outsider).translations == []
 
       reading = frame(site, @post_path, %{"slug" => "locked-post"}, as: member)
       assert languages(reading) == ["en", "fa", "ar", "de"]

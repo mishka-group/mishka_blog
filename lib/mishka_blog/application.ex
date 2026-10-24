@@ -78,10 +78,13 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.ContentComponents
   ]
 
-  # Hands the `site-main` layout the blog's bar and the languages of the record a blog page shows
-  # (a `runtime:page:frame` plugin), and keeps the words that bar looks up from "Remove unused" (a
+  # Reads the rows a blog page shows once for its head, its frame and its blocks (a
+  # `runtime:page:source` plugin, `MishkaCmsCore.Runtime.PageSource`), hands the `site-main` layout
+  # the blog's bar and the languages of the record a blog page shows (a `runtime:page:frame`
+  # plugin), and keeps the words that bar looks up from "Remove unused" (a
   # `runtime:translations:used_keys` plugin).
   @frame_plugins [
+    MishkaBlog.Plugins.PageSource,
     MishkaBlog.Plugins.PageFrame,
     MishkaBlog.Plugins.TranslationKeys
   ]
