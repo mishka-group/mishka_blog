@@ -875,41 +875,14 @@ defmodule MishkaBlog.ProvisionTest do
       refute Extensions.installed?(site.id, "mishka_shop")
     end
 
-    # EVERY SITE THAT EXISTED BEFORE THERE WAS AN INSTALLER has this extension and no record of how
-    # it got there. Asking the setting alone would show all of them the installer, which is the
-    # opposite of what it is for — so a site with no record is ASKED, on this same event, and the
-    # answer is written down so it is asked once.
-    test "a site that already has the pages counts as installed, record or no record", %{
-      site: site
-    } do
-      refute Extensions.installed?(site.id, :mishka_blog)
-
-      assert {:ok, _report} = Extensions.install(site.id, "mishka_blog")
-
-      {:ok, _} = MishkaCmsCore.Settings.put("mishka_blog.installed", "", site_id: site.id)
-
-      assert Extensions.installed?(site.id, :mishka_blog),
-             "a site running the blog was told it had never been set up"
-
-      assert Extensions.installed_version(site.id, :mishka_blog) == "unknown",
-             "the answer was not written down, so it would be asked again on every render"
-    end
-
-    # ANY OF THE PAGES IS ENOUGH, and a page of another site is not this site's.
-    test "a site holding one of the pages counts as installed, and one holding none does not", %{
-      site: site
-    } do
-      refute Extensions.installed?(site.id, :mishka_blog)
-
-      other = create_site!(active: true)
-      create_page!(site_id: other.id, path: hd(Provision.page_paths()), active: true)
-
-      refute Extensions.installed?(site.id, :mishka_blog),
-             "a page of another site made this site look set up"
-
+    # ONLY THE RECORD SAYS SO. Core asks nothing of a site carrying no record of an install, so a site
+    # holding the blog's pages without one reads as not installed, and asking writes nothing.
+    test "a site holding the pages but no record of an install is not installed", %{site: site} do
       create_page!(site_id: site.id, path: hd(Provision.page_paths()), active: true)
 
-      assert Extensions.installed?(site.id, :mishka_blog)
+      refute Extensions.installed?(site.id, :mishka_blog)
+      assert Extensions.installed_version(site.id, :mishka_blog) == nil
+      assert components(site) == []
     end
 
     # THE SCREEN GETS A FIXED MESSAGE, never the exception's own text; the log has the detail. An
@@ -1104,26 +1077,6 @@ defmodule MishkaBlog.ProvisionTest do
     |> Ash.read!(authorize?: false, page: [limit: 100])
     |> Map.fetch!(:results)
     |> Enum.filter(&(&1.path in paths))
-  end
-
-  # A SITE FOUND ALREADY SET UP is recorded without a run, so the names a run would have created
-  # come from the answer to "is it already here?".
-  describe "a site found already set up" do
-    test "gets the blog's permission names it is missing", %{site: site} do
-      assert {:ok, _report} = Extensions.install(site.id, "mishka_blog")
-      names = Enum.map(Provision.manifest().permissions, &elem(&1, 0))
-
-      MishkaCmsCore.Accounts.Permission
-      |> Ash.Query.filter(name in ^names)
-      |> Ash.read!(authorize?: false, page: false)
-      |> Enum.each(&Ash.destroy!(&1, authorize?: false))
-
-      {:ok, _} = MishkaCmsCore.Settings.put("mishka_blog.installed", "", site_id: site.id)
-      assert stored_permissions(names) == []
-
-      assert Extensions.installed?(site.id, :mishka_blog)
-      assert Enum.sort(stored_permissions(names)) == Enum.sort(names)
-    end
   end
 
   defp stored_permissions(names) do
