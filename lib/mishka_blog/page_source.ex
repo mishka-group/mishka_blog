@@ -24,12 +24,19 @@ defmodule MishkaBlog.PageSource do
       rating, how many approved comments it has, the categories it is filed under, its tags, its
       authors with their teams, and its other editions;
     * a category (`"blog:category"`) and a tag (`"blog:tag"`) — with what it opens with, how many of
-      its posts its own page lists (`listed_post_count`), and its other editions;
+      its posts its own page lists (`listed_post_count`), and its other editions; then the page of
+      those posts its list draws first, with what each card is drawn from;
     * a blogger (`"blog:author"`) — with their teams; a team (`"blog:team"`) — with its members and
       how many posts each has;
     * the blog's front page (`"blog:home"`, the Posts place, `MishkaBlog.Provision.places/0`) — the
-      featured posts its strip draws, which its list leaves out, with what each card is drawn from,
-      and how many posts there are in its language, which its search box says.
+      featured posts its strip draws, which its list leaves out, and the page of the other posts its
+      list draws first, each with what its card is drawn from, and how many posts there are in its
+      language, which its search box says.
+
+  The page of a list is the page the address names (`?page=`), of `MishkaBlog.Provision.list_page/0`
+  posts, newest first, as the provisioned list reads it; nothing is read for it while the reader's
+  search (`?q=`), or on the front page a tag (`?tag=`), narrows the list. The strip's posts and the
+  list's are drawn from what one read loads for both of them.
 
   A post's, a category's and a tag's other editions are the rows of its group of translations,
   joined by `language_group_id` (the master's own id, which the master itself may not carry), each
@@ -67,7 +74,10 @@ defmodule MishkaBlog.PageSource do
     * `site_id`, `visitor`, `language`, `kind`, `slug` — whom and for what it was read;
     * `record` — the row, every field a block draws of it and the relationships above loaded;
     * `featured` — on the front page, `%{limit: limit, rows: posts}`, the newest featured posts;
-    * `total` — on the front page, how many posts the visitor may open in its language.
+    * `total` — on the front page, how many posts the visitor may open in its language;
+    * `listed` — on the front page, a category's and a tag's, `%{per_page: n, page: p, rows: posts}`,
+      the page of posts the list draws, newest first: of the category or the tag, and on the front
+      page of the posts other than `featured`'s.
 
   ## Another page of the same record
 
@@ -76,6 +86,7 @@ defmodule MishkaBlog.PageSource do
   """
 
   require Ash.Query
+  require Ash.Sort
 
   alias MishkaBlog.{Blogger, BlogPost, Collection, Provision, Tag, Team}
   alias MishkaCmsCore.Runtime.Languages
@@ -91,6 +102,7 @@ defmodule MishkaBlog.PageSource do
     :record,
     :featured,
     :total,
+    :listed,
     rows_of: "mishka_blog"
   ]
 
@@ -103,7 +115,8 @@ defmodule MishkaBlog.PageSource do
           slug: String.t() | nil,
           record: struct() | nil,
           featured: %{limit: pos_integer(), rows: [struct()]} | nil,
-          total: non_neg_integer() | nil
+          total: non_neg_integer() | nil,
+          listed: %{per_page: pos_integer(), page: pos_integer(), rows: [struct()]} | nil
         }
 
   @records ~w(blog:post blog:category blog:tag blog:author blog:team)
@@ -260,8 +273,13 @@ defmodule MishkaBlog.PageSource do
 
   defp rows(%{kind: "blog:home"} = source, request) do
     case held(request, source) do
-      %__MODULE__{featured: %{} = featured, total: total} when is_integer(total) ->
+      %__MODULE__{featured: %{} = featured, total: total} = held when is_integer(total) ->
         %{source | featured: featured, total: total}
+        |> listed(
+          request,
+          held,
+          &list_query(&1, request, Enum.map(featured.rows, fn row -> row.id end))
+        )
 
       _not_held ->
         front(source, request)
@@ -270,8 +288,12 @@ defmodule MishkaBlog.PageSource do
 
   defp rows(source, request) do
     case held(request, source) do
-      %__MODULE__{record: record} when record != nil -> %{source | record: record}
-      _not_held -> %{source | record: record(source, request)}
+      %__MODULE__{record: record} = held when record != nil ->
+        listed(%{source | record: record}, request, held, &list_query(&1, request, []))
+
+      _not_held ->
+        source = %{source | record: record(source, request)}
+        listed(source, request, nil, &list_query(&1, request, []))
     end
   end
 
@@ -432,16 +454,136 @@ defmodule MishkaBlog.PageSource do
   end
 
   # ---------------------------------------------------------------------------
+  # The page of a list
+  # ---------------------------------------------------------------------------
+
+  # THE PAGE OF POSTS A LIST DRAWS FIRST, on a category's and a tag's page and, under its strip, on
+  # the front page: the one the address before read for the same page, else read here with what each
+  # card is drawn from. Nothing for a record the visitor may not open, and nothing while the reader's
+  # own search or tag narrows the list, which then reads for itself.
+  defp listed(%{kind: kind} = source, _request, _held, _query)
+       when kind not in ["blog:home", "blog:category", "blog:tag"],
+       do: source
+
+  defp listed(%{kind: kind, record: nil} = source, _request, _held, _query)
+       when kind != "blog:home",
+       do: source
+
+  defp listed(source, request, held, query) do
+    page = asked_page(request)
+
+    cond do
+      not plain?(source, request) ->
+        source
+
+      match?(%__MODULE__{listed: %{page: ^page}}, held) ->
+        %{source | listed: held.listed}
+
+      true ->
+        source
+        |> query.()
+        |> Ash.Query.sort(published_at: :desc, id: :asc)
+        |> Ash.Query.select(@card_fields)
+        |> Ash.Query.load(card_loads())
+        |> Ash.read(as(source, request) ++ [page: paged(page)])
+        |> case do
+          {:ok, %{results: rows}} ->
+            %{source | listed: %{per_page: Provision.list_page(), page: page, rows: rows}}
+
+          _unreadable ->
+            source
+        end
+    end
+  end
+
+  # The posts the list holds, as `blog-post-list` narrows them: the visitor's in the page's language,
+  # filed under the category or carrying the tag the page is of, or on the front page every one but
+  # the strip's.
+  defp list_query(%{kind: kind, slug: slug, language: language} = source, request, left_out) do
+    query =
+      BlogPost
+      |> Ash.Query.for_read(:public_list, %{}, as(source, request))
+      |> in_language(language)
+
+    query =
+      case kind do
+        "blog:category" -> in_category(query, slug, language)
+        "blog:tag" -> with_tag(query, slug, language)
+        "blog:home" -> query
+      end
+
+    case left_out do
+      [] -> query
+      ids -> Ash.Query.filter(query, id not in ^ids)
+    end
+  end
+
+  defp in_category(query, slug, language) when is_binary(language) and language != "",
+    do:
+      Ash.Query.filter(
+        query,
+        exists(collections, slug == ^slug and status == :active and language == ^language)
+      )
+
+  defp in_category(query, slug, _no_language),
+    do: Ash.Query.filter(query, exists(collections, slug == ^slug and status == :active))
+
+  defp with_tag(query, slug, language) when is_binary(language) and language != "",
+    do: Ash.Query.filter(query, exists(tags, slug == ^slug and language == ^language))
+
+  defp with_tag(query, slug, _no_language),
+    do: Ash.Query.filter(query, exists(tags, slug == ^slug))
+
+  # NOTHING THE READER ASKED NARROWS THE LIST: no search, and on the front page no tag. A value that
+  # is not text is nothing asked, as the list reads it.
+  defp plain?(%{kind: kind}, request) do
+    params = Map.get(request, :params) || %{}
+    asked = if kind == "blog:home", do: ["q", "tag"], else: ["q"]
+
+    Enum.all?(asked, fn key ->
+      case Map.get(params, key) do
+        words when is_binary(words) -> String.trim(words) == ""
+        _nothing_asked -> true
+      end
+    end)
+  end
+
+  # The page the address names, as the list reads its `page` key; the first when it names none.
+  defp asked_page(request) do
+    case request |> Map.get(:params, %{}) |> Kernel.||(%{}) |> Map.get("page") do
+      page when is_integer(page) and page > 0 ->
+        page
+
+      page when is_binary(page) ->
+        case Integer.parse(page) do
+          {number, _rest} when number > 0 -> number
+          _not_a_page -> 1
+        end
+
+      _none ->
+        1
+    end
+  end
+
+  defp paged(page) do
+    per_page = Provision.list_page()
+    [limit: per_page, offset: (page - 1) * per_page, count: false]
+  end
+
+  # ---------------------------------------------------------------------------
   # The front page
   # ---------------------------------------------------------------------------
 
-  # THE STRIP'S POSTS AND THE COUNT OF ALL OF THEM, IN ONE READ: the posts the visitor may open in the
-  # page's language, featured first and newest first, as many as the strip draws, counted beside the
-  # page Ash reads. The featured ones among them are the newest featured posts — the strip's, which
-  # the list under it leaves out — and the count is the number the page's search box says, which
-  # the list's own total is that count less the strip's. A plain count would not do: the visitor's
-  # locks are a filter `OpenToActor` puts on the read as it runs, and a count of its own runs none
-  # of it, so it would count the posts it keeps from them.
+  # WHICH POSTS THE STRIP DRAWS AND THE COUNT OF ALL OF THEM, IN ONE READ: the posts the visitor may
+  # open in the page's language, featured first and newest first, as many as the strip draws,
+  # counted beside the page Ash reads. The featured ones among them are the newest featured posts —
+  # the strip's, which the list under it leaves out — and the count is the number the page's search
+  # box says, which the list's own total is that count less the strip's. A plain count would not do:
+  # the visitor's locks are a filter `OpenToActor` puts on the read as it runs, and a count of its
+  # own runs none of it, so it would count the posts it keeps from them.
+  #
+  # THE STRIP'S CARDS AND THE LIST'S ARE THEN READ AS ONE, so what each card is drawn from is loaded
+  # once for both (`cards/4`).
   defp front(source, request) do
     limit = Provision.featured_strip()
 
@@ -449,29 +591,103 @@ defmodule MishkaBlog.PageSource do
     |> Ash.Query.for_read(:public_list, %{}, as(source, request))
     |> in_language(source.language)
     |> Ash.Query.sort(featured: :desc_nils_last, published_at: :desc, id: :asc)
-    |> Ash.Query.select(@card_fields)
-    |> Ash.Query.load(card_loads())
+    |> Ash.Query.select([:id, :featured])
     |> Ash.read(as(source, request) ++ [page: [limit: limit, count: true]])
     |> case do
       {:ok, %{results: found, count: count}} ->
-        %{
-          source
-          | featured: %{limit: limit, rows: Enum.filter(found, &(&1.featured == true))},
-            total: count
-        }
+        strip = for %{featured: true, id: id} <- found, do: id
+
+        case cards(source, request, strip, count) do
+          {:ok, featured, listed} ->
+            %{source | featured: %{limit: limit, rows: featured}, total: count, listed: listed}
+
+          :error ->
+            source
+        end
 
       _unreadable ->
         source
     end
   end
 
+  # THE STRIP'S POSTS AND THE PAGE OF THE LIST, read as one with what their cards are drawn from, so
+  # that is loaded once for both: the strip's first, then the list's, newest first. On the list's
+  # first page that is the head of one list. On another its posts are found first, by their ids, and
+  # read with the strip's. Where the reader's search or tag narrows the list, which then reads for
+  # itself, the strip's alone are read, and there is no page of the list (`nil`). A read that fails
+  # hands the blocks nothing, and they read for themselves.
+  defp cards(source, request, strip, count) do
+    page = asked_page(request)
+    plain? = plain?(source, request)
+
+    asked =
+      cond do
+        count == 0 ->
+          nil
+
+        not plain? ->
+          {strip, length(strip)}
+
+        page == 1 ->
+          {:head, length(strip) + Provision.list_page()}
+
+        true ->
+          with {:ok, ids} <- listed_ids(source, request, strip, page),
+               do: {strip ++ ids, length(strip) + length(ids)}
+      end
+
+    with {:ok, rows} <- card_rows(source, request, strip, asked) do
+      {featured, others} = Enum.split_with(rows, &(&1.id in strip))
+      listed = if plain?, do: %{per_page: Provision.list_page(), page: page, rows: others}
+      {:ok, featured, listed}
+    end
+  end
+
+  defp card_rows(_source, _request, _strip, :error), do: :error
+  defp card_rows(_source, _request, _strip, nil), do: {:ok, []}
+  defp card_rows(_source, _request, _strip, {[], _none}), do: {:ok, []}
+
+  defp card_rows(source, request, strip, {asked, window}) do
+    source
+    |> list_query(request, [])
+    |> only(asked)
+    |> Ash.Query.sort([
+      {Ash.Sort.expr_sort(id in ^strip, :boolean), :desc},
+      published_at: :desc,
+      id: :asc
+    ])
+    |> Ash.Query.select(@card_fields)
+    |> Ash.Query.load(card_loads())
+    |> Ash.read(as(source, request) ++ [page: [limit: window, count: false]])
+    |> case do
+      {:ok, %{results: rows}} -> {:ok, rows}
+      _unreadable -> :error
+    end
+  end
+
+  defp only(query, :head), do: query
+  defp only(query, ids), do: Ash.Query.filter(query, id in ^ids)
+
+  # The ids of the list's posts on `page`, other than the strip's.
+  defp listed_ids(source, request, strip, page) do
+    source
+    |> list_query(request, strip)
+    |> Ash.Query.sort(published_at: :desc, id: :asc)
+    |> Ash.Query.select([:id])
+    |> Ash.read(as(source, request) ++ [page: paged(page)])
+    |> case do
+      {:ok, %{results: rows}} -> {:ok, Enum.map(rows, & &1.id)}
+      _unreadable -> :error
+    end
+  end
+
+  # WHAT A CARD IS DRAWN FROM: what the post opens with, which puts the lock on it; the name of the
+  # first category it is filed under, the word before its date, in the statement that reads the
+  # posts; and its people.
   defp card_loads do
     [
       :effective_permissions,
-      collections:
-        Collection
-        |> Ash.Query.select([:id, :name, :slug, :language])
-        |> Ash.Query.sort(display_order: :asc, name: :asc),
+      :first_category_name,
       bloggers:
         Blogger
         |> Ash.Query.select([:id, :display_name, :slug, :avatar_url])

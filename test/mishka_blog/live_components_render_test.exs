@@ -1233,11 +1233,11 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           render_async(view, @async)
         end)
 
-      # One load reads the page of rows and its count, nothing being locked on the site, and the two
-      # reads that bring the people who wrote them and the categories they are filed under, which
-      # the cards draw: four per render, two renders.
-      assert Enum.count(asked, &String.contains?(&1, "mishka_blog_posts")) == 8,
-             "a load is the page of rows, its count, its authors and its categories, once for each render"
+      # One load reads the page of rows — with the first category each is filed under, in the same
+      # statement — and its count, nothing being locked on the site, and the read that brings the
+      # people who wrote them, which the cards draw: three per render, two renders.
+      assert Enum.count(asked, &String.contains?(&1, "mishka_blog_posts")) == 6,
+             "a load is the page of rows with their categories, its count and its authors, once for each render"
     end
 
     # EVERY BLOCK ON THE PAGE ANSWERS IN THE SAME FIRST PAINT.

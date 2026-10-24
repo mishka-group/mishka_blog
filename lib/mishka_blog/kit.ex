@@ -107,9 +107,10 @@ defmodule MishkaBlog.Kit do
       page than one that takes as long as the article does, and a crawler that is served the
       skeleton is served nothing.
     * `blog-related-posts` is three cards under the article, and a read of the same kind as the
-      article's own: the post the URL names, its categories and the newest posts of them. It reads
-      again only when what it is read for changes, because the page re-renders it far more often
-      than anybody asks for different reading.
+      article's own: the post the URL names, its categories and, in one read, the newest posts of
+      them followed by the newest of the rest. It reads again only when what it is read for
+      changes, because the page re-renders it far more often than anybody asks for different
+      reading.
     * `blog-post-search` reads nothing until the reader types. Its query is already a round trip
       the reader started, and one run in a task could land after a later one and answer the wrong
       words.

@@ -772,6 +772,16 @@ defmodule MishkaBlog.Provision do
   @spec featured_strip() :: pos_integer()
   def featured_strip, do: @featured_strip
 
+  # HOW MANY POSTS ONE PAGE OF THE LIST HOLDS on the front page, a category's and a tag's.
+  @list_page 9
+
+  @doc """
+  How many posts one page of the list holds on the blog's front page, a category's page and a
+  tag's: what `MishkaBlog.PageSource` reads of that list for its first paint, once.
+  """
+  @spec list_page() :: pos_integer()
+  def list_page, do: @list_page
+
   # THE STRIP IS ITS OWN BLOCK, NOT THE LIST WITH A SWITCH. Both read posts and they read different
   # ones, so on this page they are two queries either way — and as two blocks they are also two
   # loads: whichever comes back first is drawn, and a slow read of one leaves the other standing.
@@ -830,7 +840,7 @@ defmodule MishkaBlog.Provision do
       current_user={assigns[:current_user]}
       page_source={assigns[:page_source]}
     #{list_attributes(filter)}
-      per_page={9}
+      per_page={#{@list_page}}
       show_sort={true}
       language={@page.language}
       base={#{live_url(address, captured)}}

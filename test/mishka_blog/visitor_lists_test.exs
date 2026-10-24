@@ -235,6 +235,47 @@ defmodule MishkaBlog.VisitorListsTest do
     assert count.(Ash.Query.for_read(Blogger, :public_list, %{}, authorize?: false)) == 4
   end
 
+  # THE WORD BEFORE THE DATE ON A CARD names no category the visitor may not open: the first of the
+  # post's categories is read through the categories' public read, as the visitor.
+  test "a post's first category is the first one its visitor may open", %{
+    site: site,
+    member: member
+  } do
+    staff =
+      create_collection!(
+        site_id: site.id,
+        status: :active,
+        name: "Alpha staff",
+        display_order: 0,
+        permissions: ["staff:read"]
+      )
+
+    members =
+      create_collection!(
+        site_id: site.id,
+        status: :active,
+        name: "Zeta members",
+        display_order: 1,
+        permissions: ["members:read"]
+      )
+
+    post = post!(site, [], [staff, members])
+
+    first_category = fn opts ->
+      BlogPost
+      |> Ash.Query.for_read(:public_list, %{}, Keyword.put(opts, :tenant, site.id))
+      |> Ash.Query.filter(id == ^post.id)
+      |> Ash.Query.load(:first_category_name)
+      |> Ash.read!(page: [limit: 1])
+      |> rows()
+      |> Enum.map(& &1.first_category_name)
+    end
+
+    assert first_category.(actor: member) == ["Zeta members"]
+    assert first_category.(actor: nil) == []
+    assert first_category.(authorize?: false) == ["Alpha staff"]
+  end
+
   test "a read of the system's sees every record", %{site: site, posts: posts} do
     all =
       BlogPost

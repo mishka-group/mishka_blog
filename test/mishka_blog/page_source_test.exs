@@ -98,6 +98,23 @@ defmodule MishkaBlog.PageSourceTest do
     SiteLayout.accept(answered, given)
   end
 
+  defp front_page(site, visitor, params) do
+    {sample, page} =
+      Enum.find_value(Provision.sample_pages(site), fn sample ->
+        sample.path == "/:lang/blog" &&
+          {sample, %{path: sample.path, section: sample.section, language: "en", title: "Blog"}}
+      end)
+
+    PageSource.read(
+      CorePageSource.given(page,
+        site_id: site.id,
+        current_user: visitor,
+        extra: sample.extra,
+        params: Map.put(params, "lang", "en")
+      )
+    )
+  end
+
   defp post!(site, slug, title, overrides \\ []) do
     create_blog_post!(
       [
@@ -277,6 +294,36 @@ defmodule MishkaBlog.PageSourceTest do
       assert source(site, :category, "news", nil).record.listed_post_count == 2
       assert source(site, :category, "news", member).record.listed_post_count == 3
     end
+
+    # THE PAGE OF POSTS ITS LIST DRAWS FIRST is read with the category, as the same visitor, with
+    # what each card is drawn from, so the list takes it rather than reading it again.
+    test "carries the first page of its list, of the posts the reader may open, as cards", %{
+      site: site,
+      member: member
+    } do
+      news = category!(site, "news", [])
+      other = category!(site, "other", [])
+
+      for {slug, permissions, category} <- [
+            {"one", [], news},
+            {"two", [], news},
+            {"three", @lock, news},
+            {"elsewhere", [], other}
+          ] do
+        post = post!(site, slug, slug, permissions: permissions)
+        create_post_collection!(post_id: post.id, collection_id: category.id)
+      end
+
+      guest = source(site, :category, "news", nil).listed
+      assert %{per_page: per_page, page: 1, rows: rows} = guest
+      assert per_page == Provision.list_page()
+      assert rows |> Enum.map(& &1.slug) |> Enum.sort() == ["one", "two"]
+      assert Enum.all?(rows, &(&1.first_category_name == "News"))
+      assert Enum.all?(rows, &(&1.effective_permissions == []))
+
+      held = source(site, :category, "news", member).listed.rows
+      assert held |> Enum.map(& &1.slug) |> Enum.sort() == ["one", "three", "two"]
+    end
   end
 
   describe "the blog's front page" do
@@ -313,6 +360,52 @@ defmodule MishkaBlog.PageSourceTest do
 
       assert Enum.sort(Enum.map(reader.featured.rows, & &1.slug)) == [
                "featured-locked",
+               "featured-open"
+             ]
+    end
+
+    # THE LIST UNDER THE STRIP is read with it: the page of the posts other than the strip's, each
+    # card with its first category and its people, loaded once for the strip's cards and the list's.
+    test "carries the first page of the list under the strip, without the strip's posts", %{
+      site: site,
+      member: member
+    } do
+      news = category!(site, "news", [])
+
+      for {slug, overrides} <- [
+            {"plain", []},
+            {"another", []},
+            {"featured-open", [featured: true]},
+            {"featured-locked", [featured: true, permissions: @lock]}
+          ] do
+        post = post!(site, slug, slug, overrides)
+        create_post_collection!(post_id: post.id, collection_id: news.id)
+      end
+
+      read = fn visitor, params -> front_page(site, visitor, params) end
+
+      guest = read.(nil, %{})
+      assert Enum.map(guest.featured.rows, & &1.slug) == ["featured-open"]
+      assert %{page: 1, rows: listed} = guest.listed
+      assert listed |> Enum.map(& &1.slug) |> Enum.sort() == ["another", "plain"]
+
+      for row <- guest.featured.rows ++ listed, do: assert(row.first_category_name == "News")
+
+      reader = read.(member, %{})
+      assert reader.listed.rows |> Enum.map(& &1.slug) |> Enum.sort() == ["another", "plain"]
+
+      # A SEARCH OR A TAG NARROWS THE LIST, which then reads for itself: no page of it is read here.
+      assert read.(nil, %{"q" => "plain"}).listed == nil
+      assert read.(nil, %{"tag" => "elixir"}).listed == nil
+
+      assert read.(nil, %{"q" => "plain"}).featured.rows |> Enum.map(& &1.slug) == [
+               "featured-open"
+             ]
+
+      # Another page of the list is read beside the strip's posts.
+      assert %{page: 2, rows: []} = read.(nil, %{"page" => "2"}).listed
+
+      assert read.(nil, %{"page" => "2"}).featured.rows |> Enum.map(& &1.slug) == [
                "featured-open"
              ]
     end
