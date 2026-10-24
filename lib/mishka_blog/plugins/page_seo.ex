@@ -78,16 +78,17 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   The blogger the `slug` capture names: their name, their bio as plain text, their avatar, a
   `twitter:creator` with their X account when they have one, a
-  `ProfilePage` whose `mainEntity` is the `Person` — with `sameAs` their social links and
-  `knowsAbout` their expertise — and a `BreadcrumbList`, Home → Blog → the blogger. `vars` —
+  `ProfilePage` in the language of the page whose `mainEntity` is the `Person` — with `sameAs`
+  their social links and `knowsAbout` their expertise — and a `BreadcrumbList`, Home → Blog → the
+  blogger. `vars` —
   `author.name`, `author.bio`, `author.image`, `author.url`. Its share card says "Author" above the
   name, with their photo and their teams. A blogger is the same row in every language, so the slug
   alone names them.
 
   ## A team, `"blog:team"`
 
-  The active team the `slug` capture names: its name, description and avatar, a `ProfilePage`
-  whose `mainEntity` is the `Organization` with its members as `Person`s, and a `BreadcrumbList`,
+  The active team the `slug` capture names: its name, description and avatar, a `ProfilePage` in
+  the language of the page whose `mainEntity` is the `Organization` with its members as `Person`s, and a `BreadcrumbList`,
   Home → Blog → the team. `vars` — `team.name`, `team.description`, `team.url`. Its share card
   says "Team" above the name, with the members' photos and how many they are.
 
@@ -535,6 +536,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         "@context" => "https://schema.org",
         "@type" => "ProfilePage",
         "url" => seo.url,
+        "inLanguage" => seo.language,
         "mainEntity" => person
       })
 
@@ -584,6 +586,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         "@context" => "https://schema.org",
         "@type" => "ProfilePage",
         "url" => seo.url,
+        "inLanguage" => seo.language,
         "mainEntity" => organization
       })
 
