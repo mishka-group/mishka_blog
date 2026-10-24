@@ -560,6 +560,33 @@ defmodule MishkaBlog.Plugins.PageFrameTest do
       end
     end
 
+    # THE DESIGN'S OWN RULE, read off Blog.dc.html: it has no page of a category or of a tag, only its
+    # Posts screen narrowed to one (`go('index', {cat})` and `go('index', {tag})`), and its bar marks
+    # the screen (`activeKey`). Opening a category from Categories, or a tag from Tags, lands on Posts
+    # and leaves Categories and Tags unmarked.
+    test "marks Posts, not Categories or Tags, on a category's page and on a tag's", %{site: site} do
+      paths = Provision.item_paths()
+
+      for path <- [paths.category, paths.tag] do
+        bar = frame(site, path, %{"slug" => "anything"}).section_bar
+
+        assert Enum.map(bar.links, &{&1.label, &1.current}) == [
+                 {"Posts", true},
+                 {"Categories", false},
+                 {"Tags", false},
+                 {"People", false}
+               ]
+
+        html = rendered_bar(bar)
+
+        assert html
+               |> LazyHTML.from_fragment()
+               |> LazyHTML.query(~s([data-role="site-section-links"] a[aria-current="page"]))
+               |> LazyHTML.text()
+               |> String.trim() == "Posts"
+      end
+    end
+
     test "is on every page the blog writes, and only on the blog's section", %{site: site} do
       for path <- Provision.page_paths() do
         assert %{links: [_, _, _, _]} = frame(site, path, %{"slug" => "anything"}).section_bar

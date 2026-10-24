@@ -19,9 +19,12 @@ defmodule MishkaBlog.Plugins.PageFrame do
   The blog's name in the home design's italic serif, leading to its front page, and its four places
   as the design draws them: Posts, Categories, Tags and People (`MishkaBlog.Provision.places/0`).
   The one the reader is in is marked: a post, a category and a tag are in Posts, a blogger and a team
-  are in People, as the design has them, and every other page is in the place whose page it is. The
-  search box is the list pages' own, beside their title, as the design draws it; the bar has no
-  trailing part, and nothing that needs a class in the site's stylesheet.
+  are in People, and every other page is in the place whose page it is. That is the design's own
+  rule: it has no page of a category or a tag, only the Posts screen narrowed to one (opening a
+  category from Categories, or a tag from Tags, lands on it), and its bar marks the screen, so
+  Posts, whatever the reader came from. The search box is the list pages' own, beside their title,
+  as the design draws it; the bar has no trailing part, and nothing that needs a class in the site's
+  stylesheet.
 
   The words are the site's own translations (`MishkaCmsCore.Runtime.Translations`), in the language of
   the response, and the key itself where nobody has written one. `MishkaBlog.Provision` registers
@@ -72,7 +75,8 @@ defmodule MishkaBlog.Plugins.PageFrame do
   # The kinds of record the blog's pages show, `MishkaBlog.Plugins.PageRecords`' ids.
   @records ~w(blog:post blog:category blog:tag blog:author blog:team)
 
-  # The place of the bar a page showing a record is in, whatever path it was given.
+  # The place of the bar a page showing a record is in, whatever path it was given. A category's page
+  # and a tag's are the design's Posts screen narrowed, which its bar marks as Posts.
   @record_places %{
     "blog:post" => :posts,
     "blog:category" => :posts,
