@@ -8,15 +8,15 @@ defmodule MishkaBlog.VisitorListsTest do
   (`MishkaBlog.Resources.Preparations.OpenToActor`): a read with the visitor as its actor — what the
   blog's components pass, `nil` for a guest — leaves out, in its own query, what that visitor may not
   open, so its count and its pages are of what the visitor sees. A category's and a tag's
-  `published_post_count`, loaded or sorted by, counts the posts that visitor may open, and a check of
-  a row's posts (`exists(tenant_posts, …)`) finds only those. A read of the system's,
+  `published_post_count`, loaded or sorted by, counts the posts that visitor may open, and so does a
+  blogger's `post_count`, and a check of a row's posts (`exists(tenant_posts, …)`) finds only those. A read of the system's,
   `authorize?: false`, sees everything. A lock written is kept to by the next read.
 
   members (locked) → guides (names nothing); open names nothing.
   """
   use MishkaBlog.DataCase, async: false
 
-  alias MishkaBlog.{BlogPost, Collection, Tag}
+  alias MishkaBlog.{Blogger, BlogPost, Collection, Tag}
 
   require Ash.Query
 
@@ -123,6 +123,17 @@ defmodule MishkaBlog.VisitorListsTest do
     assert visible(BlogPost, ctx.site, ctx.member, page: [limit: 10, count: true]).count == 3
   end
 
+  # A COUNT IS OF WHAT THE LIST HOLDS. `Ash.count/2` runs none of a read's `before_action` hooks, so a
+  # list narrowed to its visitor only there counted the posts and the categories they may not open.
+  test "a count of a list counts what its visitor may open, as the list lists it", ctx do
+    for {visitor, posts, categories} <- [{nil, 1, 1}, {ctx.member, 3, 3}] do
+      assert BlogPost |> read_as(ctx.site, visitor) |> Ash.count!(tenant: ctx.site.id) == posts
+
+      assert Collection |> read_as(ctx.site, visitor) |> Ash.count!(tenant: ctx.site.id) ==
+               categories
+    end
+  end
+
   test "a page's lists of categories and tags hold what its visitor may open", ctx do
     locked =
       create_blog_tag!(site_id: ctx.site.id, language: "en", permissions: ["members:read"])
@@ -193,6 +204,76 @@ defmodule MishkaBlog.VisitorListsTest do
 
     assert by_count(Tag, ctx.site, nil) == [{few_open.id, 2}, {many_closed.id, 1}]
     assert by_count(Tag, ctx.site, ctx.member) == [{many_closed.id, 4}, {few_open.id, 2}]
+  end
+
+  # THE NUMBER A PEOPLE PAGE PUTS ON A BLOGGER'S CARD is the number of posts behind it for the reader:
+  # the one open to everybody for a guest, those a member's permissions open for a member, and every
+  # published one for the system.
+  test "a blogger's post_count counts the posts that visitor may open", ctx do
+    writer = create_blogger!(site_id: ctx.site.id)
+
+    for post <- Map.values(ctx.posts),
+        do: create_post_blogger!(post_id: post.id, blogger_id: writer.id)
+
+    create_post_blogger!(
+      post_id: create_blog_post!(site_id: ctx.site.id, status: :draft).id,
+      blogger_id: writer.id
+    )
+
+    count = fn read ->
+      read
+      |> Ash.Query.load(:post_count)
+      |> Ash.read!(tenant: ctx.site.id)
+      |> rows()
+      |> Enum.find(&(&1.id == writer.id))
+      |> Map.fetch!(:post_count)
+    end
+
+    assert count.(read_as(Blogger, ctx.site, nil)) == 1
+    assert count.(read_as(Blogger, ctx.site, ctx.member)) == 3
+
+    assert count.(Ash.Query.for_read(Blogger, :public_list, %{}, authorize?: false)) == 4
+  end
+
+  # THE WORD BEFORE THE DATE ON A CARD names no category the visitor may not open: the first of the
+  # post's categories is read through the categories' public read, as the visitor.
+  test "a post's first category is the first one its visitor may open", %{
+    site: site,
+    member: member
+  } do
+    staff =
+      create_collection!(
+        site_id: site.id,
+        status: :active,
+        name: "Alpha staff",
+        display_order: 0,
+        permissions: ["staff:read"]
+      )
+
+    members =
+      create_collection!(
+        site_id: site.id,
+        status: :active,
+        name: "Zeta members",
+        display_order: 1,
+        permissions: ["members:read"]
+      )
+
+    post = post!(site, [], [staff, members])
+
+    first_category = fn opts ->
+      BlogPost
+      |> Ash.Query.for_read(:public_list, %{}, Keyword.put(opts, :tenant, site.id))
+      |> Ash.Query.filter(id == ^post.id)
+      |> Ash.Query.load(:first_category_name)
+      |> Ash.read!(page: [limit: 1])
+      |> rows()
+      |> Enum.map(& &1.first_category_name)
+    end
+
+    assert first_category.(actor: member) == ["Zeta members"]
+    assert first_category.(actor: nil) == []
+    assert first_category.(authorize?: false) == ["Alpha staff"]
   end
 
   test "a read of the system's sees every record", %{site: site, posts: posts} do

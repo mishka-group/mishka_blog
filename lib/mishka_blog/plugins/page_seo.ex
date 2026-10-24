@@ -20,11 +20,21 @@ defmodule MishkaBlog.Plugins.PageSeo do
   Everything returned is a default: what the page sets in its own SEO — a title, a description, a
   tag, structured data — wins, and may name the variables below, `{{post.title}} | Blog`.
 
+  ## What is read
+
+  Nothing, on a page a visitor reads: `MishkaCmsWeb.RuntimeLive` hands it the rows the page read
+  once for its head, its frame and its blocks, as the visitor (`source`, `MishkaBlog.PageSource`),
+  and the record below is the one there, with what that read loaded. A record the visitor's read
+  left out is answered with its lock alone, read here as the system, so the address answers them
+  404 and nothing else of it reaches them. An editor's preview and a share card hand no rows, and
+  the record is read here, once: a post, a category or a tag as the system, and a blogger or a
+  team, which carry no lock of their own, as a guest, through the public action.
+
   ## A post, `"blog:post"`
 
-  The post the `slug` capture names in the page's language, published — read once, through
+  The post the `slug` capture names in the page's language, published — read through
   `:public_list` as `blog-post-detail` reads it, on the page's site, with its authors, categories,
-  tags and published translations:
+  tags and its other published editions:
 
     * `title`, `description`, `image` — the post's title, excerpt and featured image;
     * `type` — `"article"`;
@@ -68,16 +78,17 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   The blogger the `slug` capture names: their name, their bio as plain text, their avatar, a
   `twitter:creator` with their X account when they have one, a
-  `ProfilePage` whose `mainEntity` is the `Person` — with `sameAs` their social links and
-  `knowsAbout` their expertise — and a `BreadcrumbList`, Home → Blog → the blogger. `vars` —
+  `ProfilePage` in the language of the page whose `mainEntity` is the `Person` — with `sameAs`
+  their social links and `knowsAbout` their expertise — and a `BreadcrumbList`, Home → Blog → the
+  blogger. `vars` —
   `author.name`, `author.bio`, `author.image`, `author.url`. Its share card says "Author" above the
   name, with their photo and their teams. A blogger is the same row in every language, so the slug
   alone names them.
 
   ## A team, `"blog:team"`
 
-  The active team the `slug` capture names: its name, description and avatar, a `ProfilePage`
-  whose `mainEntity` is the `Organization` with its members as `Person`s, and a `BreadcrumbList`,
+  The active team the `slug` capture names: its name, description and avatar, a `ProfilePage` in
+  the language of the page whose `mainEntity` is the `Organization` with its members as `Person`s, and a `BreadcrumbList`,
   Home → Blog → the team. `vars` — `team.name`, `team.description`, `team.url`. Its share card
   says "Team" above the name, with the members' photos and how many they are.
 
@@ -106,7 +117,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   require Ash.Query
 
-  alias MishkaBlog.{Blogger, BlogPost, Collection, Tag, Team}
+  alias MishkaBlog.{Blogger, BlogPost, Collection, PageSource, Tag, Team}
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.PlainText
   alias MishkaCmsCore.Runtime.{Languages, Page, Seo}
@@ -165,68 +176,132 @@ defmodule MishkaBlog.Plugins.PageSeo do
     )
   end
 
+  # THE RECORD IS THE PAGE'S OWN READ, made once for its head, its frame and its blocks as the
+  # visitor (`source`, `MishkaBlog.PageSource`), when `MishkaCmsWeb.RuntimeLive` hands it over; a read
+  # of its own, as the system, for an editor's preview and a share card, which hand none.
   defp post(seo) do
     seo = %{seo | var_docs: post_docs()}
 
-    case read(BlogPost, seo, @post_fields, post_loads()) do
-      %BlogPost{} = post -> post_seo(seo, post)
-      nil -> seo
+    case shared(seo) do
+      {:ok, %BlogPost{} = post} -> post_seo(seo, post)
+      {:ok, nil} -> locked(seo, BlogPost, [:effective_permissions], & &1.effective_permissions)
+      :none -> system(seo, read(BlogPost, seo, @post_fields, post_loads()), &post_seo/2)
     end
   end
 
   defp category(seo) do
     seo = %{seo | var_docs: collection_docs()}
 
-    case read(Collection, seo, @collection_fields, [:effective_permissions]) do
-      %Collection{} = collection -> collection_seo(seo, collection)
-      nil -> seo
+    case shared(seo) do
+      {:ok, %Collection{} = collection} ->
+        collection_seo(seo, collection)
+
+      {:ok, nil} ->
+        locked(seo, Collection, [:effective_permissions], & &1.effective_permissions)
+
+      :none ->
+        system(
+          seo,
+          read(Collection, seo, @collection_fields, [:effective_permissions]),
+          &collection_seo/2
+        )
     end
   end
 
   defp tag(seo) do
     seo = %{seo | var_docs: tag_docs()}
 
-    case read(Tag, seo, @tag_fields, []) do
-      %Tag{} = tag -> tag_seo(seo, tag)
-      nil -> seo
+    case shared(seo) do
+      {:ok, %Tag{} = tag} -> tag_seo(seo, tag)
+      {:ok, nil} -> locked(seo, Tag, [], & &1.permissions)
+      :none -> system(seo, read(Tag, seo, @tag_fields, []), &tag_seo/2)
     end
   end
 
+  # A BLOGGER AND A TEAM CARRY NO LOCK OF THEIR OWN: one the visitor's read does not find is not
+  # here, and the page answers that.
   defp author(seo) do
     seo = %{seo | var_docs: author_docs()}
 
-    case read_one(Blogger, seo, @blogger_fields,
-           teams:
-             Team
-             |> Ash.Query.select([:name])
-             |> Ash.Query.sort(name: :asc)
-             |> Ash.Query.page(limit: 5)
-         ) do
-      %Blogger{} = blogger -> author_seo(seo, blogger)
-      nil -> seo
+    case shared(seo) do
+      {:ok, %Blogger{} = blogger} ->
+        author_seo(seo, blogger)
+
+      {:ok, nil} ->
+        seo
+
+      :none ->
+        seo
+        |> read_one(Blogger, @blogger_fields,
+          teams:
+            Team
+            |> Ash.Query.select([:name])
+            |> Ash.Query.sort(name: :asc)
+            |> Ash.Query.page(limit: 5)
+        )
+        |> then(&system(seo, &1, fn seo, blogger -> author_seo(seo, blogger) end))
     end
   end
 
   defp team(seo) do
-    members =
-      Blogger
-      |> Ash.Query.for_read(:public_list)
-      |> Ash.Query.select([:display_name, :slug, :avatar_url])
-      |> Ash.Query.sort(:display_name)
-
     seo = %{seo | var_docs: team_docs()}
 
-    case read_one(Team, seo, @team_fields, tenant_members: members) do
-      %Team{} = team -> team_seo(seo, team)
-      nil -> seo
+    case shared(seo) do
+      {:ok, %Team{} = team} ->
+        team_seo(seo, team)
+
+      {:ok, nil} ->
+        seo
+
+      :none ->
+        members =
+          Blogger
+          |> Ash.Query.for_read(:public_list)
+          |> Ash.Query.select([:display_name, :slug, :avatar_url])
+          |> Ash.Query.sort(:display_name)
+
+        seo
+        |> read_one(Team, @team_fields, tenant_members: members)
+        |> then(&system(seo, &1, fn seo, team -> team_seo(seo, team) end))
+    end
+  end
+
+  # `{:ok, record}` out of the rows the page read once, as its visitor, for this same page — `nil`
+  # where the visitor's read found none — and `:none` for a caller that handed no rows. The head is
+  # handed no visitor of its own: the source core hands it is the one read for this request.
+  defp shared(%{source: %PageSource{record: record} = source} = seo) do
+    if PageSource.for_page?(source, seo), do: {:ok, record}, else: :none
+  end
+
+  defp shared(_no_source), do: :none
+
+  defp system(seo, nil, _answer), do: seo
+  defp system(seo, record, answer), do: answer.(seo, record)
+
+  # A RECORD THE VISITOR'S OWN READ LEFT OUT: its lock alone is read, as the system, for
+  # `MishkaCmsWeb.RuntimeLive` to refuse them with, and the head says nothing else of it — nothing of
+  # a record reaches a visitor it was kept from. One whose lock names nothing was left out for a
+  # reason the lock does not say, and opens for whoever holds `*`, as a record whose lock could not
+  # be read does (`MishkaCmsCore.Runtime.Seo`). A slug the system finds nothing at changes nothing.
+  defp locked(seo, resource, loads, lock_of) do
+    case read(resource, seo, [:id, :permissions], loads) do
+      nil ->
+        seo
+
+      record ->
+        case List.wrap(lock_of.(record)) do
+          [] -> %{seo | permissions: ["*"], card: false}
+          lock -> %{seo | permissions: lock, card: false}
+        end
     end
   end
 
   # The row the `slug` capture names, in the page's language, on the page's site; `nil` when the
-  # request names none or none is shown. Read as the system, because what it reads is the lock
-  # `MishkaCmsWeb.RuntimeLive` admits the visitor by: read as a visitor who may not open it, a locked
-  # record is no record at all, and the gate is handed no permissions to refuse them with. The hook
-  # carries no visitor either.
+  # request names none or none is shown. Read as the system, for the two callers that are no
+  # visitor — a preview and a share card — and for the lock `MishkaCmsWeb.RuntimeLive` admits the
+  # visitor by when the visitor's own read left the record out: read as a visitor who may not open
+  # it, a locked record is no record at all, and the gate is handed no permissions to refuse them
+  # with.
   defp read(resource, %{params: %{"slug" => slug}, site_id: site_id} = seo, fields, loads)
        when is_binary(slug) and slug != "" and is_binary(site_id) do
     resource
@@ -244,9 +319,9 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   defp read(_resource, _seo, _fields, _loads), do: nil
 
-  # A blogger or a team is one row in every language: the slug alone names it. Read as a visitor
-  # reads it, through the public action.
-  defp read_one(resource, %{params: %{"slug" => slug}, site_id: site_id}, fields, loads)
+  # A blogger or a team is one row in every language: the slug alone names it. Read as a guest
+  # reads it, through the public action, for a caller handed no rows.
+  defp read_one(%{params: %{"slug" => slug}, site_id: site_id}, resource, fields, loads)
        when is_binary(slug) and slug != "" and is_binary(site_id) do
     resource
     |> Ash.Query.for_read(:public_list, %{}, tenant: site_id)
@@ -260,7 +335,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
     end
   end
 
-  defp read_one(_resource, _seo, _fields, _loads), do: nil
+  defp read_one(_seo, _resource, _fields, _loads), do: nil
 
   defp in_language(query, language) when is_binary(language) and language != "",
     do: Ash.Query.filter(query, language == ^language)
@@ -282,10 +357,10 @@ defmodule MishkaBlog.Plugins.PageSeo do
         |> Ash.Query.select([:name])
         |> Ash.Query.sort(name: :asc)
         |> Ash.Query.page(limit: 50),
-      language_variants:
+      editions:
         BlogPost
-        |> Ash.Query.filter(status == :published)
-        |> Ash.Query.select([:slug, :language, :language_group_id])
+        |> Ash.Query.select([:id, :slug, :language, :title])
+        |> Ash.Query.sort(language: :asc)
     ]
   end
 
@@ -461,6 +536,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         "@context" => "https://schema.org",
         "@type" => "ProfilePage",
         "url" => seo.url,
+        "inLanguage" => seo.language,
         "mainEntity" => person
       })
 
@@ -502,8 +578,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         "description" => team.description,
         "logo" => Seo.absolute(team.avatar_url, base),
         "url" => seo.url,
-        "member" =>
-          Enum.map(rows(team.tenant_members), &%{"@type" => "Person", "name" => &1.display_name})
+        "member" => Enum.map(members_of(team), &%{"@type" => "Person", "name" => &1.display_name})
       })
 
     profile =
@@ -511,6 +586,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         "@context" => "https://schema.org",
         "@type" => "ProfilePage",
         "url" => seo.url,
+        "inLanguage" => seo.language,
         "mainEntity" => organization
       })
 
@@ -523,8 +599,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
         permissions: [],
         card: %{
           eyebrow: gettext("Team"),
-          people: team.tenant_members |> rows() |> Enum.map(&person/1),
-          meta: [members(length(rows(team.tenant_members)))],
+          people: team |> members_of() |> Enum.map(&person/1),
+          meta: [members(length(members_of(team)))],
           picture: nil
         },
         vars:
@@ -657,7 +733,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
     editions =
       for edition <-
-            [post | post.language_variants]
+            [post | rows(post.editions)]
             |> Enum.uniq_by(& &1.language)
             |> Enum.sort_by(& &1.language),
           edition.language in served,
@@ -672,6 +748,11 @@ defmodule MishkaBlog.Plugins.PageSeo do
   # A relationship read through an action that pages arrives as a page.
   defp rows(%Ash.Page.Offset{results: results}), do: results
   defp rows(rows) when is_list(rows), do: rows
+  defp rows(_not_loaded), do: []
+
+  # A team's members: the ones its page read with it, as its visitor, else the ones read here.
+  defp members_of(%{members: members}) when is_list(members), do: members
+  defp members_of(team), do: rows(team.tenant_members)
 
   defp meta(key, name, value) when is_binary(value) and value != "",
     do: [%{tag: "meta", attrs: %{key => name}, content: value}]

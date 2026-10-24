@@ -45,10 +45,10 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   A record asked for by itself (`get?`) is read with whether it opens for the reader beside it, and
   is left out of the result when it does not, so it is not found.
 
-  IN A READ OF CATEGORIES OR TAGS, what is counted, sorted by or asked of their posts is of the posts
-  the reader may open: an aggregate over them, such as `published_post_count`, in a list or asked for
-  alone, and an `exists(tenant_posts, …)` filter, such as a block's leaving out of rows with nothing
-  to read.
+  IN A READ OF CATEGORIES, TAGS OR BLOGGERS, what is counted, sorted by or asked of their posts is of
+  the posts the reader may open: an aggregate over them, such as a category's `published_post_count`
+  or a blogger's `post_count`, in a list or asked for alone, and an `exists(tenant_posts, …)` filter,
+  such as a block's leaving out of rows with nothing to read.
 
   ## Options
 
@@ -91,14 +91,10 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   defp reader(%{authorize?: false}), do: :system
   defp reader(%{actor: actor}), do: {:reader, actor}
 
-  # A blogger or a team opens with no lock of its own; only the page that serves it can close it.
-  defp keep(query, kind, reader) when kind in [:blogger, :team] do
-    on_site(query, fn query, site_id ->
-      Ash.Query.filter(query, ^opens(kind, reader, ReaderLocks.site(site_id)))
-    end)
-  end
-
-  defp keep(%{action: %{get?: true}} = query, kind, reader) do
+  # A blogger or a team opens with no lock of its own; only the page that serves it can close it, so
+  # one asked for alone is narrowed as a list is. What a blogger's posts are counted as is the
+  # reader's, as a category's and a tag's are.
+  defp keep(%{action: %{get?: true}} = query, kind, reader) when kind not in [:blogger, :team] do
     query
     |> Ash.Query.calculate(
       :open_to_reader?,
@@ -110,10 +106,23 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   end
 
   defp keep(query, kind, reader) do
+    query
+    |> narrowed(kind, reader)
+    |> on_site(fn query, site_id -> counted(query, kind, site_id, reader) end)
+  end
+
+  # THE ROWS THE READER MAY OPEN. A query prepared for its site is narrowed at once, in its own
+  # filter, and so is everything computed from it: `Ash.count/2` and the other aggregates of a read
+  # run none of its `before_action` hooks, so a count of a list narrowed only there counted the
+  # records the reader may not open. One whose site arrives with the read is narrowed as it runs.
+  # What the row's own posts are counted and checked as (`counted/4`) waits for the read either
+  # way: it narrows the aggregates, the sort and the filter the caller adds after this.
+  defp narrowed(%{tenant: site_id} = query, kind, reader) when is_binary(site_id),
+    do: Ash.Query.filter(query, ^opens(kind, reader, ReaderLocks.site(site_id)))
+
+  defp narrowed(query, kind, reader) do
     on_site(query, fn query, site_id ->
-      query
-      |> Ash.Query.filter(^opens(kind, reader, ReaderLocks.site(site_id)))
-      |> counted(kind, site_id, reader)
+      Ash.Query.filter(query, ^opens(kind, reader, ReaderLocks.site(site_id)))
     end)
   end
 
@@ -141,7 +150,7 @@ defmodule MishkaBlog.Resources.Preparations.OpenToActor do
   defp admit(_query, records),
     do: {:ok, Enum.filter(records, &(&1.calculations[:open_to_reader?] == true))}
 
-  defp counted(query, kind, site_id, reader) when kind in [:category, :tag],
+  defp counted(query, kind, site_id, reader) when kind in [:category, :tag, :blogger],
     do: to_open_posts(query, ReaderLocks.post(reader, ReaderLocks.site(site_id)))
 
   defp counted(query, _kind, _site_id, _reader), do: query

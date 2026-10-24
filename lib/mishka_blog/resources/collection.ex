@@ -2015,6 +2015,26 @@ defmodule MishkaBlog.Collection do
       description "All language variants (translations) of this collection"
     end
 
+    # THE OTHER EDITIONS OF THE CATEGORY AS ITS READER MAY OPEN THEM: the rows of its group of
+    # translations — keyed by the master's own id, which the master itself may not carry
+    # (`MishkaCmsCore.LanguageEditions`) — through the public read, so one that is not active, one locked by its own lock or a parent's, and one whose page is
+    # closed to the reader are not among them. Loaded with the category a page reads
+    # (`MishkaBlog.PageSource`), as that page's visitor.
+    has_many :editions, MishkaBlog.Collection do
+      public? false
+      no_attributes? true
+      read_action :public_list
+
+      filter expr(
+               id != parent(id) and
+                 (language_group_id == parent(language_group_id) or
+                    id == parent(language_group_id) or
+                    (is_nil(parent(language_group_id)) and language_group_id == parent(id)))
+             )
+
+      description "The other editions of this category a reader may open"
+    end
+
     # Bypass relationship - for master admin users without tenant
     has_many :master_language_variants, MishkaBlog.Collection do
       public? true
@@ -2157,6 +2177,20 @@ defmodule MishkaBlog.Collection do
       filterable? false
       filter expr(status == :published)
       description "Number of published posts in this collection"
+    end
+
+    # WHAT THE CATEGORY'S OWN PAGE COUNTS: its published posts in its own language, the ones the
+    # page's list pages through and its search box says, read through the posts' public read as
+    # `published_post_count` is — so a public read of categorys counts only the posts its reader may
+    # open — and loaded with the category the page reads (`MishkaBlog.PageSource`), so the page asks
+    # for its count with its row.
+    count :listed_post_count, :tenant_posts do
+      public? true
+      multitenancy :bypass
+      read_action :public_list
+      filterable? false
+      filter expr(status == :published and language == parent(language))
+      description "Number of published posts of this category in its own language"
     end
   end
 

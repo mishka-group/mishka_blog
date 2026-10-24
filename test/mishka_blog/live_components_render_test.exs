@@ -124,9 +124,10 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     end
   end
 
-  # SEVERAL DIFFERENT BLOCKS ON ONE PAGE, which is what a real blog page is: the featured strip, the
-  # paged list and the sidebar, each with its own read. `Host` above draws one component twice; this
-  # draws whichever ones a test names, so what one of them does to another can be asserted.
+  # SEVERAL DIFFERENT BLOCKS ON ONE PAGE, which is what a real blog page is: the search box, the
+  # featured strip and the paged list, each with its own read. `Host` above draws one component
+  # twice; this draws whichever ones a test names, so what one of them does to another can be
+  # asserted.
   defmodule Several do
     use Phoenix.LiveView
 
@@ -257,17 +258,20 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     refused =
       Enum.map(kept, fn helper ->
         case helper.name do
-          "fetch" -> %{helper | args: "_asked", code: "{:error, :refused}"}
+          "fetch" -> %{helper | args: unused(helper.args), code: "{:error, :refused}"}
           _left_alone -> helper
         end
       end)
 
-    refute refused == kept, "#{name} has no fetch/1, so nothing was refused"
+    refute refused == kept, "#{name} has no fetch, so nothing was refused"
 
     write_helpers!(site, name, refused)
 
     kept
   end
+
+  # The same arguments, each one unused: `asked`, and the page's rows where the block takes them.
+  defp unused(args), do: Regex.replace(~r/\b([a-z]\w*)/, args, "_\\1")
 
   # THE CLOUD TWICE ON ONE PAGE, because it has TWO row containers and draws whichever one the page
   # gave it a base for — a guard put on one of them is a guard missing from the other, and one
@@ -451,13 +455,13 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
          %{site: site, member: member} do
       {:ok, guest, _html} = mount_page(site, "blog-post-list", %{per_page: 10, show_total: true})
       assert titles(guest) == ["Public"]
-      assert [<<"1 ", _posts::binary>>] = text_of(guest, ~s([data-role="blog-list-total"]))
+      assert text_of(guest, ~s([data-role="blog-list-total"])) == ["1 post"]
 
       {:ok, shown, _html} =
         mount_page(site, "blog-post-list", %{per_page: 10, show_total: true, current_user: member})
 
       assert titles(shown) == ["Public", "Locked"]
-      assert [<<"2 ", _posts::binary>>] = text_of(shown, ~s([data-role="blog-list-total"]))
+      assert text_of(shown, ~s([data-role="blog-list-total"])) == ["2 posts"]
     end
 
     test "is left out of the categories and the tags", %{site: site, member: member} do
@@ -1053,44 +1057,27 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert href == "/test-blog-post/#{post.slug}"
     end
 
-    # A TITLE IS A LINK AND DOES NOT LOOK LIKE ONE. It underlines on hover and nowhere else, so a
-    # card full of image and excerpt reads as though nothing on it is clickable. The footer carries
-    # a labelled action as well, pointing at whichever destination the page chose.
-    test "every card carries a visible read link", %{site: site} do
+    # THE WHOLE CARD IS THE LINK. The title is the one anchor on it, drawn over the card's whole area,
+    # so a card full of cover and summary is clickable anywhere and a reader on a screen reader still
+    # meets one link with the post's own title, not a second "Read".
+    test "every card is one link, drawn over the whole card", %{site: site} do
       [post | _rest] = publish!(site, ["A"])
 
       {:ok, view, _html} =
         mount_page(site, "blog-post-list", %{post_base: "/test-blog-posts/post"})
 
+      html = render_async(view, @async)
+
       [href] =
-        view
-        |> render_async(@async)
+        html
         |> LazyHTML.from_fragment()
-        |> LazyHTML.query(~s([data-role="blog-list-read"]))
+        |> LazyHTML.query(~s([data-role="blog-list-item"] a))
         |> Enum.map(&LazyHTML.attribute(&1, "href"))
         |> List.flatten()
 
       assert href == "/test-blog-posts/post/#{post.slug}"
-      assert text_of(view, ~s([data-role="blog-list-read"])) == ["Read →"]
-    end
-
-    test "and the read link follows the inline mode when that is what the page chose", %{
-      site: site
-    } do
-      publish!(site, ["A"])
-
-      {:ok, view, _html} = mount_page(site, "blog-post-list", %{base: "/here"})
-
-      [href] =
-        view
-        |> render_async(@async)
-        |> LazyHTML.from_fragment()
-        |> LazyHTML.query(~s([data-role="blog-list-read"]))
-        |> Enum.map(&LazyHTML.attribute(&1, "href"))
-        |> List.flatten()
-
-      assert href =~ "/here?"
-      assert href =~ "post="
+      assert html =~ "after:absolute after:inset-0"
+      assert text_of(view, ~s([data-role="blog-list-read"])) == []
     end
 
     test "and keep opening beside the list when none is", %{site: site} do
@@ -1246,10 +1233,11 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           render_async(view, @async)
         end)
 
-      # One load reads the page of rows and its count, nothing being locked on the site: two per
-      # render, two renders.
-      assert Enum.count(asked, &String.contains?(&1, "mishka_blog_posts")) == 4,
-             "a load is the page of rows and its count, once for each render"
+      # One load reads the page of rows — with the first category each is filed under, in the same
+      # statement — and its count, nothing being locked on the site, and the read that brings the
+      # people who wrote them, which the cards draw: three per render, two renders.
+      assert Enum.count(asked, &String.contains?(&1, "mishka_blog_posts")) == 6,
+             "a load is the page of rows with their categories, its count and its authors, once for each render"
     end
 
     # EVERY BLOCK ON THE PAGE ANSWERS IN THE SAME FIRST PAINT.
@@ -1781,7 +1769,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert styles |> reached("list-disc") |> Enum.map(&LazyHTML.text/1) == ["Own item"]
       assert styles |> reached("list-decimal") |> Enum.map(&LazyHTML.text/1) == ["First step"]
 
-      assert styles |> reached("ml-5") |> Enum.map(&LazyHTML.text/1) == [
+      assert styles |> reached("ms-6") |> Enum.map(&LazyHTML.text/1) == [
                "Own item",
                "First step"
              ]
@@ -1816,7 +1804,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
 
       styles = styled(view)
 
-      assert styles |> reached("text-lg") |> Enum.map(&LazyHTML.text/1) == ["Own heading"]
+      assert styles |> reached("font-normal") |> Enum.map(&LazyHTML.text/1) == ["Own heading"]
       assert styles |> reached("list-disc") |> Enum.count() == 1
 
       assert styles |> reached("underline") |> Enum.flat_map(&LazyHTML.attribute(&1, "href")) ==
@@ -1977,6 +1965,99 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     end
   end
 
+  # THE BAR OF A PAGE SAYS HOW MANY POSTS ITS READER MAY OPEN, and a category's page or a tag's says
+  # how many of theirs: the number is read as the visitor, through the public read, in the page's
+  # language, and narrowed the way the list under the bar is.
+  describe "blog-post-search as the bar of a page" do
+    @count ~s([data-role="blog-search-count"])
+
+    defp bar_count(site, attrs \\ %{}) do
+      {:ok, view, _html} = mount_page(site, "blog-post-search", Map.put(attrs, :variant, "bar"))
+      text_of(view, @count)
+    end
+
+    test "counts the published posts, says 1 post for one, and says nothing for none",
+         %{site: site} do
+      create_blog_post!(site_id: site.id, title: "Draft", status: :draft)
+      assert bar_count(site) == []
+
+      publish!(site, ["One"])
+      assert bar_count(site) == ["1 post"]
+
+      publish!(site, ["Two"])
+      assert bar_count(site) == ["2 posts"]
+    end
+
+    test "says its count in the words the page gives for one and for the others", %{site: site} do
+      words = %{post_text: "maqale", posts_text: "maqale-ha"}
+
+      publish!(site, ["One"])
+      assert bar_count(site, words) == ["1 maqale"]
+
+      publish!(site, ["Two"])
+      assert bar_count(site, words) == ["2 maqale-ha"]
+    end
+
+    test "leaves out the posts the reader may not open and the other editions", %{site: site} do
+      members = category!(site, name: "Members", slug: "members", permissions: ["members:read"])
+      [open, locked] = publish!(site, ["Open", "Locked"])
+      categorize!(locked, members)
+      persian!(site, "In Persian")
+
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+
+      assert bar_count(site, %{language: "en"}) == ["1 post"]
+      assert bar_count(site, %{language: "en", current_user: member}) == ["2 posts"]
+      assert bar_count(site, %{language: "fa"}) == ["1 post"]
+      assert bar_count(site, %{language: "all"}) == ["2 posts"]
+      assert open.id != locked.id
+    end
+
+    test "counts a category's posts when it is given the category, and a tag's the tag",
+         %{site: site} do
+      [first, second, third] = publish!(site, ["A", "B", "C"])
+      draft = create_blog_post!(site_id: site.id, title: "Draft", status: :draft)
+
+      otp = category!(site, name: "OTP", slug: "otp")
+      for post <- [first, second, draft], do: categorize!(post, otp)
+
+      hidden = category!(site, name: "Hidden", slug: "hidden", status: :draft)
+      categorize!(first, hidden)
+
+      elixir = tag!(site, name: "Elixir", slug: "elixir")
+      tag_post!(third, elixir)
+
+      assert bar_count(site) == ["3 posts"]
+      assert bar_count(site, %{collection: "otp"}) == ["2 posts"]
+      assert bar_count(site, %{tag: "elixir"}) == ["1 post"]
+
+      # both narrow, as they do the list; a category that is not active and one that is not there
+      # hold nothing
+      assert bar_count(site, %{collection: "otp", tag: "elixir"}) == []
+      assert bar_count(site, %{collection: "hidden"}) == []
+      assert bar_count(site, %{collection: "no-such-category"}) == []
+    end
+
+    test "counts a category the reader may not open as none, and as theirs for one who may",
+         %{site: site} do
+      members = category!(site, name: "Members", slug: "members", permissions: ["members:read"])
+      [post] = publish!(site, ["Locked"])
+      categorize!(post, members)
+
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+
+      assert bar_count(site, %{collection: "members"}) == []
+      assert bar_count(site, %{collection: "members", current_user: member}) == ["1 post"]
+    end
+
+    # `?tag[]=x` arrives as a list and `?tag[a]=b` as a map: neither is a tag, so nothing is asked.
+    test "reads a category or a tag that is not text as nothing asked", %{site: site} do
+      publish!(site, ["A", "B"])
+
+      assert bar_count(site, %{collection: %{"a" => "b"}, tag: ["x"]}) == ["2 posts"]
+    end
+  end
+
   # A LIST THAT HOLDS ONE SUBJECT, which is what a category page and a sidebar block both are. The
   # narrowing is done in the query rather than by a template that renders everything and hides most
   # of it: page two of a category has to be page two of that category.
@@ -2120,7 +2201,8 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           last_text: "Akhar",
           total_text: "neveshte",
           newest_text: "Tazetarin",
-          read_text: "Bekhan",
+          showing_text: "Namayesh",
+          of_text: "az",
           base: "/here"
         })
 
@@ -2130,7 +2212,23 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert text_of(view, ~s([data-role="blog-list-last"])) == ["Akhar"]
       assert text_of(view, ~s([data-role="blog-list-total"])) == ["3 neveshte"]
       assert text_of(view, ~s([data-role="blog-list-sort"])) == ["Tazetarin"]
-      assert text_of(view, ~s([data-role="blog-list-read"])) == ["Bekhan →", "Bekhan →"]
+      assert text_of(view, ~s([data-role="blog-list-showing"])) == ["Namayesh 1–2 az 3"]
+    end
+
+    test "its total says 1 post for one, in the words the page gives", %{site: site} do
+      publish!(site, ["A"])
+
+      {:ok, plain, _html} = mount_page(site, "blog-post-list", %{show_total: true})
+      assert text_of(plain, ~s([data-role="blog-list-total"])) == ["1 post"]
+
+      {:ok, worded, _html} =
+        mount_page(site, "blog-post-list", %{
+          show_total: true,
+          post_text: "neveshte-yek",
+          total_text: "neveshte"
+        })
+
+      assert text_of(worded, ~s([data-role="blog-list-total"])) == ["1 neveshte-yek"]
     end
   end
 
@@ -2460,6 +2558,29 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert text_of(view, ~s([data-role="blog-category-count"])) == ["2"]
     end
 
+    # "1 posts" IS NOT ENGLISH. A card says 1 post, and any other number in the plural, in the words
+    # the page gives for each.
+    test "counts a card's posts in the singular for one", %{site: site} do
+      filed!(site, "Solo", "solo")
+
+      pair = category!(site, name: "Pair", slug: "pair")
+      for post <- publish!(site, ["P1", "P2"]), do: categorize!(post, pair)
+
+      cards = %{variant: "cards", show_count: true}
+      {:ok, view, _html} = mount_page(site, "blog-category-list", cards)
+
+      assert text_of(view, ~s([data-role="blog-category-count"])) == ["2 posts", "1 post"]
+
+      {:ok, worded, _html} =
+        mount_page(
+          site,
+          "blog-category-list",
+          Map.merge(cards, %{post_text: "maqale", posts_text: "maqale-ha"})
+        )
+
+      assert text_of(worded, ~s([data-role="blog-category-count"])) == ["2 maqale-ha", "1 maqale"]
+    end
+
     test "leaves out the categories holding nothing published", %{site: site} do
       filed!(site, "Full", "full")
       _empty = category!(site, name: "Empty", slug: "empty")
@@ -2474,8 +2595,8 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
                ["Empty", "Full"]
     end
 
-    # THE SIDEBAR THE TODO ASKS FOR: categories, each with what it most recently holds. It is the
-    # block that makes a category list something a reader uses rather than a table of contents.
+    # CATEGORIES, EACH WITH WHAT IT MOST RECENTLY HOLDS. It is what makes a category list
+    # something a reader uses rather than a table of contents.
     test "carries each category's own latest posts when the author asks for them", %{site: site} do
       category = category!(site, name: "OTP", slug: "otp")
       [first, second, third] = publish!(site, ["First", "Second", "Third"])
@@ -2500,8 +2621,9 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert text_of(view, ~s([data-role="blog-category-post"])) == []
     end
 
-    # THE ARTICLE THE READER ALREADY HAS OPEN. On a post page this block sits beside it, and the
-    # category that article is filed under spent one of its three lines offering it back.
+    # THE ARTICLE THE READER ALREADY HAS OPEN. Beside a post, as in the sidebar of the release
+    # before's post page, the category that article is filed under spent one of its three lines
+    # offering it back.
     test "and leaves out the one post the page is already showing", %{site: site} do
       category = category!(site, name: "OTP", slug: "otp")
       [open_one, other] = publish!(site, ["Open", "Another"])
@@ -2657,7 +2779,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           category_base: "/blog/category"
         })
 
-      assert text_of(view, ~s([data-role="blog-detail-tag"])) == ["Elixir"]
+      assert text_of(view, ~s([data-role="blog-detail-tag"])) == ["#Elixir"]
       assert hrefs(view, ~s([data-role="blog-detail-tag"])) == ["/blog/tag/elixir"]
       assert text_of(view, ~s([data-role="blog-detail-category"])) == ["OTP"]
       assert hrefs(view, ~s([data-role="blog-detail-category"])) == ["/blog/category/otp"]
@@ -2673,17 +2795,19 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert text_of(view, ~s([data-role="blog-detail-author"])) == ["Ada Lovelace"]
     end
 
-    # ONLY THE TRANSLATIONS A READER CAN OPEN. `language_variants` is every row sharing the group,
-    # drafts included, so a link per variant would have published the unfinished ones.
-    test "lists the published translations and not the unfinished ones", %{site: site} do
+    # THE LANGUAGES OF A POST ARE THE HEADER'S, NOT THE ARTICLE'S. The layout's dropdown is the one
+    # switcher a page has, fed by `MishkaBlog.Plugins.PageFrame`, so the article draws no row of
+    # language pills under its text, whatever translations the post has.
+    test "draws no language pills of its own, whatever translations the post has", %{site: site} do
       [master] = publish!(site, ["Master"])
       translate!(site, master, "fa", "Tarjome")
-      translate!(site, master, "ru", "Perevod", :draft)
 
-      {:ok, view, _html} =
-        mount_page(site, "blog-post-detail", %{slug: master.slug, post_base: "/mish-blog/post"})
+      {:ok, view, html} =
+        mount_page(site, "blog-post-detail", %{slug: master.slug, post_base: "/:lang/blog"})
 
-      assert text_of(view, ~s([data-role="blog-detail-translation"])) == ["fa"]
+      refute has_element?(view, ~s([data-role="blog-detail-translations"]))
+      refute has_element?(view, ~s([data-role="blog-detail-translation"]))
+      refute html =~ "hreflang"
     end
 
     # A PERSIAN POST READ LEFT TO RIGHT is not a styling detail — punctuation lands on the wrong
@@ -2711,9 +2835,9 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert has_element?(ltr, ~s(article[data-role="blog-detail-article"][dir="auto"]))
     end
 
-    # A PART THE PAGE TURNED OFF COSTS NOTHING. The four extra reads ran whatever the switches said
-    # and only the markup consulted them, and `update/2` runs again on every re-render of the page
-    # around it — so a page drawing the body alone paid five queries for one, every single time.
+    # A PART THE PAGE TURNED OFF COSTS NOTHING. The extra reads ran whatever the switches said and
+    # only the markup consulted them, and `update/2` runs again on every re-render of the page
+    # around it — so a page drawing the body alone paid four queries for one, every single time.
     test "and reads nothing for the parts the page turned off", %{site: site} do
       [post] = publish!(site, ["Ours"])
       tag_post!(post, tag!(site, name: "Elixir", slug: "elixir"))
@@ -2726,8 +2850,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
               slug: post.slug,
               show_tags: false,
               show_categories: false,
-              show_authors: false,
-              show_translations: false
+              show_authors: false
             })
 
           render(view)
@@ -2802,8 +2925,8 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
   # A SLUG BELONGS TO ONE EDITION, and a page in one language answers for that edition alone.
   describe "blog-post-detail in one language" do
     # Without this the English article also answers at /fa/blog/<its slug> — the same piece writing
-    # itself out inside a Persian page, right to left, with a Persian sidebar beside it, and nothing
-    # anywhere saying the URL was wrong.
+    # itself out inside a Persian page, right to left, and nothing anywhere saying the URL was
+    # wrong.
     test "does not serve a post written in another one", %{site: site} do
       [english] = publish!(site, ["English post"])
 
@@ -2827,49 +2950,6 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert text_of(view, ~s([data-role="blog-detail-title"])) == ["نوشته"]
     end
 
-    # THE ONE LINK THAT LEAVES THE PAGE'S OWN LANGUAGE. A base with the language written into it
-    # gets everything else right and this wrong: the Persian edition offered as /en/blog/<fa slug>,
-    # a path under English carrying hreflang="fa", answered by the English page, which does not have
-    # that post. Written as /:lang/blog, each link is filled with the language of the row it leads
-    # to.
-    #
-    # The site has to PUBLISH Persian for that link to lead anywhere: `:lang` only answers
-    # `site.languages`, so the link is offered on a site that lists `fa` and drawn as a word on one
-    # that does not — see the test below.
-    test "offers each translation under the path of its own language", %{site: site} do
-      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["en", "fa"], site_id: site.id)
-      [master] = publish!(site, ["Master"])
-      persian = translate!(site, master, "fa", "Tarjome")
-
-      {:ok, view, _html} =
-        mount_page(site, "blog-post-detail", %{
-          slug: master.slug,
-          language: "en",
-          post_base: "/:lang/blog"
-        })
-
-      assert hrefs(view, ~s([data-role="blog-detail-translation"])) == [
-               "/fa/blog/#{persian.slug}"
-             ]
-    end
-
-    test "and draws a translation the site does not publish as a word, not a link", %{site: site} do
-      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["en"], site_id: site.id)
-      [master] = publish!(site, ["Master"])
-      persian = translate!(site, master, "fa", "Tarjome")
-
-      {:ok, view, _html} =
-        mount_page(site, "blog-post-detail", %{
-          slug: master.slug,
-          language: "en",
-          post_base: "/:lang/blog"
-        })
-
-      assert hrefs(view, ~s([data-role="blog-detail-translation"])) == []
-      assert text_of(view, ~s([data-role="blog-detail-translation"])) == ["fa"]
-      refute render(view) =~ persian.slug
-    end
-
     test "and fills the same capture on a tag and a category from the row it links to", %{
       site: site
     } do
@@ -2890,52 +2970,29 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert hrefs(view, ~s([data-role="blog-detail-category"])) == ["/fa/blog/category/olgooha"]
     end
 
-    # AN EDITION OPENED BESIDE THIS ONE IS A PATCH, AND THAT IS NOT COSMETIC. `patch` keeps the page
-    # holding this block mounted — its list, its sidebar and everything each of them has read stay
-    # where they are — while `navigate` throws all of it away and mounts the page again. Both write
-    # the same `href`, so nothing but this attribute can tell them apart, which is exactly how the
-    # distinction was lost when the row became a component.
-    test "opens an edition beside this one with a patch, and its own page with a navigation", %{
-      site: site
-    } do
-      [master] = publish!(site, ["Master"])
-      translate!(site, master, "fa", "Tarjome")
-
-      {:ok, beside, _html} =
-        mount_page(site, "blog-post-detail", %{slug: master.slug, base: "/en/blog"})
-
-      assert attrs_of(beside, ~s([data-role="blog-detail-translation"]), "data-phx-link") ==
-               ["patch"]
-
-      {:ok, its_own_page, _html} =
-        mount_page(site, "blog-post-detail", %{slug: master.slug, post_base: "/en/blog"})
-
-      assert attrs_of(its_own_page, ~s([data-role="blog-detail-translation"]), "data-phx-link") ==
-               ["redirect"]
-    end
-
-    # AND EACH ROW STILL ANSWERS TO ITS OWN NAME. The three rows under an article are one component
-    # drawn three times now, and a component that named only its words left nothing for a stylesheet
-    # or a test to address the row by — while the categories row, which sits directly under the
-    # body, also lost the wider gap that separated it from the text.
-    test "names each row under the article, and spaces the first of them", %{site: site} do
+    # AND EACH ROW STILL ANSWERS TO ITS OWN NAME. The two rows of an article are one component
+    # drawn twice, and a component that named only its words left nothing for a stylesheet or a
+    # test to address the row by. The categories are pills in the line of badges above the title,
+    # so their row has no box of its own; the tags are a row under the text.
+    test "names each row of the article, and draws the categories without a box", %{site: site} do
       [post] = publish!(site, ["Ours"])
       tag_post!(post, tag!(site, name: "Elixir", slug: "elixir"))
       categorize!(post, category!(site, name: "OTP", slug: "otp"))
-      translate!(site, post, "fa", "Tarjome")
 
       {:ok, view, _html} =
         mount_page(site, "blog-post-detail", %{slug: post.slug, post_base: "/en/blog"})
 
-      for role <- ~w(blog-detail-categories blog-detail-tags blog-detail-translations) do
+      for role <- ~w(blog-detail-categories blog-detail-tags) do
         assert has_element?(view, ~s([data-role="#{role}"])), "#{role} was not drawn"
       end
 
       assert [categories] = attrs_of(view, ~s([data-role="blog-detail-categories"]), "class")
       assert [tags] = attrs_of(view, ~s([data-role="blog-detail-tags"]), "class")
 
-      assert categories =~ "mt-6", "the row under the article lost the gap above it"
-      assert tags =~ "mt-3"
+      assert categories =~ "contents",
+             "the categories got a box of their own, so they no longer sit in the line of badges"
+
+      assert tags =~ "gap-2"
     end
   end
 
@@ -3113,7 +3170,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           tag_base: "/:lang/blog/tag"
         })
 
-      assert text_of(view, ~s([data-role="blog-detail-tag"])) == ["اکسیر"]
+      assert text_of(view, ~s([data-role="blog-detail-tag"])) == ["#اکسیر"]
       assert hrefs(view, ~s([data-role="blog-detail-tag"])) == []
     end
   end
@@ -3170,9 +3227,9 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
              ) == []
     end
 
-    # THE BOX TO WRITE IN COMES FIRST, under the heading, and the conversation follows it, so a
-    # long thread never pushes it out of reach.
-    test "puts the box to write in above the conversation", %{site: site} do
+    # THE BOX TO WRITE IN COMES AFTER THE CONVERSATION, which is how the design draws the post page:
+    # the thread, then the empty line, then the box with its button.
+    test "puts the box to write in under the conversation", %{site: site} do
       [post] = publish!(site, ["Ours"])
       comment!(site, post, content: "First")
 
@@ -3183,7 +3240,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       {form_at, _} = :binary.match(html, ~s(data-role="blog-comments-form"))
       {list_at, _} = :binary.match(html, ~s(data-role="blog-comments-list"))
 
-      assert form_at < list_at
+      assert list_at < form_at
     end
 
     # `whitespace-pre-line` KEEPS EVERY LINE BREAK, the template's own too: text on a line of its own
@@ -3462,7 +3519,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
           heading: "Comments"
         })
 
-      assert text_of(asked_in_english, ~s([data-role="blog-comments-heading"])) == ["Comments"]
+      assert labels(asked_in_english, ~s([data-role="blog-comments-heading"])) == ["Comments 0"]
     end
   end
 
@@ -3513,6 +3570,98 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
 
       assert titles(view) == ["Newer post", "Older post"]
       assert has_element?(view, ~s([data-role="blog-author-pager"])) == false
+    end
+
+    # THE DESIGN'S PERSON: the way back above the head, how many posts a reader can open and the team
+    # they are in beside it, and the cards under a heading that names them by their first name.
+    test "draws the way back, the numbers and the heading the design puts around a person", %{
+      site: site
+    } do
+      {:ok, view, _html} =
+        mount_page(site, "blog-author-profile", %{
+          slug: "mona",
+          back_href: "/blog/people",
+          back_text: "People",
+          posts_heading: "Posts by %{name}"
+        })
+
+      assert hrefs(view, ~s([data-role="blog-author-back"])) == ["/blog/people"]
+      assert squished(view, ~s([data-role="blog-author-back"])) == ["← People"]
+      assert squished(view, ~s([data-role="blog-author-stat"])) == ["2 posts"]
+      assert squished(view, ~s([data-role="blog-author-teams"])) == ["Team Core"]
+      assert text_of(view, ~s([data-role="blog-author-posts-heading"])) == ["Posts by Mona"]
+
+      {:ok, alone, _html} = mount_page(site, "blog-author-profile", %{slug: "mona"})
+      refute has_element?(alone, ~s([data-role="blog-author-back"]))
+    end
+
+    test "counts one post as a post, and nothing published as none", %{site: site} do
+      blogger!(site, display_name: "Quiet", slug: "quiet")
+      solo = blogger!(site, display_name: "Solo Writer", slug: "solo")
+      [only] = publish!(site, ["Solo post"])
+      credit!(only, solo)
+
+      {:ok, none, _html} = mount_page(site, "blog-author-profile", %{slug: "quiet"})
+      assert squished(none, ~s([data-role="blog-author-stat"])) == ["0 posts"]
+
+      {:ok, one, _html} = mount_page(site, "blog-author-profile", %{slug: "solo"})
+      assert squished(one, ~s([data-role="blog-author-stat"])) == ["1 post"]
+    end
+
+    # EACH POST IS ONE CARD AND ONE LINK, with the category it is filed under and the day it went out
+    # in the line over its title, and the badge a featured one carries over its picture.
+    test "draws each post as the design's card, with one link over the whole of it", %{
+      site: site,
+      writer: writer
+    } do
+      guides = category!(site, name: "Guides", slug: "guides")
+
+      post =
+        create_blog_post!(
+          site_id: site.id,
+          title: "Filed and featured",
+          status: :published,
+          featured: true,
+          published_at: ~U[2026-02-03 00:00:00Z]
+        )
+
+      credit!(post, writer)
+      categorize!(post, guides)
+
+      {:ok, view, _html} =
+        mount_page(site, "blog-author-profile", %{slug: "mona", post_base: "/:lang/blog"})
+
+      assert titles(view) == ["Filed and featured", "Newer post", "Older post"]
+      assert text_of(view, ~s([data-role="blog-list-category"])) == ["Guides"]
+      assert hd(text_of(view, ~s([data-role="blog-list-date"]))) == "03 Feb 2026"
+      assert squished(view, ~s([data-role="blog-list-featured"])) == ["★ Featured"]
+
+      links = hrefs(view, ~s([data-role="blog-list-item"] a))
+      assert length(links) == 3, "a card holds more than the one link over it"
+      assert hd(links) == "/blog/#{post.slug}"
+    end
+
+    test "draws the picture of a post that has one, and its first letter where it has none", %{
+      site: site,
+      writer: writer
+    } do
+      with_picture =
+        create_blog_post!(
+          site_id: site.id,
+          title: "Pictured",
+          status: :published,
+          featured_image_url: "https://cdn.example.test/pictured.png",
+          published_at: ~U[2026-02-03 00:00:00Z]
+        )
+
+      credit!(with_picture, writer)
+
+      {:ok, view, _html} = mount_page(site, "blog-author-profile", %{slug: "mona"})
+
+      assert attrs_of(view, ~s([data-role="blog-list-item"] img), "src") ==
+               ["https://cdn.example.test/pictured.png"]
+
+      assert text_of(view, ~s([data-role="blog-list-nocover"])) == ["N", "O"]
     end
 
     # A LINK ON A PROFILE IS AN ADDRESS SOMEBODY TYPED. Only one a browser should follow is put in
@@ -3690,6 +3839,52 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert titles(view) == ["By the team"]
     end
 
+    # THE TEAM AS THE DESIGN DRAWS A PERSON: the way back, a line under its name, and the numbers of
+    # posts and members in the head, with each member's own count on their card.
+    test "draws the way back, the numbers and the heading the design puts around it", %{
+      site: site
+    } do
+      {:ok, view, _html} =
+        mount_page(site, "blog-team-profile", %{
+          slug: "core",
+          back_href: "/blog/people",
+          back_text: "People",
+          posts_heading: "Posts by %{name}"
+        })
+
+      assert hrefs(view, ~s([data-role="blog-team-back"])) == ["/blog/people"]
+      assert text_of(view, ~s([data-role="blog-team-label"])) == ["Team"]
+      assert squished(view, ~s([data-role="blog-team-stat"])) == ["1 post", "1 member"]
+      assert text_of(view, ~s([data-role="blog-team-posts-heading"])) == ["Posts by Core"]
+
+      assert text_of(view, ~s([data-role="blog-team-member"] [data-role="blog-profile-count"])) ==
+               ["1 post"]
+
+      {:ok, alone, _html} = mount_page(site, "blog-team-profile", %{slug: "core"})
+      refute has_element?(alone, ~s([data-role="blog-team-back"]))
+    end
+
+    test "draws its cover across the top, and no cover where it has none", %{site: site} do
+      {:ok, plain, _html} = mount_page(site, "blog-team-profile", %{slug: "core"})
+      refute has_element?(plain, ~s([data-role="blog-team-cover"]))
+
+      team!(site,
+        name: "Pictured",
+        slug: "pictured",
+        cover_image_url: "https://cdn.example.test/cover.png"
+      )
+
+      {:ok, view, _html} = mount_page(site, "blog-team-profile", %{slug: "pictured"})
+
+      assert attrs_of(view, ~s([data-role="blog-team-cover"]), "src") ==
+               ["https://cdn.example.test/cover.png"]
+
+      {:ok, hidden, _html} =
+        mount_page(site, "blog-team-profile", %{slug: "pictured", show_cover: false})
+
+      refute has_element?(hidden, ~s([data-role="blog-team-cover"]))
+    end
+
     test "leaves a locked post out for a visitor who may not open it", %{site: site, ada: ada} do
       locked =
         create_blog_post!(
@@ -3759,7 +3954,8 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
   describe "blog-people" do
     setup %{site: site} do
       core = team!(site, name: "Core", slug: "core")
-      member!(core, blogger!(site, display_name: "Ada", slug: "ada"))
+      ada = blogger!(site, display_name: "Ada", slug: "ada")
+      member!(core, ada)
       gone = blogger!(site, display_name: "Gone", slug: "gone")
       member!(core, gone)
       Ash.destroy!(gone, action: :destroy, tenant: site.id, authorize?: false)
@@ -3772,7 +3968,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       blogger!(site, display_name: "Cyrus", slug: "cyrus")
       team!(site, name: "Empty", slug: "empty")
 
-      :ok
+      %{ada: ada}
     end
 
     test "draws every active team with its members, then the bloggers in none", %{site: site} do
@@ -3801,6 +3997,139 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
                "/blog/author/bea",
                "/blog/author/cyrus"
              ]
+    end
+
+    # THE NUMBER ON A CARD IS THE NUMBER BEHIND IT: the posts the reader may open, so a draft and a post
+    # locked away from them are not counted, and one that is theirs to open is.
+    test "says how many posts each person has that the reader may open", %{site: site} do
+      zed = blogger!(site, display_name: "Zed", slug: "zed")
+      [one, two] = publish!(site, ["Zed one", "Zed two"])
+      credit!(one, zed)
+      credit!(two, zed)
+      credit!(create_blog_post!(site_id: site.id, title: "Draft", status: :draft), zed)
+
+      locked =
+        create_blog_post!(
+          site_id: site.id,
+          title: "Members only",
+          status: :published,
+          permissions: ["members:read"],
+          published_at: ~U[2026-03-01 00:00:00Z]
+        )
+
+      credit!(locked, zed)
+      member = create_user_with_permissions!(["members:read"], site_id: site.id)
+
+      counted = fn attrs ->
+        {:ok, view, _html} = mount_page(site, "blog-people", attrs)
+
+        text_of(
+          view,
+          ~s([data-role="blog-people-person"] [data-role="blog-profile-count"])
+        )
+      end
+
+      assert counted.(%{}) == ["0 posts", "0 posts", "2 posts"]
+      assert counted.(%{current_user: member}) == ["0 posts", "0 posts", "3 posts"]
+    end
+
+    test "says a post in the words the page gave it, one in the singular", %{site: site, ada: ada} do
+      credit!(hd(publish!(site, ["Ada's only"])), ada)
+
+      {:ok, view, _html} =
+        mount_page(site, "blog-people", %{
+          post_text: "%{count} entry",
+          posts_text: "%{count} entries"
+        })
+
+      assert text_of(view, ~s([data-role="blog-people-member"] [data-role="blog-profile-count"])) ==
+               ["1 entry"]
+
+      assert text_of(view, ~s([data-role="blog-people-person"] [data-role="blog-profile-count"])) ==
+               ["0 entries", "0 entries"]
+    end
+
+    # THE DESIGN'S TEAM HEAD: its members' faces in a stack, and a corner that counts them.
+    test "stacks the faces of a team and counts its members", %{site: site} do
+      {:ok, view, _html} = mount_page(site, "blog-people", %{})
+
+      assert text_of(
+               view,
+               ~s([data-role="blog-people-team-faces"] [data-role="blog-profile-initial"])
+             ) == ["A"]
+
+      assert squished(view, ~s([data-role="blog-people-team-size"])) == ["Team · 1", "Team · 0"]
+    end
+
+    test "shows eight faces at most, and says how many more there are", %{site: site} do
+      crowd = team!(site, name: "Crowd", slug: "crowd")
+
+      for number <- 1..10 do
+        member!(crowd, blogger!(site, display_name: "Person #{number}", slug: "person-#{number}"))
+      end
+
+      {:ok, view, _html} = mount_page(site, "blog-people", %{})
+
+      faces =
+        text_of(view, ~s([data-role="blog-people-team-faces"] [data-role="blog-profile-initial"]))
+
+      # Crowd's eight, and Ada's one in Core.
+      assert length(faces) == 9
+      assert text_of(view, ~s([data-role="blog-people-team-more"])) == ["+2"]
+      assert "Team · 10" in squished(view, ~s([data-role="blog-people-team-size"]))
+    end
+
+    # ONE PERSON, ONE COLOUR: their letters are tinted by their slug, so the card, the head of their
+    # own page and a stack of faces all agree.
+    test "tints a person's letters the same wherever they are drawn", %{site: site} do
+      tint = fn view, selector ->
+        view
+        |> attrs_of(selector, "class")
+        |> hd()
+        |> String.split()
+        |> Enum.filter(&String.match?(&1, ~r/^(dark:)?(bg|text)-tint-[1-6](-ink)?(-dark)?$/))
+        |> Enum.sort()
+      end
+
+      {:ok, people, _html} = mount_page(site, "blog-people", %{})
+
+      {:ok, own_page, _html} = mount_page(site, "blog-author-profile", %{slug: "ada"})
+
+      card =
+        tint.(people, ~s([data-role="blog-people-member"] [data-role="blog-profile-initial"]))
+
+      faces =
+        tint.(people, ~s([data-role="blog-people-team-faces"] [data-role="blog-profile-initial"]))
+
+      head =
+        tint.(own_page, ~s([data-role="blog-author-card"] [data-role="blog-profile-initial"]))
+
+      assert length(card) == 4, "the tint is not the four classes of the theme's tokens"
+      assert card == faces
+      assert card == head
+    end
+
+    test "draws a picture where the blogger has one, and their letters where they have none", %{
+      site: site
+    } do
+      blogger!(site,
+        display_name: "Pictured",
+        slug: "pictured",
+        avatar_url: "https://cdn.example.test/pictured.png"
+      )
+
+      {:ok, view, _html} = mount_page(site, "blog-people", %{})
+
+      assert attrs_of(
+               view,
+               ~s([data-role="blog-people-person"] img[data-role="blog-profile-image"]),
+               "src"
+             ) == ["https://cdn.example.test/pictured.png"]
+
+      assert text_of(
+               view,
+               ~s([data-role="blog-people-person"] [data-role="blog-profile-initial"])
+             ) == ["B", "C"]
     end
 
     # A BLOGGER AND A TEAM ARE ONE ROW IN EVERY LANGUAGE, so their addresses are the page's own.

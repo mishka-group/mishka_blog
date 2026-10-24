@@ -22,15 +22,18 @@ defmodule MishkaBlog.ProvisionTest do
 
   import ExUnit.CaptureLog
 
-  alias MishkaBlog.Plugins.Installer
+  alias MishkaBlog.Plugins.{Installer, PageFrame}
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Install
   alias MishkaCmsCore.Install.{Bootstrap, Extensions}
   alias MishkaCmsCore.Runtime.Component
-  alias MishkaCmsCore.Runtime.Languages
-  alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.ExtensionProvision
+  alias MishkaCmsCore.Runtime.Helpers
+  alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.Media
+  alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.PageProvision
+  alias MishkaCmsCore.Runtime.SiteLayout
   alias MishkaCmsCore.Runtime.Snippet
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaInstaller.Event.EventHandler
@@ -62,6 +65,17 @@ defmodule MishkaBlog.ProvisionTest do
   end
 
   defp component(site, name), do: Enum.find(components(site), &(&1.name == name))
+
+  # The `{key, language}` rows the site holds for `keys`, sorted.
+  defp registered(site, keys) do
+    MishkaCmsCore.Runtime.Translation
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(key in ^keys and site_id == ^site.id)
+    |> Ash.read!(authorize?: false, page: false)
+    |> Enum.map(&{&1.key, &1.language})
+    |> Enum.sort()
+  end
+
   defp page(site, path), do: Enum.find(pages(site), &(&1.path == path))
 
   defp snippets(site) do
@@ -118,13 +132,15 @@ defmodule MishkaBlog.ProvisionTest do
   # credo:disable-for-next-line ExSlop.Check.Warning.DualKeyAccess
   defp attr_name(attr), do: to_string(attr["name"] || attr[:name])
 
-  # THE BLOG'S OWN WORDS ARE TRANSLATABLE. Its headings and its header's links ask `t/1` for their
-  # text, so `/fa/blog` reads Persian once somebody writes it — and creating the pages registers
-  # the words, so they are waiting in Translations the moment the blog is installed.
+  # THE BLOG'S OWN WORDS ARE TRANSLATABLE. Its headings ask `t/1` for their text, so `/fa/blog` reads
+  # Persian once somebody writes it — and creating the pages registers the words, so they are
+  # waiting in Translations the moment the blog is installed. The words of the bar under the header
+  # are asked for by `MishkaBlog.Plugins.PageFrame`, not by a template, so provisioning registers
+  # those itself.
   describe "the blog's words" do
-    test "every heading and header link asks t/1, none is written in English", %{site: site} do
+    test "every heading asks t/1, none is written in English", %{site: site} do
       Provision.ensure!(site)
-      templates = site |> pages() |> Enum.map_join("\n", & &1.template)
+      templates = site |> templates() |> Enum.map_join("\n", &elem(&1, 1))
 
       for word <- [
             "Categories",
@@ -133,11 +149,13 @@ defmodule MishkaBlog.ProvisionTest do
             "Latest posts",
             "Recent posts",
             "Search",
-            "Blog",
-            "Posts",
+            "Posts by %{name}",
+            "The people behind it",
             "Teams",
             "Members",
-            "Writers"
+            "Writers",
+            "Comments",
+            "Keep reading"
           ] do
         assert templates =~ ~s|t("#{word}")|, "#{word} is not asked of t/1"
       end
@@ -163,6 +181,45 @@ defmodule MishkaBlog.ProvisionTest do
         |> Enum.sort()
 
       assert languages == ["en", "fa"]
+    end
+
+    test "registers the words of the bar in each language, and keeps what a translator wrote",
+         %{site: site} do
+      on_exit(fn ->
+        MishkaCmsCore.Runtime.States.SettingsState.delete(site.id, "site.languages")
+      end)
+
+      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+      words = PageFrame.words()
+
+      assert Enum.sort(words) == ["Blog", "Categories", "People", "Posts", "Tags"]
+      assert registered(site, words) == []
+
+      Provision.ensure!(site)
+
+      assert registered(site, words) ==
+               for(word <- Enum.sort(words), language <- ["en", "fa"], do: {word, language})
+
+      {:ok, _} =
+        MishkaCmsCore.Runtime.Translation
+        |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+        |> Ash.Query.filter(key == "Posts" and language == "fa" and site_id == ^site.id)
+        |> Ash.read_one!(authorize?: false)
+        |> Ash.Changeset.for_update(:update, %{value: "نوشته‌ها"}, authorize?: false)
+        |> Ash.update(authorize?: false)
+
+      Provision.ensure!(site)
+
+      assert Enum.sort(registered(site, words)) ==
+               for(word <- Enum.sort(words), language <- ["en", "fa"], do: {word, language})
+
+      assert Ash.read_one!(
+               Ash.Query.filter(
+                 MishkaCmsCore.Runtime.Translation,
+                 key == "Posts" and language == "fa" and site_id == ^site.id
+               ),
+               authorize?: false
+             ).value == "نوشته‌ها"
     end
   end
 
@@ -212,6 +269,28 @@ defmodule MishkaBlog.ProvisionTest do
     end
 
     # THE PAGE SAYS WHAT IT SHOWS, so its SEO is the record's whatever path it is later given.
+    # THE HEADER, THE LANGUAGE SWITCHER AND THE FOOTER ARE THE LAYOUT'S, so a page of the blog draws
+    # none of them and is given the layout the site's own pages hang on. A site installed without
+    # starter content has none, and its pages are written with no layout rather than with a wrong one.
+    test "hangs every page on the site's site-main layout when it has one", %{site: site} do
+      layout = create_layout!(site_id: site.id, name: "site-main")
+      create_layout!(site_id: site.id, name: "another")
+
+      Provision.ensure!(site)
+
+      assert Enum.map(Provision.page_paths(), &page(site, &1).layout_id) ==
+               List.duplicate(layout.id, length(Provision.page_paths()))
+    end
+
+    test "writes the pages with no layout when the site has no site-main", %{site: site} do
+      create_layout!(site_id: site.id, name: "another")
+
+      Provision.ensure!(site)
+
+      assert Enum.map(Provision.page_paths(), &page(site, &1).layout_id) ==
+               List.duplicate(nil, length(Provision.page_paths()))
+    end
+
     test "marks each page that shows a record with the kind it shows", %{site: site} do
       Provision.ensure!(site)
       paths = Provision.item_paths()
@@ -238,6 +317,56 @@ defmodule MishkaBlog.ProvisionTest do
                ["blog:author", "blog:category", "blog:post", "blog:tag", "blog:team"]
 
       assert Enum.sort(shown) == Enum.sort(kinds)
+    end
+
+    # A PAGE DRAWS STRAIGHT INTO THE LAYOUT'S COLUMN. The header, the bar under it, the footer, the
+    # language switcher and the dark-mode toggle are the `site-main` layout's, and so are the column's
+    # width and its gutters (`MishkaCmsCore.Runtime.SiteLayout`): a page that drew a bar of its own
+    # would show the blog's name twice, and one that drew a container of its own would double the
+    # gutters and set the page narrower than the header above it.
+    test "draws every page with no chrome and no outer container of its own", %{site: site} do
+      Provision.ensure!(site)
+
+      for path <- Provision.page_paths() do
+        template = page(site, path).template
+
+        for tag <- ["<header", "<main", "<footer", "min-h-screen", "blog-sidebar"] do
+          refute template =~ tag, "#{path} draws #{tag}, which is the layout's"
+        end
+
+        for bar <- ["blog-section-nav", ~s(aria-current="page"), "<nav"] do
+          refute template =~ bar, "#{path} draws #{bar}, the bar the layout draws from the plugin"
+        end
+
+        for container <- ["mx-auto", "max-w-[1160px]", "1160px"] do
+          refute template =~ container, "#{path} draws #{container}, which is the layout's"
+        end
+
+        # the elements the page begins with, at the left edge of the template
+        for [opening] <- Regex.scan(~r/^<(?:div|section|article|aside)\b[^>]*>/m, template),
+            [_whole, classes] <- Regex.scan(~r/\bclass="([^"]*)"/, opening) do
+          refute classes =~ ~r/(?:^|\s)(?:mx-|max-w-|min-w-|w-screen|container)/,
+                 "#{path} begins with a box that sets its own width: #{classes}"
+
+          refute classes =~ ~r/(?:^|\s)(?:px|ps|pe|pl|pr)-/,
+                 "#{path} begins with a box that sets its own side padding: #{classes}"
+        end
+      end
+
+      people = page(site, "/:lang/blog/people").template
+
+      assert people =~ "<h1"
+      assert people =~ ~s|t("The people behind it")|
+      refute people =~ ~s|heading={t("People")}|, "the block would head the page a second time"
+    end
+
+    # THE ROOMS A PAGE KEEPS ARE ITS OWN: the room above its first section, which the layout cannot
+    # know, so the list pages begin with the design's `pt-16` and the home with the same.
+    test "gives a page the room above its first section and nothing at its sides", %{site: site} do
+      Provision.ensure!(site)
+
+      assert page(site, "/:lang/blog").template =~ ~r/\A<section class="[^"]*\bpt-16\b/
+      assert page(site, "/:lang/blog/people").template =~ ~r/\A<section class="[^"]*\bpt-16\b/
     end
 
     # WHO WRITES THE BLOG HAS PAGES TOO: a blogger's, a team's, and everybody at once, each drawn by
@@ -267,7 +396,10 @@ defmodule MishkaBlog.ProvisionTest do
       assert {"author_base", {:literal, "/:lang/blog/author"}} in given
       assert {"team_base", {:literal, "/:lang/blog/team"}} in given
 
-      assert page(site, "/:lang/blog").template =~
+      assert page(site, paths.author).template =~
+               ~s|site_path("/:lang/blog/people", @page.language)|
+
+      assert page(site, paths.team).template =~
                ~s|site_path("/:lang/blog/people", @page.language)|
     end
 
@@ -437,6 +569,7 @@ defmodule MishkaBlog.ProvisionTest do
       report = Provision.ensure!(site)
 
       assert %{components: [], pages: [], snippets: []} = report
+
       assert Enum.map(report.skipped_pages, & &1.path) == Provision.page_paths()
 
       assert length(components(site)) == length(Provision.component_names())
@@ -742,41 +875,14 @@ defmodule MishkaBlog.ProvisionTest do
       refute Extensions.installed?(site.id, "mishka_shop")
     end
 
-    # EVERY SITE THAT EXISTED BEFORE THERE WAS AN INSTALLER has this extension and no record of how
-    # it got there. Asking the setting alone would show all of them the installer, which is the
-    # opposite of what it is for — so a site with no record is ASKED, on this same event, and the
-    # answer is written down so it is asked once.
-    test "a site that already has the pages counts as installed, record or no record", %{
-      site: site
-    } do
-      refute Extensions.installed?(site.id, :mishka_blog)
-
-      assert {:ok, _report} = Extensions.install(site.id, "mishka_blog")
-
-      {:ok, _} = MishkaCmsCore.Settings.put("mishka_blog.installed", "", site_id: site.id)
-
-      assert Extensions.installed?(site.id, :mishka_blog),
-             "a site running the blog was told it had never been set up"
-
-      assert Extensions.installed_version(site.id, :mishka_blog) == "unknown",
-             "the answer was not written down, so it would be asked again on every render"
-    end
-
-    # ANY OF THE PAGES IS ENOUGH, and a page of another site is not this site's.
-    test "a site holding one of the pages counts as installed, and one holding none does not", %{
-      site: site
-    } do
-      refute Extensions.installed?(site.id, :mishka_blog)
-
-      other = create_site!(active: true)
-      create_page!(site_id: other.id, path: hd(Provision.page_paths()), active: true)
-
-      refute Extensions.installed?(site.id, :mishka_blog),
-             "a page of another site made this site look set up"
-
+    # ONLY THE RECORD SAYS SO. Core asks nothing of a site carrying no record of an install, so a site
+    # holding the blog's pages without one reads as not installed, and asking writes nothing.
+    test "a site holding the pages but no record of an install is not installed", %{site: site} do
       create_page!(site_id: site.id, path: hd(Provision.page_paths()), active: true)
 
-      assert Extensions.installed?(site.id, :mishka_blog)
+      refute Extensions.installed?(site.id, :mishka_blog)
+      assert Extensions.installed_version(site.id, :mishka_blog) == nil
+      assert components(site) == []
     end
 
     # THE SCREEN GETS A FIXED MESSAGE, never the exception's own text; the log has the detail. An
@@ -914,12 +1020,28 @@ defmodule MishkaBlog.ProvisionTest do
                  extensions: ["mishka_blog"]
                })
 
-      on_exit(fn -> SiteState.delete(first.id) end)
+      # THE RUN COMPILES THE SITE ONTO DISK, as it does for a real one: its templates under
+      # `priv/static/temp/runtime/<name>` and the media the starter content saves under
+      # `uploads/<id>`. Neither goes away with the database's rollback, so each is removed here.
+      on_exit(fn ->
+        SiteState.delete(first.id)
+        File.rm_rf(Helpers.static_temp_dir(["runtime", first.name]))
+        File.rm_rf(Path.join([Media.static_dir(), "uploads", first.id]))
+      end)
 
       assert Install.installed?()
       assert Extensions.installed?(first.id, :mishka_blog)
-      assert length(components(first)) == length(Provision.component_names())
+      # the site's own starter components (its header and footer) are there beside the blog's
+      assert Provision.component_names() -- Enum.map(components(first), & &1.name) == []
       assert Provision.page_paths() -- Enum.map(pages(first), & &1.path) == []
+
+      # AND THE BLOG'S PAGES HANG ON THE LAYOUT THE WIZARD WROTE FIRST, with its header and footer
+      layout_id = SiteLayout.layout_id(first.id)
+      assert <<_uuid::binary-size(36)>> = layout_id
+
+      for path <- Provision.page_paths() do
+        assert page(first, path).layout_id == layout_id, "#{path} is not on site-main"
+      end
 
       assert {:error, {:extension_failed, _message}} = Extensions.install(site.id, "mishka_blog")
 
@@ -955,26 +1077,6 @@ defmodule MishkaBlog.ProvisionTest do
     |> Ash.read!(authorize?: false, page: [limit: 100])
     |> Map.fetch!(:results)
     |> Enum.filter(&(&1.path in paths))
-  end
-
-  # A SITE FOUND ALREADY SET UP is recorded without a run, so the names a run would have created
-  # come from the answer to "is it already here?".
-  describe "a site found already set up" do
-    test "gets the blog's permission names it is missing", %{site: site} do
-      assert {:ok, _report} = Extensions.install(site.id, "mishka_blog")
-      names = Enum.map(Provision.manifest().permissions, &elem(&1, 0))
-
-      MishkaCmsCore.Accounts.Permission
-      |> Ash.Query.filter(name in ^names)
-      |> Ash.read!(authorize?: false, page: false)
-      |> Enum.each(&Ash.destroy!(&1, authorize?: false))
-
-      {:ok, _} = MishkaCmsCore.Settings.put("mishka_blog.installed", "", site_id: site.id)
-      assert stored_permissions(names) == []
-
-      assert Extensions.installed?(site.id, :mishka_blog)
-      assert Enum.sort(stored_permissions(names)) == Enum.sort(names)
-    end
   end
 
   defp stored_permissions(names) do

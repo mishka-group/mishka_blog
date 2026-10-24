@@ -8,30 +8,40 @@ defmodule MishkaBlog.Kit do
 
   ## What is in the bundle, and why it is a bundle
 
-  `priv/cms_ui_kits/mishka_blog.json` carries sixteen components of two kinds. Each is complete on
+  `priv/cms_ui_kits/mishka_blog.json` carries seventeen components of two kinds. Each is complete on
   its own: its markup, its declarations, and its own code, including the Ash reads it runs. Nothing
   about them lives in Elixir.
 
-  ### The ten blocks, which are live components
+  ### The eleven blocks, which are live components
 
   `blog-post-list`, `blog-featured-posts`, `blog-post-search`, `blog-tag-cloud`,
-  `blog-post-detail`, `blog-category-list`, `blog-post-comments`, `blog-author-profile`,
-  `blog-team-profile` and `blog-people`. Each is a `Phoenix.LiveComponent` that runs its own query,
-  so an author can put any of them on any page, on its own or beside the others, and each holds what
-  it read.
+  `blog-post-detail`, `blog-category-list`, `blog-post-comments`, `blog-related-posts`,
+  `blog-author-profile`, `blog-team-profile` and `blog-people`. Each is a `Phoenix.LiveComponent`
+  that runs its own query, so an author can put any of them on any page, on its own or beside the
+  others, and each holds what it read.
 
-  A blogger's page and a team's read their own page of posts and draw it with the list's own
-  `blog-post-card` and `blog-pager`. They cannot draw `blog-post-list` itself: a component's markup
-  may not hold a live component (`MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement`).
+  A blogger's page and a team's read their own page of posts and draw it with `blog-pager` and, for
+  each post, `blog-post-card` in its `related` variant, which is also the card under an article
+  (`blog-related-posts`): a 16:8 cover, the category and the date, the title in the serif, two lines
+  of the summary, one link over the whole of it. They cannot draw `blog-post-list` itself: a
+  component's markup may not hold a live component
+  (`MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement`).
 
   ### The six pieces, which are function components
 
   `blog-post-card`, `blog-post-meta`, `blog-term-row`, `blog-pager`, `blog-notice` and
   `blog-profile-card`. These hold nothing and read nothing: they draw what the block above hands
   them. They are components rather than markup inside one block because more than one block draws
-  them — the card is drawn by the paged list and by the featured strip, the profile card by both
-  profiles and by `blog-people`, the notice by every block but the search box — and an admin who
-  restyles a card restyles it once.
+  them — the card is drawn by the paged list, by the featured strip, by the posts to read next and by
+  both profiles, the profile card by both profiles and by `blog-people`, the notice by every block
+  but the search box — and an admin who restyles a card restyles it once.
+
+  Two of them are also where a colour is decided, once, so the same post or person is the same
+  colour on every page that draws them. `blog-post-card` draws a post's cover — its picture, or its
+  first letter on the tint its slug picks — for the grid, the strip, the posts to read next, a
+  person's page and the head of the article. `blog-profile-card` draws a person's picture, or their
+  letters on the tint their slug picks, as a tile, a pill or the picture alone at four sizes or any
+  size a caller sets; the byline of a card and of an article draw it too.
 
   ### Who they read as
 
@@ -56,7 +66,7 @@ defmodule MishkaBlog.Kit do
   strip is `blog-featured-posts` now: it is its own query, so it is its own load and its own place
   on a page, and an author who wants only it no longer carries a pager, a sort button and a page
   size to turn off one at a time. The switch stays on the list, because "the featured archive,
-  paged" is a list and because a site provisioned before this still has a page that sets it.
+  paged" is a list.
 
   The sidebar's "Recent posts" is NOT a component of its own, and that is the same rule read the
   other way. It is the same query, the same paging and the same card as the list — `variant`
@@ -91,11 +101,16 @@ defmodule MishkaBlog.Kit do
   What puts the rows INTO the new one is `asked/1`: a streamed row is drawn once and never
   re-rendered, so everything a row is built from is part of the read's own signature.
 
-  Two read in step with the page on every read, not only the first, and both on purpose:
+  Three read in step with the page on every read, not only the first, and all on purpose:
 
     * `blog-post-detail` is what the page IS. A skeleton where the article should be is a worse
       page than one that takes as long as the article does, and a crawler that is served the
       skeleton is served nothing.
+    * `blog-related-posts` is three cards under the article, and a read of the same kind as the
+      article's own: the post the URL names, its categories and, in one read, the newest posts of
+      them followed by the newest of the rest. It reads again only when what it is read for
+      changes, because the page re-renders it far more often than anybody asks for different
+      reading.
     * `blog-post-search` reads nothing until the reader types. Its query is already a round trip
       the reader started, and one run in a task could land after a later one and answer the wrong
       words.

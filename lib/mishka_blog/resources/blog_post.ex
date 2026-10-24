@@ -2820,6 +2820,27 @@ defmodule MishkaBlog.BlogPost do
       description "All language variants (translations) of this blog post"
     end
 
+    # THE OTHER EDITIONS OF THE POST AS ITS READER MAY OPEN THEM: the rows of its group of
+    # translations — keyed by the master's own id, which the master itself may not carry
+    # (`MishkaCmsCore.LanguageEditions`) — through the public read, so a draft, one locked to
+    # permissions the reader does not hold, by its own lock or a category's, and one whose page is
+    # closed to the reader are not among them. Loaded with the post a page reads
+    # (`MishkaBlog.PageSource`), as that page's visitor.
+    has_many :editions, MishkaBlog.BlogPost do
+      public? false
+      no_attributes? true
+      read_action :public_list
+
+      filter expr(
+               id != parent(id) and
+                 (language_group_id == parent(language_group_id) or
+                    id == parent(language_group_id) or
+                    (is_nil(parent(language_group_id)) and language_group_id == parent(id)))
+             )
+
+      description "The other editions of this post a reader may open"
+    end
+
     # Bypass relationship - for master admin users without tenant
     has_many :master_language_variants, MishkaBlog.BlogPost do
       public? true
@@ -3115,6 +3136,17 @@ defmodule MishkaBlog.BlogPost do
     count :version_count, :sorted_versions do
       public? true
       multitenancy :bypass
+    end
+
+    # THE WORD BEFORE THE DATE ON A CARD: the first category the post is filed under, in the order
+    # the blog's editors gave them, through `Collection.public_list` (`:collections`) as the reader
+    # the post is read for, so a category they may not open is not named. In the statement that
+    # reads the posts, where loading `collections` for it is a read of its own.
+    first :first_category_name, :collections, :name do
+      public? true
+      sort display_order: :asc, name: :asc
+
+      description "The name of the first category the post is filed under, as the reader may open it"
     end
   end
 

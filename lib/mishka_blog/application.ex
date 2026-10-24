@@ -78,6 +78,17 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.ContentComponents
   ]
 
+  # Reads the rows a blog page shows once for its head, its frame and its blocks (a
+  # `runtime:page:source` plugin, `MishkaCmsCore.Runtime.PageSource`), hands the `site-main` layout
+  # the blog's bar and the languages of the record a blog page shows (a `runtime:page:frame`
+  # plugin), and keeps the words that bar looks up from "Remove unused" (a
+  # `runtime:translations:used_keys` plugin).
+  @frame_plugins [
+    MishkaBlog.Plugins.PageSource,
+    MishkaBlog.Plugins.PageFrame,
+    MishkaBlog.Plugins.TranslationKeys
+  ]
+
   # Each code block of a post being written is lexed in a task of its own under this supervisor — see
   # `MishkaBlog.Resources.Changes.HighlightCode`.
   @highlight_supervisor {Task.Supervisor, name: MishkaBlog.HighlightSupervisor}
@@ -93,7 +104,8 @@ defmodule MishkaBlog.Application do
         @notify_plugins ++
         @settings_plugins ++
         @sidebar_menus ++
-        @provision_plugins ++ @seo_plugins ++ @share_card_plugins ++ @runtime_plugins
+        @provision_plugins ++
+        @seo_plugins ++ @share_card_plugins ++ @runtime_plugins ++ @frame_plugins
 
   @impl true
   def start(_type, _args) do

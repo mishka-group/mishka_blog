@@ -931,7 +931,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       assert answered.type == "profile"
       assert answered.permissions == []
 
-      assert %{"mainEntity" => person} = schema_of(answered, "ProfilePage")
+      assert %{"mainEntity" => person, "inLanguage" => "en"} = schema_of(answered, "ProfilePage")
       assert person["@type"] == "Person"
       assert person["name"] == "Shahryar Tavakkoli"
       assert person["sameAs"] == ["https://github.com/shahryarjb"]
@@ -999,6 +999,8 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
 
       assert %{"mainEntity" => %{"@type" => "Organization", "member" => members}} =
                schema_of(answered, "ProfilePage")
+
+      assert schema_of(answered, "ProfilePage")["inLanguage"] == "en"
 
       assert Enum.map(members, & &1["name"]) == ["Mona Aghili", "Shahryar Tavakkoli"]
       assert blog_crumb(answered)["item"] == base() <> "/blog"

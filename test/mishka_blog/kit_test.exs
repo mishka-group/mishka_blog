@@ -36,7 +36,8 @@ defmodule MishkaBlog.KitTest do
   # lets every assertion below ask the right question of each — a function component has no socket,
   # so it has no `mount/1`, no `id={@id}` and nothing to aim an event at.
   @live ~w(blog-post-list blog-featured-posts blog-post-search blog-tag-cloud blog-post-detail
-           blog-category-list blog-post-comments blog-author-profile blog-team-profile blog-people)
+           blog-category-list blog-post-comments blog-related-posts blog-author-profile blog-team-profile
+           blog-people)
 
   @functions ~w(blog-post-card blog-post-meta blog-term-row blog-pager blog-notice
                 blog-profile-card)
@@ -85,7 +86,7 @@ defmodule MishkaBlog.KitTest do
       assert bundle()["name"] == "mishka_blog"
     end
 
-    test "ships exactly the sixteen components, each of the kind it is listed under" do
+    test "ships exactly the seventeen components, each of the kind it is listed under" do
       assert Enum.map(components(), & &1["name"]) |> Enum.sort() == Enum.sort(@names)
 
       for component <- components() do
@@ -375,8 +376,68 @@ defmodule MishkaBlog.KitTest do
           ]
           |> Enum.join()
 
-        assert callers =~ ~r/\b#{Regex.escape(name)}\s*\(/,
+        # A FUNCTION COMPONENT A HELPER DEFINES IS CALLED THE WAY HEEX CALLS IT, `<.name …/>`.
+        assert callers =~ ~r/\b#{Regex.escape(name)}\s*\(|<\.#{Regex.escape(name)}\b/,
                "#{component["name"]} carries #{name}/n and calls it nowhere"
+      end
+    end
+
+    # THE LAYOUT OWNS THE WIDTH OF THE PAGE (`MishkaCmsCore.Runtime.SiteLayout`): its column is the
+    # 1160 px of the header and the footer, with the gutters of both, and a block is drawn straight
+    # into it. A block that centred itself in a container of its own would double the gutters and
+    # set the page narrower than the header above it. The columns inside a block, the text's and the
+    # article's, are its own; the page's is not.
+    test "and none draws a container of the page's width, or runs to the window's edges" do
+      for component <- components() do
+        source = component["template"] <> Enum.map_join(component["helpers"], & &1["code"])
+
+        for container <- ["mx-auto", "max-w-[1160px]", "w-screen", "site-bleed"] do
+          refute source =~ container,
+                 "#{component["name"]} draws #{container}, which is the layout's"
+        end
+      end
+    end
+
+    # THE COLOURS THE SITE'S THEME HAS ARE ITS TOKENS (`MishkaCmsCore.Install.StarterContent`), not
+    # hex values of the block's own: a theme an admin edits, or a release that moves a tint, then
+    # reaches the blog too. So every token the blog names exists in the theme, and none of the
+    # values the theme's shared tokens hold is written out as a hex value.
+    test "and write the theme's colours as its tokens" do
+      theme =
+        for [name, value] <-
+              Regex.scan(
+                ~r/--color-([a-z0-9-]+):\s*(#[0-9a-f]{6});/,
+                MishkaCmsCore.Install.StarterContent.theme_css(),
+                capture: :all_but_first
+              ),
+            into: %{},
+            do: {name, value}
+
+      assert map_size(theme) > 40, "the theme was not read, so nothing is asserted of the blog"
+
+      shared =
+        ~r/^(tint-\d.*|chip-wash.*|brand-dark|body.*|edge-hover|warn-ink.*|warn-wash.*)$/
+
+      held = for {name, value} <- theme, name =~ shared, do: value
+      assert length(held) > 20
+
+      for component <- components() do
+        source = component["template"] <> Enum.map_join(component["helpers"], & &1["code"])
+
+        for value <- held do
+          refute String.contains?(source, "[#{value}]"),
+                 "#{component["name"]} writes #{value}, which is a token of the theme"
+        end
+
+        used =
+          ~r/(?:bg|text|border|divide|ring|from|to)-((?:tint-[1-6](?:-ink)?|chip-wash|brand|body|edge-hover|warn-ink|warn-wash)(?:-dark)?)(?![\w-])/
+          |> Regex.scan(source, capture: :all_but_first)
+          |> List.flatten()
+
+        for token <- Enum.uniq(used) do
+          assert Map.has_key?(theme, token),
+                 "#{component["name"]} draws #{token}, which the theme does not declare"
+        end
       end
     end
 
