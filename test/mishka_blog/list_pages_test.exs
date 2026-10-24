@@ -525,6 +525,16 @@ defmodule MishkaBlog.ListPagesTest do
       second = render_page(site, "/:lang/blog", %{"q" => "Post", "page" => "2"})
       assert length(titles(second)) == 3
       assert text(second, ~s([data-role="blog-list-showing"])) == ["Showing 10–12 of 12"]
+
+      # On the last page, Next and Last stay in range and out of the keyboard's way.
+      for role <- ["blog-list-next", "blog-list-last"] do
+        [href] = attrs(second, ~s(a[data-role="#{role}"]), "href")
+        assert href =~ "page=2"
+        assert attrs(second, ~s(a[data-role="#{role}"]), "aria-disabled") == ["true"]
+        assert attrs(second, ~s(a[data-role="#{role}"]), "tabindex") == ["-1"]
+      end
+
+      assert attrs(html, ~s(a[data-role="blog-list-next"]), "tabindex") == []
     end
 
     test "leaves the page number out of the pager when everything fits on one page", %{site: site} do
