@@ -257,17 +257,20 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     refused =
       Enum.map(kept, fn helper ->
         case helper.name do
-          "fetch" -> %{helper | args: "_asked", code: "{:error, :refused}"}
+          "fetch" -> %{helper | args: unused(helper.args), code: "{:error, :refused}"}
           _left_alone -> helper
         end
       end)
 
-    refute refused == kept, "#{name} has no fetch/1, so nothing was refused"
+    refute refused == kept, "#{name} has no fetch, so nothing was refused"
 
     write_helpers!(site, name, refused)
 
     kept
   end
+
+  # The same arguments, each one unused: `asked`, and the page's rows where the block takes them.
+  defp unused(args), do: Regex.replace(~r/\b([a-z]\w*)/, args, "_\\1")
 
   # THE CLOUD TWICE ON ONE PAGE, because it has TWO row containers and draws whichever one the page
   # gave it a base for — a guard put on one of them is a guard missing from the other, and one

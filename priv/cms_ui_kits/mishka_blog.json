@@ -439,6 +439,14 @@
           }
         },
         {
+          "name": "page_source",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The rows the page read for this address, handed down by the page as page_source={assigns[:page_source]}. What it holds for exactly a read this block makes, for this same reader, is taken from it; anything else is read here, as it is without it."
+          }
+        },
+        {
           "name": "current_user",
           "type": "any",
           "opts": {
@@ -498,6 +506,16 @@
           "name": "read_as",
           "args": "visitor",
           "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
+        },
+        {
+          "name": "source_of",
+          "args": "assigns",
+          "code": "# THE ROWS THE PAGE READ FOR THIS ADDRESS, when it handed them down (`page_source`) and read them for\n# this block's reader on this block's site; `nil` otherwise, and the block reads for itself. Read by\n# their shape, the one the extension's page source documents: a block calls nothing of its code.\nsite = site_id()\n\nvisitor =\n  case assigns[:current_user] do\n    %{id: id} -> id\n    _guest -> nil\n  end\n\ncase assigns[:page_source] do\n  %{rows_of: \"mishka_blog\", site_id: ^site, visitor: ^visitor} = source -> source\n  _not_for_this_block -> nil\nend\n"
+        },
+        {
+          "name": "shared",
+          "args": "source, read",
+          "code": "# ONE READ THIS BLOCK WOULD MAKE, answered by the rows the page read once for its head, its frame\n# and its blocks: `{:ok, rows}` where the page read exactly that, as this reader, and `:error` where\n# it did not, so the block reads it itself.\n#\n#   * `{:record, kind, slug, language}` — the post, category or tag the page's slug names in its\n#     language, or the blogger or team (`:any` language: one row in every language); `nil` where\n#     the reader's read found none;\n#   * `{:featured, limit, language}` — the front page's newest featured posts;\n#   * `{:total, category, tag, language}` — how many posts the reader may open in the language, of\n#     the category or the tag the page is of, or of none on the front page.\ncase {source, read} do\n  {%{kind: kind, slug: slug, language: language, record: record}, {:record, kind, slug, language}}\n  when kind != \"blog:home\" ->\n    {:ok, record}\n\n  {%{kind: kind, slug: slug, record: record}, {:record, kind, slug, :any}}\n  when kind in [\"blog:author\", \"blog:team\"] ->\n    {:ok, record}\n\n  {%{kind: \"blog:home\", language: language, featured: %{limit: limit, rows: rows}},\n   {:featured, limit, language}} ->\n    {:ok, rows}\n\n  {%{kind: \"blog:home\", language: language, total: total}, {:total, \"\", \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:category\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, slug, \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:tag\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, \"\", slug, language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  _not_read_for_this ->\n    :error\nend\n"
         },
         {
           "name": "site_name",
@@ -581,8 +599,8 @@
         },
         {
           "name": "narrow",
-          "args": "query, asked",
-          "code": "require Ash.Query\n\nquery = narrow_language(query, asked.language)\n\nquery =\n  case asked.featured_only do\n    true -> Ash.Query.filter(query, featured == true)\n    false -> query\n  end\n\n# THE ROW THE HEADING NAMES IS THE ROW THE LIST IS OF. A slug is unique per SITE and not per\n# language, so `filter_row/1` resolves it in the page's language — and narrowed by the slug alone\n# this listed the Persian posts filed under an English category beneath the page's fallback\n# heading, having just decided that category does not exist in Persian. Empty and `all` narrow\n# nothing, the same two answers `only_language/2` gives.\nquery =\n  case {asked.collection, asked.language} do\n    {\"\", _the_whole_archive} ->\n      query\n\n    {wanted, code} when code not in [\"\", \"all\"] ->\n      Ash.Query.filter(\n        query,\n        exists(collections, slug == ^wanted and status == :active and language == ^code)\n      )\n\n    {wanted, _every_language} ->\n      Ash.Query.filter(query, exists(collections, slug == ^wanted and status == :active))\n  end\n\nquery =\n  case {asked.tag, asked.language} do\n    {\"\", _the_whole_archive} ->\n      query\n\n    {wanted, code} when code not in [\"\", \"all\"] ->\n      Ash.Query.filter(query, exists(tags, slug == ^wanted and language == ^code))\n\n    {wanted, _every_language} ->\n      Ash.Query.filter(query, exists(tags, slug == ^wanted))\n  end\n\n# THE WORDS A READER TYPED, matched in the title and in the summary, whatever their case — what the\n# search box on the blog's home asks for.\nquery =\n  case asked.search do\n    \"\" ->\n      query\n\n    term ->\n      found = Ash.CiString.new(term)\n      Ash.Query.filter(query, contains(title, ^found) or contains(excerpt, ^found))\n  end\n\nquery =\n  case asked.exclude_featured do\n    0 -> query\n    count -> Ash.Query.filter(query, not (id in ^featured_ids(asked, count)))\n  end\n\ncase asked.exclude_slug do\n  \"\" -> query\n  wanted -> Ash.Query.filter(query, slug != ^wanted)\nend"
+          "args": "query, asked, source",
+          "code": "require Ash.Query\n\nquery = narrow_language(query, asked.language)\n\nquery =\n  case asked.featured_only do\n    true -> Ash.Query.filter(query, featured == true)\n    false -> query\n  end\n\n# THE ROW THE HEADING NAMES IS THE ROW THE LIST IS OF. A slug is unique per SITE and not per\n# language, so `filter_row/1` resolves it in the page's language — and narrowed by the slug alone\n# this listed the Persian posts filed under an English category beneath the page's fallback\n# heading, having just decided that category does not exist in Persian. Empty and `all` narrow\n# nothing, the same two answers `only_language/2` gives.\nquery =\n  case {asked.collection, asked.language} do\n    {\"\", _the_whole_archive} ->\n      query\n\n    {wanted, code} when code not in [\"\", \"all\"] ->\n      Ash.Query.filter(\n        query,\n        exists(collections, slug == ^wanted and status == :active and language == ^code)\n      )\n\n    {wanted, _every_language} ->\n      Ash.Query.filter(query, exists(collections, slug == ^wanted and status == :active))\n  end\n\nquery =\n  case {asked.tag, asked.language} do\n    {\"\", _the_whole_archive} ->\n      query\n\n    {wanted, code} when code not in [\"\", \"all\"] ->\n      Ash.Query.filter(query, exists(tags, slug == ^wanted and language == ^code))\n\n    {wanted, _every_language} ->\n      Ash.Query.filter(query, exists(tags, slug == ^wanted))\n  end\n\n# THE WORDS A READER TYPED, matched in the title and in the summary, whatever their case — what the\n# search box on the blog's home asks for.\nquery =\n  case asked.search do\n    \"\" ->\n      query\n\n    term ->\n      found = Ash.CiString.new(term)\n      Ash.Query.filter(query, contains(title, ^found) or contains(excerpt, ^found))\n  end\n\nquery =\n  case asked.exclude_featured do\n    0 -> query\n    count -> Ash.Query.filter(query, not (id in ^featured_ids(asked, count, source)))\n  end\n\ncase asked.exclude_slug do\n  \"\" -> query\n  wanted -> Ash.Query.filter(query, slug != ^wanted)\nend"
         },
         {
           "name": "only_language",
@@ -591,13 +609,23 @@
         },
         {
           "name": "filter_row",
-          "args": "asked",
-          "code": "require Ash.Query\n\n# THE ROW THE LIST IS OF, when a category or a tag narrows it: the heading's words, and for a tag\n# the words of the chip that says so. A tag's row is read for the chip even when the page gives the\n# list a heading of its own.\nrow =\n  cond do\n    asked.collection != \"\" and asked.show_filter_title ->\n      {:collection,\n       MishkaBlog.Collection\n       |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n       |> Ash.Query.filter(slug == ^asked.collection)\n       |> only_language(asked.language)\n       |> Ash.Query.select([:id, :name, :description])\n       |> Ash.read(tenant: site_id(), page: [limit: 1])\n       |> first_row()}\n\n    asked.tag != \"\" and (asked.show_filter_title or asked.tagged_text != \"\") ->\n      {:tag,\n       MishkaBlog.Tag\n       |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n       |> Ash.Query.filter(slug == ^asked.tag)\n       |> only_language(asked.language)\n       |> Ash.Query.select([:id, :name, :description])\n       |> Ash.read(tenant: site_id(), page: [limit: 1])\n       |> first_row()}\n\n    true ->\n      {nil, nil}\n  end\n\n# TITLED, when the list is headed with the row's own name: a category's always, a tag's unless the\n# page gave a heading for tags of its own, which is what the design's chip under it is for.\ncase row do\n  {_kind, nil} ->\n    nil\n\n  {kind, found} ->\n    %{\n      kind: kind,\n      name: found.name,\n      description: found.description,\n      titled: asked.show_filter_title and (kind == :collection or asked.tag_heading == \"\")\n    }\nend"
+          "args": "asked, source",
+          "code": "require Ash.Query\n\n# THE ROW THE LIST IS OF, when a category or a tag narrows it: the heading's words, and for a tag\n# the words of the chip that says so. A tag's row is read for the chip even when the page gives the\n# list a heading of its own.\nrow =\n  cond do\n    asked.collection != \"\" and asked.show_filter_title ->\n      {:collection,\n       shared_row(source, \"blog:category\", asked) ||\n         MishkaBlog.Collection\n         |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n         |> Ash.Query.filter(slug == ^asked.collection)\n         |> only_language(asked.language)\n         |> Ash.Query.select([:id, :name, :description])\n         |> Ash.read(tenant: site_id(), page: [limit: 1])\n         |> first_row()}\n\n    asked.tag != \"\" and (asked.show_filter_title or asked.tagged_text != \"\") ->\n      {:tag,\n       shared_row(source, \"blog:tag\", asked) ||\n         MishkaBlog.Tag\n         |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n         |> Ash.Query.filter(slug == ^asked.tag)\n         |> only_language(asked.language)\n         |> Ash.Query.select([:id, :name, :description])\n         |> Ash.read(tenant: site_id(), page: [limit: 1])\n         |> first_row()}\n\n    true ->\n      {nil, nil}\n  end\n\n# TITLED, when the list is headed with the row's own name: a category's always, a tag's unless the\n# page gave a heading for tags of its own, which is what the design's chip under it is for.\ncase row do\n  {_kind, nil} ->\n    nil\n\n  {kind, found} ->\n    %{\n      kind: kind,\n      name: found.name,\n      description: found.description,\n      titled: asked.show_filter_title and (kind == :collection or asked.tag_heading == \"\")\n    }\nend"
+        },
+        {
+          "name": "shared_row",
+          "args": "source, kind, asked",
+          "code": "# THE CATEGORY OR THE TAG THE PAGE IS OF, as the page read it once for its head and its blocks, when\n# it handed it down for this reader and it is the one this list is narrowed by; `nil` where it is\n# not, and the row is read here. A category or a tag the reader may not open is no row either way.\nslug =\n  case kind do\n    \"blog:category\" -> asked.collection\n    \"blog:tag\" -> asked.tag\n  end\n\ncase shared(source, {:record, kind, slug, asked.language}) do\n  {:ok, %{} = row} -> row\n  _not_shared -> nil\nend\n"
         },
         {
           "name": "posts_page",
-          "args": "asked, page, per_page",
-          "code": "require Ash.Query\n\n# WHAT A CARD IS DRAWN FROM comes with the post: the categories it is filed under and the people who\n# wrote it, each read as the visitor so one they may not open is not named, and what the post opens\n# with, which is what puts the lock on a card. `effective_permissions` reads nothing while no\n# category of the site is locked. A line in a sidebar draws none of it, so it reads none of it.\nMishkaBlog.BlogPost\n|> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n|> narrow(asked)\n|> Ash.Query.sort(published_at: direction(asked.sort), id: :asc)\n|> Ash.Query.select([\n  :id,\n  :title,\n  :slug,\n  :language,\n  :excerpt,\n  :published_at,\n  :featured_image_url,\n  :featured,\n  :reading_time_minutes\n])\n|> with_card(asked.variant)\n|> Ash.read(\n  tenant: site_id(),\n  page: [limit: per_page, offset: (page - 1) * per_page, count: true]\n)\n|> paged()"
+          "args": "asked, page, per_page, source",
+          "code": "require Ash.Query\n\n# WHAT A CARD IS DRAWN FROM comes with the post: the categories it is filed under and the people who\n# wrote it, each read as the visitor so one they may not open is not named, and what the post opens\n# with, which is what puts the lock on a card. `effective_permissions` reads nothing while no\n# category of the site is locked. A line in a sidebar draws none of it, so it reads none of it.\n#\n# HOW MANY POSTS THE LIST PAGES THROUGH is the page's own count where the page read it once for its\n# search box too (`shared_total/2`), and only the page of posts is read; else Ash counts them beside\n# the page.\ntotal = shared_total(asked, source)\n\nMishkaBlog.BlogPost\n|> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n|> narrow(asked, source)\n|> Ash.Query.sort(published_at: direction(asked.sort), id: :asc)\n|> Ash.Query.select([\n  :id,\n  :title,\n  :slug,\n  :language,\n  :excerpt,\n  :published_at,\n  :featured_image_url,\n  :featured,\n  :reading_time_minutes\n])\n|> with_card(asked.variant)\n|> Ash.read(\n  tenant: site_id(),\n  page: [limit: per_page, offset: (page - 1) * per_page, count: total == :error]\n)\n|> paged()\n|> case do\n  {:ok, found} when is_map(found) ->\n    case total do\n      {:ok, counted} -> {:ok, %{found | total: counted}}\n      :error -> {:ok, found}\n    end\n\n  unreadable ->\n    unreadable\nend\n"
+        },
+        {
+          "name": "shared_total",
+          "args": "asked, source",
+          "code": "# THE NUMBER OF POSTS THIS LIST HOLDS, out of the page's own rows, where the list is narrowed by\n# nothing but what the page counted for: its language, and the category or the tag the page is of —\n# the number its search box says too. On the front page the list leaves out the strip's featured\n# posts, which are among the ones counted, so it holds that many fewer. `:error` for a list narrowed\n# by anything else, which counts its own.\nplain? = asked.search == \"\" and not asked.featured_only and asked.exclude_slug == \"\"\n\ncase {plain?, asked.exclude_featured} do\n  {false, _excluded} ->\n    :error\n\n  {true, 0} ->\n    shared(source, {:total, asked.collection, asked.tag, asked.language})\n\n  {true, count} when asked.collection == \"\" and asked.tag == \"\" ->\n    with {:ok, total} <- shared(source, {:total, \"\", \"\", asked.language}),\n         {:ok, strip} <- shared(source, {:featured, count, asked.language}) do\n      {:ok, max(total - length(strip), 0)}\n    end\n\n  {true, _excluded} ->\n    :error\nend\n"
         },
         {
           "name": "asked",
@@ -606,8 +634,8 @@
         },
         {
           "name": "fetch",
-          "args": "asked",
-          "code": "# RUN IN THE TASK, so nothing here may touch the socket. A page nobody has is a missing page when the\n# address named it, and is clamped to the last one there is when the pager's buttons asked for it. The answer carries the term it was read for — `arrived/2` stores that rather than\n# what was asked, so a clamp settles instead of asking again on the next render.\nwith {:ok, %{rows: posts, total: total}} <- posts_page(asked, asked.page, asked.per_page) do\n  pages = max(ceil(total / asked.per_page), 1)\n\n  cond do\n    asked.page <= pages ->\n      {:ok,\n       %{\n         asked: asked,\n         page: asked.page,\n         posts: posts,\n         total: total,\n         pages: pages,\n         filter_row: filter_row(asked),\n         chips: chip_rows(asked)\n       }}\n\n    asked.page_in_url ->\n      {:missing, asked}\n\n    true ->\n      with {:ok, %{rows: clamped}} <- posts_page(asked, pages, asked.per_page) do\n        {:ok,\n         %{\n           asked: %{asked | page: pages},\n           page: pages,\n           posts: clamped,\n           total: total,\n           pages: pages,\n           filter_row: filter_row(asked),\n           chips: chip_rows(asked)\n         }}\n      end\n  end\nend"
+          "args": "asked, source",
+          "code": "# RUN IN THE TASK, so nothing here may touch the socket. A page nobody has is a missing page when the\n# address named it, and is clamped to the last one there is when the pager's buttons asked for it. The answer carries the term it was read for — `arrived/2` stores that rather than\n# what was asked, so a clamp settles instead of asking again on the next render.\nwith {:ok, %{rows: posts, total: total}} <- posts_page(asked, asked.page, asked.per_page, source) do\n  pages = max(ceil(total / asked.per_page), 1)\n\n  cond do\n    asked.page <= pages ->\n      {:ok,\n       %{\n         asked: asked,\n         page: asked.page,\n         posts: posts,\n         total: total,\n         pages: pages,\n         filter_row: filter_row(asked, source),\n         chips: chip_rows(asked)\n       }}\n\n    asked.page_in_url ->\n      {:missing, asked}\n\n    true ->\n      with {:ok, %{rows: clamped}} <- posts_page(asked, pages, asked.per_page, source) do\n        {:ok,\n         %{\n           asked: %{asked | page: pages},\n           page: pages,\n           posts: clamped,\n           total: total,\n           pages: pages,\n           filter_row: filter_row(asked, source),\n           chips: chip_rows(asked)\n         }}\n      end\n  end\nend"
         },
         {
           "name": "arrived",
@@ -637,7 +665,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n# THE PAGE'S OWN ROWS GO WITH THE READ, into the task too, which has no socket to find them on.\nsource = source_of(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked, source))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked, source) end)\n    end\nend\n"
         },
         {
           "name": "whole",
@@ -666,8 +694,13 @@
         },
         {
           "name": "featured_ids",
+          "args": "asked, count, source",
+          "code": "require Ash.Query\n\n# THE POSTS THE FEATURED STRIP ABOVE THE LIST DRAWS: the newest `count` featured ones, in the same\n# edition and for the same reader, which is the strip's own read. They are left out of the list, so\n# a post is not drawn twice on one page. The page read them once for the strip and for this list,\n# and where it handed them down they are not read again.\ncase shared(source, {:featured, count, asked.language}) do\n  {:ok, rows} ->\n    Enum.map(rows, & &1.id)\n\n  :error ->\n    read_featured_ids(asked, count)\nend\n"
+        },
+        {
+          "name": "read_featured_ids",
           "args": "asked, count",
-          "code": "require Ash.Query\n\n# THE POSTS THE FEATURED STRIP ABOVE THE LIST DRAWS: the newest `count` featured ones, in the same\n# edition and for the same reader, which is the strip's own read. They are left out of the list, so\n# a post is not drawn twice on one page.\nMishkaBlog.BlogPost\n|> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n|> narrow_language(asked.language)\n|> Ash.Query.filter(featured == true)\n|> Ash.Query.sort(published_at: :desc, id: :asc)\n|> Ash.Query.select([:id])\n|> Ash.read(tenant: site_id(), page: [limit: count])\n|> case do\n  {:ok, %{results: found}} -> Enum.map(found, & &1.id)\n  {:ok, found} when is_list(found) -> Enum.map(found, & &1.id)\n  _unreadable -> []\nend"
+          "code": "require Ash.Query\n\nMishkaBlog.BlogPost\n|> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n|> narrow_language(asked.language)\n|> Ash.Query.filter(featured == true)\n|> Ash.Query.sort(published_at: :desc, id: :asc)\n|> Ash.Query.select([:id])\n|> Ash.read(tenant: site_id(), page: [limit: count])\n|> case do\n  {:ok, %{results: found}} -> Enum.map(found, & &1.id)\n  {:ok, found} when is_list(found) -> Enum.map(found, & &1.id)\n  _unreadable -> []\nend\n"
         },
         {
           "name": "with_card",
@@ -909,6 +942,14 @@
           }
         },
         {
+          "name": "page_source",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The rows the page read for this address, handed down by the page as page_source={assigns[:page_source]}. What it holds for exactly a read this block makes, for this same reader, is taken from it; anything else is read here, as it is without it."
+          }
+        },
+        {
           "name": "current_user",
           "type": "any",
           "opts": {
@@ -958,6 +999,16 @@
           "name": "read_as",
           "args": "visitor",
           "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
+        },
+        {
+          "name": "source_of",
+          "args": "assigns",
+          "code": "# THE ROWS THE PAGE READ FOR THIS ADDRESS, when it handed them down (`page_source`) and read them for\n# this block's reader on this block's site; `nil` otherwise, and the block reads for itself. Read by\n# their shape, the one the extension's page source documents: a block calls nothing of its code.\nsite = site_id()\n\nvisitor =\n  case assigns[:current_user] do\n    %{id: id} -> id\n    _guest -> nil\n  end\n\ncase assigns[:page_source] do\n  %{rows_of: \"mishka_blog\", site_id: ^site, visitor: ^visitor} = source -> source\n  _not_for_this_block -> nil\nend\n"
+        },
+        {
+          "name": "shared",
+          "args": "source, read",
+          "code": "# ONE READ THIS BLOCK WOULD MAKE, answered by the rows the page read once for its head, its frame\n# and its blocks: `{:ok, rows}` where the page read exactly that, as this reader, and `:error` where\n# it did not, so the block reads it itself.\n#\n#   * `{:record, kind, slug, language}` — the post, category or tag the page's slug names in its\n#     language, or the blogger or team (`:any` language: one row in every language); `nil` where\n#     the reader's read found none;\n#   * `{:featured, limit, language}` — the front page's newest featured posts;\n#   * `{:total, category, tag, language}` — how many posts the reader may open in the language, of\n#     the category or the tag the page is of, or of none on the front page.\ncase {source, read} do\n  {%{kind: kind, slug: slug, language: language, record: record}, {:record, kind, slug, language}}\n  when kind != \"blog:home\" ->\n    {:ok, record}\n\n  {%{kind: kind, slug: slug, record: record}, {:record, kind, slug, :any}}\n  when kind in [\"blog:author\", \"blog:team\"] ->\n    {:ok, record}\n\n  {%{kind: \"blog:home\", language: language, featured: %{limit: limit, rows: rows}},\n   {:featured, limit, language}} ->\n    {:ok, rows}\n\n  {%{kind: \"blog:home\", language: language, total: total}, {:total, \"\", \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:category\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, slug, \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:tag\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, \"\", slug, language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  _not_read_for_this ->\n    :error\nend\n"
         },
         {
           "name": "site_name",
@@ -1021,8 +1072,13 @@
         },
         {
           "name": "fetch",
-          "args": "asked",
-          "code": "require Ash.Query\n\n# WHAT A CARD IS DRAWN FROM comes with the post, as the list's own read brings it: the categories it\n# is filed under, the people who wrote it, and what it opens with. A line in a sidebar draws none\n# of it, so it reads none of it.\nwith {:ok, %{rows: posts, total: total}} <-\n       MishkaBlog.BlogPost\n       |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n       |> narrow(asked)\n       |> Ash.Query.sort(published_at: direction(asked.sort), id: :asc)\n       |> Ash.Query.select([\n         :id,\n         :title,\n         :slug,\n         :language,\n         :excerpt,\n         :published_at,\n         :featured_image_url,\n         :featured,\n         :reading_time_minutes\n       ])\n       |> with_card(asked.variant)\n       |> Ash.read(tenant: site_id(), page: [limit: asked.limit, count: true])\n       |> paged() do\n  {:ok, %{posts: posts, total: total}}\nend"
+          "args": "asked, source",
+          "code": "require Ash.Query\n\n# WHAT A CARD IS DRAWN FROM comes with the post, as the list's own read brings it: the categories it\n# is filed under, the people who wrote it, and what it opens with. A line in a sidebar draws none\n# of it, so it reads none of it.\n#\n# THE STRIP ON THE BLOG'S FRONT PAGE IS THE PAGE'S OWN READ: the page read the newest featured posts\n# once for this strip and for the list under it, which leaves them out, and where it handed them down\n# for this reader they are not read again. Nothing is counted: the strip draws what it has, and has\n# none when there are none.\ncase strip(asked, source) do\n  {:ok, posts} ->\n    {:ok, %{posts: posts, total: length(posts)}}\n\n  :error ->\n    with {:ok, %{rows: posts}} <-\n           MishkaBlog.BlogPost\n           |> Ash.Query.for_read(:public_list, %{}, read_as(asked.visitor))\n           |> narrow(asked)\n           |> Ash.Query.sort(published_at: direction(asked.sort), id: :asc)\n           |> Ash.Query.select([\n             :id,\n             :title,\n             :slug,\n             :language,\n             :excerpt,\n             :published_at,\n             :featured_image_url,\n             :featured,\n             :reading_time_minutes\n           ])\n           |> with_card(asked.variant)\n           |> Ash.read(tenant: site_id(), page: [limit: asked.limit])\n           |> paged() do\n      {:ok, %{posts: posts, total: length(posts)}}\n    end\nend\n"
+        },
+        {
+          "name": "strip",
+          "args": "asked, source",
+          "code": "# THE PAGE'S FEATURED POSTS, for a strip asking what the page read: the newest ones, as many as it\n# draws, of no category and no tag, in the page's language; `:error` for any other strip.\ncase asked.collection == \"\" and asked.tag == \"\" and asked.exclude_slug == \"\" and\n       asked.sort in [\"\", \"newest\"] do\n  true -> shared(source, {:featured, asked.limit, asked.language})\n  false -> :error\nend\n"
         },
         {
           "name": "arrived",
@@ -1047,7 +1103,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n# THE PAGE'S OWN ROWS GO WITH THE READ, into the task too, which has no socket to find them on.\nsource = source_of(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked, source))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:posts, fn -> fetch(asked, source) end)\n    end\nend\n"
         },
         {
           "name": "with_card",
@@ -1199,6 +1255,14 @@
           }
         },
         {
+          "name": "page_source",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The rows the page read for this address, handed down by the page as page_source={assigns[:page_source]}. What it holds for exactly a read this block makes, for this same reader, is taken from it; anything else is read here, as it is without it."
+          }
+        },
+        {
           "name": "current_user",
           "type": "any",
           "opts": {
@@ -1233,6 +1297,16 @@
           "name": "read_as",
           "args": "visitor",
           "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
+        },
+        {
+          "name": "source_of",
+          "args": "assigns",
+          "code": "# THE ROWS THE PAGE READ FOR THIS ADDRESS, when it handed them down (`page_source`) and read them for\n# this block's reader on this block's site; `nil` otherwise, and the block reads for itself. Read by\n# their shape, the one the extension's page source documents: a block calls nothing of its code.\nsite = site_id()\n\nvisitor =\n  case assigns[:current_user] do\n    %{id: id} -> id\n    _guest -> nil\n  end\n\ncase assigns[:page_source] do\n  %{rows_of: \"mishka_blog\", site_id: ^site, visitor: ^visitor} = source -> source\n  _not_for_this_block -> nil\nend\n"
+        },
+        {
+          "name": "shared",
+          "args": "source, read",
+          "code": "# ONE READ THIS BLOCK WOULD MAKE, answered by the rows the page read once for its head, its frame\n# and its blocks: `{:ok, rows}` where the page read exactly that, as this reader, and `:error` where\n# it did not, so the block reads it itself.\n#\n#   * `{:record, kind, slug, language}` — the post, category or tag the page's slug names in its\n#     language, or the blogger or team (`:any` language: one row in every language); `nil` where\n#     the reader's read found none;\n#   * `{:featured, limit, language}` — the front page's newest featured posts;\n#   * `{:total, category, tag, language}` — how many posts the reader may open in the language, of\n#     the category or the tag the page is of, or of none on the front page.\ncase {source, read} do\n  {%{kind: kind, slug: slug, language: language, record: record}, {:record, kind, slug, language}}\n  when kind != \"blog:home\" ->\n    {:ok, record}\n\n  {%{kind: kind, slug: slug, record: record}, {:record, kind, slug, :any}}\n  when kind in [\"blog:author\", \"blog:team\"] ->\n    {:ok, record}\n\n  {%{kind: \"blog:home\", language: language, featured: %{limit: limit, rows: rows}},\n   {:featured, limit, language}} ->\n    {:ok, rows}\n\n  {%{kind: \"blog:home\", language: language, total: total}, {:total, \"\", \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:category\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, slug, \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:tag\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, \"\", slug, language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  _not_read_for_this ->\n    :error\nend\n"
         },
         {
           "name": "positive",
@@ -1281,8 +1355,8 @@
         },
         {
           "name": "count_posts",
-          "args": "language, collection, tag, visitor",
-          "code": "require Ash.Query\n\n# EVERY POST THE READER MAY OPEN IN THIS EDITION, which is the number the search box says it will\n# look through. Read as the visitor, so a locked post is not counted for one who cannot open it, and\n# through the public read, so a draft, a scheduled post and an archived one are not counted at all.\n# On a category's page or a tag's it is that category's or that tag's, narrowed as the list under it\n# is (`narrow_to/4`), so the bar and the list's pager are counting from the same posts.\nMishkaBlog.BlogPost\n|> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n|> narrow_language(language)\n|> narrow_to(collection, tag, language)\n|> Ash.Query.select([:id])\n|> Ash.read(tenant: site_id(), page: [limit: 1, count: true])\n|> case do\n  {:ok, %{count: count}} when is_integer(count) -> count\n  _unreadable -> 0\nend"
+          "args": "source, language, collection, tag, visitor",
+          "code": "require Ash.Query\n\n# EVERY POST THE READER MAY OPEN IN THIS EDITION, which is the number the search box says it will\n# look through. Read as the visitor, so a locked post is not counted for one who cannot open it, and\n# through the public read, so a draft, a scheduled post and an archived one are not counted at all.\n# On a category's page or a tag's it is that category's or that tag's, narrowed as the list under it\n# is (`narrow_to/4`), so the bar and the list's pager are counting from the same posts.\n#\n# THE PAGE COUNTED THEM ONCE, for this box and for the list under it, and where it handed the count\n# down for this reader it is not counted again. Else the count comes with a read of one row, through\n# the read itself: what keeps a post from a reader is a filter the read puts on as it runs, which a\n# count of its own would not.\ncase shared(source, {:total, collection, tag, trimmed(language)}) do\n  {:ok, count} ->\n    count\n\n  :error ->\n    MishkaBlog.BlogPost\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> narrow_language(language)\n    |> narrow_to(collection, tag, language)\n    |> Ash.Query.select([:id])\n    |> Ash.read(tenant: site_id(), page: [limit: 1, count: true])\n    |> case do\n      {:ok, %{count: count}} when is_integer(count) -> count\n      _unreadable -> 0\n    end\nend\n"
         },
         {
           "name": "kept",
@@ -1297,7 +1371,7 @@
         {
           "name": "update",
           "args": "_assigns, socket",
-          "code": "# THE COUNT IS READ ONCE FOR WHAT IT DEPENDS ON — who is looking, in which edition and of which\n# category or tag — and not on every render of the page around it: this runs each time the page\n# does, and a count that was asked again for nothing would be a query on every re-render. Only the\n# bar draws it.\nasked =\n  {socket.assigns[:current_user], trimmed(socket.assigns[:language]),\n   trimmed(socket.assigns[:collection]), trimmed(socket.assigns[:tag])}\n\ncase {trimmed(socket.assigns[:variant]), socket.assigns[:counted]} do\n  {\"bar\", ^asked} ->\n    {:ok, socket}\n\n  {\"bar\", _before} ->\n    {visitor, language, collection, tag} = asked\n\n    {:ok,\n     Phoenix.Component.assign(socket,\n       counted: asked,\n       total_posts: count_posts(language, collection, tag, visitor)\n     )}\n\n  _no_bar ->\n    {:ok, socket}\nend\n"
+          "code": "# THE COUNT IS READ ONCE FOR WHAT IT DEPENDS ON — who is looking, in which edition and of which\n# category or tag — and not on every render of the page around it: this runs each time the page\n# does, and a count that was asked again for nothing would be a query on every re-render. Only the\n# bar draws it.\nasked =\n  {socket.assigns[:current_user], trimmed(socket.assigns[:language]),\n   trimmed(socket.assigns[:collection]), trimmed(socket.assigns[:tag])}\n\ncase {trimmed(socket.assigns[:variant]), socket.assigns[:counted]} do\n  {\"bar\", ^asked} ->\n    {:ok, socket}\n\n  {\"bar\", _before} ->\n    {visitor, language, collection, tag} = asked\n\n    {:ok,\n     Phoenix.Component.assign(socket,\n       counted: asked,\n       total_posts: count_posts(source_of(socket.assigns), language, collection, tag, visitor)\n     )}\n\n  _no_bar ->\n    {:ok, socket}\nend\n"
         }
       ],
       "permissions": [],
@@ -1871,6 +1945,14 @@
           }
         },
         {
+          "name": "page_source",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The rows the page read for this address, handed down by the page as page_source={assigns[:page_source]}. What it holds for exactly a read this block makes, for this same reader, is taken from it; anything else is read here, as it is without it."
+          }
+        },
+        {
           "name": "current_user",
           "type": "any",
           "opts": {
@@ -1905,6 +1987,16 @@
           "name": "read_as",
           "args": "visitor",
           "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
+        },
+        {
+          "name": "source_of",
+          "args": "assigns",
+          "code": "# THE ROWS THE PAGE READ FOR THIS ADDRESS, when it handed them down (`page_source`) and read them for\n# this block's reader on this block's site; `nil` otherwise, and the block reads for itself. Read by\n# their shape, the one the extension's page source documents: a block calls nothing of its code.\nsite = site_id()\n\nvisitor =\n  case assigns[:current_user] do\n    %{id: id} -> id\n    _guest -> nil\n  end\n\ncase assigns[:page_source] do\n  %{rows_of: \"mishka_blog\", site_id: ^site, visitor: ^visitor} = source -> source\n  _not_for_this_block -> nil\nend\n"
+        },
+        {
+          "name": "shared",
+          "args": "source, read",
+          "code": "# ONE READ THIS BLOCK WOULD MAKE, answered by the rows the page read once for its head, its frame\n# and its blocks: `{:ok, rows}` where the page read exactly that, as this reader, and `:error` where\n# it did not, so the block reads it itself.\n#\n#   * `{:record, kind, slug, language}` — the post, category or tag the page's slug names in its\n#     language, or the blogger or team (`:any` language: one row in every language); `nil` where\n#     the reader's read found none;\n#   * `{:featured, limit, language}` — the front page's newest featured posts;\n#   * `{:total, category, tag, language}` — how many posts the reader may open in the language, of\n#     the category or the tag the page is of, or of none on the front page.\ncase {source, read} do\n  {%{kind: kind, slug: slug, language: language, record: record}, {:record, kind, slug, language}}\n  when kind != \"blog:home\" ->\n    {:ok, record}\n\n  {%{kind: kind, slug: slug, record: record}, {:record, kind, slug, :any}}\n  when kind in [\"blog:author\", \"blog:team\"] ->\n    {:ok, record}\n\n  {%{kind: \"blog:home\", language: language, featured: %{limit: limit, rows: rows}},\n   {:featured, limit, language}} ->\n    {:ok, rows}\n\n  {%{kind: \"blog:home\", language: language, total: total}, {:total, \"\", \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:category\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, slug, \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:tag\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, \"\", slug, language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  _not_read_for_this ->\n    :error\nend\n"
         },
         {
           "name": "trimmed",
@@ -1969,17 +2061,17 @@
         {
           "name": "tags_of",
           "args": "post, visitor",
-          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  %{id: post_id} ->\n    MishkaBlog.Tag\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(name: :asc)\n    |> Ash.Query.select([:id, :name, :slug, :language])\n    |> Ash.read(tenant: site_id(), page: [limit: 50])\n    |> rows()\nend\n"
+          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  # THE TAGS THE PAGE READ WITH THE POST, as this reader, where it read it with them.\n  %{tags: found} when is_list(found) ->\n    found\n\n  %{id: post_id} ->\n    MishkaBlog.Tag\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(name: :asc)\n    |> Ash.Query.select([:id, :name, :slug, :language])\n    |> Ash.read(tenant: site_id(), page: [limit: 50])\n    |> rows()\nend\n"
         },
         {
           "name": "categories_of",
           "args": "post, visitor",
-          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  %{id: post_id} ->\n    MishkaBlog.Collection\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(display_order: :asc, name: :asc)\n    |> Ash.Query.select([:id, :name, :slug, :language])\n    |> Ash.read(tenant: site_id(), page: [limit: 50])\n    |> rows()\nend\n"
+          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  # THE CATEGORIES THE PAGE READ WITH THE POST, as this reader, where it read it with them.\n  %{collections: found} when is_list(found) ->\n    found\n\n  %{id: post_id} ->\n    MishkaBlog.Collection\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(display_order: :asc, name: :asc)\n    |> Ash.Query.select([:id, :name, :slug, :language])\n    |> Ash.read(tenant: site_id(), page: [limit: 50])\n    |> rows()\nend\n"
         },
         {
           "name": "authors_of",
           "args": "post, visitor",
-          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  %{id: post_id} ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(display_name: :asc)\n    |> Ash.Query.select([:id, :display_name, :slug, :bio, :avatar_url])\n    |> Ash.read(tenant: site_id(), page: [limit: 20])\n    |> rows()\nend\n"
+          "code": "require Ash.Query\n\ncase post do\n  nil ->\n    []\n\n  # THE AUTHORS THE PAGE READ WITH THE POST, as this reader, where it read it with them.\n  %{bloggers: found} when is_list(found) ->\n    found\n\n  %{id: post_id} ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(posts, id == ^post_id))\n    |> Ash.Query.sort(display_name: :asc)\n    |> Ash.Query.select([:id, :display_name, :slug, :bio, :avatar_url])\n    |> Ash.read(tenant: site_id(), page: [limit: 20])\n    |> rows()\nend\n"
         },
         {
           "name": "only_language",
@@ -1989,7 +2081,12 @@
         {
           "name": "load_post",
           "args": "socket",
-          "code": "require Ash.Query\n\nassigns = socket.assigns\nslug = asked_slug(assigns)\n\npost =\n  case slug in [nil, \"\"] do\n    true ->\n      nil\n\n    false ->\n      MishkaBlog.BlogPost\n      |> Ash.Query.for_read(:public_list, %{}, read_as(assigns[:current_user]))\n      |> Ash.Query.filter(slug == ^to_string(slug))\n      |> only_language(assigns[:language])\n      |> Ash.Query.select([\n        :id,\n        :title,\n        :subtitle,\n        :slug,\n        :excerpt,\n        :content,\n        :published_at,\n        :updated_at,\n        :featured_image_url,\n        :featured,\n        :language,\n        :language_group_id,\n        :reading_time_minutes\n      ])\n      |> Ash.Query.load([:rendered_content, :effective_permissions])\n      |> Ash.read(tenant: site_id(), page: [limit: 1])\n      |> first_row()\n  end\n\n# A SLUG THE URL NAMED AND NOTHING ANSWERS IS A MISSING PAGE, not a page with a notice on it.\n# The address was a post; there is no post; 404 is the honest answer and the one a crawler needs —\n# see `MishkaCmsCore.ErrorsExceptions.NotFoundError`, which every other \"not here\" in this CMS\n# raises. LiveView converts it exactly as a controller does: on the HTTP render Phoenix's error view\n# draws the 404 page, and on a connected render the client reloads into that same answer.\n#\n# ONLY WHEN THE URL NAMED IT. A slug an author typed into the `slug` attribute of an embedded card\n# is their content mistake, and taking the whole page down for it would be a worse answer than the\n# notice — so that case still draws `missing_text`.\nif post == nil and slug not in [nil, \"\"] and from_url?(assigns) do\n  missing!(socket)\nend\n\n# NOTHING IS READ FOR A PART THE PAGE TURNED OFF. `update/2` runs again on every re-render of the\n# page holding this component, so a page drawing the body alone paid for three reads it never showed,\n# every single time.\nsocket\n|> Phoenix.Component.assign(:slug, slug)\n|> Phoenix.Component.assign(:post, post)\n|> Phoenix.Component.assign(:locked, locked?(post))\n|> Phoenix.Component.assign(:tags, (assigns[:show_tags] && tags_of(post, assigns[:current_user])) || [])\n|> Phoenix.Component.assign(:categories, (assigns[:show_categories] && categories_of(post, assigns[:current_user])) || [])\n|> Phoenix.Component.assign(:authors, (assigns[:show_authors] && authors_of(post, assigns[:current_user])) || [])\n"
+          "code": "require Ash.Query\n\nassigns = socket.assigns\nslug = asked_slug(assigns)\n\npost =\n  case slug in [nil, \"\"] do\n    true ->\n      nil\n\n    false ->\n      asked = {:record, \"blog:post\", to_string(slug), trimmed(assigns[:language])}\n\n      case shared(source_of(assigns), asked) do\n        {:ok, row} -> row\n        :error -> read_post(slug, assigns)\n      end\n  end\n\n# A SLUG THE URL NAMED AND NOTHING ANSWERS IS A MISSING PAGE, not a page with a notice on it.\n# The address was a post; there is no post; 404 is the honest answer and the one a crawler needs —\n# see `MishkaCmsCore.ErrorsExceptions.NotFoundError`, which every other \"not here\" in this CMS\n# raises. LiveView converts it exactly as a controller does: on the HTTP render Phoenix's error view\n# draws the 404 page, and on a connected render the client reloads into that same answer.\n#\n# ONLY WHEN THE URL NAMED IT. A slug an author typed into the `slug` attribute of an embedded card\n# is their content mistake, and taking the whole page down for it would be a worse answer than the\n# notice — so that case still draws `missing_text`.\nif post == nil and slug not in [nil, \"\"] and from_url?(assigns) do\n  missing!(socket)\nend\n\n# NOTHING IS READ FOR A PART THE PAGE TURNED OFF. `update/2` runs again on every re-render of the\n# page holding this component, so a page drawing the body alone paid for three reads it never showed,\n# every single time.\nsocket\n|> Phoenix.Component.assign(:slug, slug)\n|> Phoenix.Component.assign(:post, post)\n|> Phoenix.Component.assign(:locked, locked?(post))\n|> Phoenix.Component.assign(:tags, (assigns[:show_tags] && tags_of(post, assigns[:current_user])) || [])\n|> Phoenix.Component.assign(:categories, (assigns[:show_categories] && categories_of(post, assigns[:current_user])) || [])\n|> Phoenix.Component.assign(:authors, (assigns[:show_authors] && authors_of(post, assigns[:current_user])) || [])\n"
+        },
+        {
+          "name": "read_post",
+          "args": "slug, assigns",
+          "code": "# THE POST THE SLUG NAMES, read here, as the visitor, where the page handed no rows of its own for\n# it.\nrequire Ash.Query\n\nMishkaBlog.BlogPost\n|> Ash.Query.for_read(:public_list, %{}, read_as(assigns[:current_user]))\n|> Ash.Query.filter(slug == ^to_string(slug))\n|> only_language(assigns[:language])\n|> Ash.Query.select([\n  :id,\n  :title,\n  :subtitle,\n  :slug,\n  :excerpt,\n  :content,\n  :published_at,\n  :updated_at,\n  :featured_image_url,\n  :featured,\n  :language,\n  :language_group_id,\n  :reading_time_minutes\n])\n|> Ash.Query.load([:rendered_content, :effective_permissions])\n|> Ash.read(tenant: site_id(), page: [limit: 1])\n|> first_row()\n"
         },
         {
           "name": "site_name",
@@ -2488,6 +2585,14 @@
           }
         },
         {
+          "name": "page_source",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The rows the page read for this address, handed down by the page as page_source={assigns[:page_source]}. What it holds for exactly a read this block makes, for this same reader, is taken from it; anything else is read here, as it is without it."
+          }
+        },
+        {
           "name": "current_user",
           "type": "any",
           "opts": {
@@ -2665,6 +2770,16 @@
           "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so the conversation under a post locked to\n# permissions it does not hold is not read, and a page with nobody signed in reads as a guest. The\n# tenant goes with it, because a public action that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
         },
         {
+          "name": "source_of",
+          "args": "assigns",
+          "code": "# THE ROWS THE PAGE READ FOR THIS ADDRESS, when it handed them down (`page_source`) and read them for\n# this block's reader on this block's site; `nil` otherwise, and the block reads for itself. Read by\n# their shape, the one the extension's page source documents: a block calls nothing of its code.\nsite = site_id()\n\nvisitor =\n  case assigns[:current_user] do\n    %{id: id} -> id\n    _guest -> nil\n  end\n\ncase assigns[:page_source] do\n  %{rows_of: \"mishka_blog\", site_id: ^site, visitor: ^visitor} = source -> source\n  _not_for_this_block -> nil\nend\n"
+        },
+        {
+          "name": "shared",
+          "args": "source, read",
+          "code": "# ONE READ THIS BLOCK WOULD MAKE, answered by the rows the page read once for its head, its frame\n# and its blocks: `{:ok, rows}` where the page read exactly that, as this reader, and `:error` where\n# it did not, so the block reads it itself.\n#\n#   * `{:record, kind, slug, language}` — the post, category or tag the page's slug names in its\n#     language, or the blogger or team (`:any` language: one row in every language); `nil` where\n#     the reader's read found none;\n#   * `{:featured, limit, language}` — the front page's newest featured posts;\n#   * `{:total, category, tag, language}` — how many posts the reader may open in the language, of\n#     the category or the tag the page is of, or of none on the front page.\ncase {source, read} do\n  {%{kind: kind, slug: slug, language: language, record: record}, {:record, kind, slug, language}}\n  when kind != \"blog:home\" ->\n    {:ok, record}\n\n  {%{kind: kind, slug: slug, record: record}, {:record, kind, slug, :any}}\n  when kind in [\"blog:author\", \"blog:team\"] ->\n    {:ok, record}\n\n  {%{kind: \"blog:home\", language: language, featured: %{limit: limit, rows: rows}},\n   {:featured, limit, language}} ->\n    {:ok, rows}\n\n  {%{kind: \"blog:home\", language: language, total: total}, {:total, \"\", \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:category\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, slug, \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:tag\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, \"\", slug, language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  _not_read_for_this ->\n    :error\nend\n"
+        },
+        {
           "name": "positive",
           "args": "value, fallback",
           "code": "cond do\n  is_integer(value) and value > 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number > 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
@@ -2716,8 +2831,8 @@
         },
         {
           "name": "post_row",
-          "args": "slug, language, visitor",
-          "code": "require Ash.Query\n\ncase slug in [nil, \"\"] do\n  true ->\n    nil\n\n  false ->\n    MishkaBlog.BlogPost\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(slug == ^to_string(slug))\n    |> only_language(language)\n    |> Ash.Query.select([:id, :title, :slug, :language])\n    |> Ash.read(tenant: site_id(), page: [limit: 1])\n    |> first_row()\nend\n"
+          "args": "source, slug, language, visitor",
+          "code": "require Ash.Query\n\n# THE POST THE CONVERSATION IS UNDER: the one the page read once for its head and its blocks, when it\n# handed it down for this reader, else read here, as the visitor.\ncase slug in [nil, \"\"] do\n  true ->\n    nil\n\n  false ->\n    case shared(source, {:record, \"blog:post\", to_string(slug), trimmed(language)}) do\n      {:ok, row} ->\n        row\n\n      :error ->\n        MishkaBlog.BlogPost\n        |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n        |> Ash.Query.filter(slug == ^to_string(slug))\n        |> only_language(language)\n        |> Ash.Query.select([:id, :title, :slug, :language])\n        |> Ash.read(tenant: site_id(), page: [limit: 1])\n        |> first_row()\n    end\nend\n"
         },
         {
           "name": "author_names",
@@ -2737,7 +2852,7 @@
         {
           "name": "top_level",
           "args": "post_id, wanted, visitor",
-          "code": "require Ash.Query\n\n# THE REPLIES ARE READ AS THE COMMENTS ABOVE THEM ARE, through the public action and as the\n# visitor. `replies` itself reads through the resource's primary action, which is the moderators'.\nreplies =\n  MishkaBlog.Comment\n  |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n  |> Ash.Query.load(:rendered_content)\n\n# ONE CAPPED PAGE AT A TIME. `:approved_by_post` hands back at most 100 rows and Ash shrinks a\n# bigger ask to that cap rather than refusing it, so asking for the whole conversation at once made\n# every comment past the hundredth unreachable while \"load more\" stayed on the page for ever.\nEnum.reduce_while(Stream.iterate(0, &(&1 + 100)), {:ok, {[], 0}}, fn offset, {:ok, {gathered, counted}} ->\n  ask = min(wanted - offset, 100)\n\n  MishkaBlog.Comment\n  |> Ash.Query.for_read(:approved_by_post, %{post_id: post_id}, read_as(visitor))\n  |> Ash.Query.filter(is_nil(parent_comment_id))\n  |> Ash.Query.sort(is_pinned: :desc, inserted_at: :asc)\n  |> Ash.Query.load([:rendered_content, replies: replies])\n  |> Ash.read(\n    tenant: site_id(),\n    page: [limit: ask, offset: offset, count: offset == 0]\n  )\n  |> paged()\n  |> case do\n    {:error, reason} ->\n      {:halt, {:error, reason}}\n\n    {:ok, %{rows: page, total: total}} ->\n      rows = gathered ++ page\n\n      whole =\n        case offset do\n          0 -> total\n          _a_later_page -> counted\n        end\n\n      case length(rows) < wanted and length(page) == ask do\n        true -> {:cont, {:ok, {rows, whole}}}\n        false -> {:halt, {:ok, {rows, whole}}}\n      end\n  end\nend)\n"
+          "code": "require Ash.Query\n\n# THE REPLIES ARE READ AS THE COMMENTS ABOVE THEM ARE, through the public action and as the\n# visitor. `replies` itself reads through the resource's primary action, which is the moderators'.\nreplies =\n  MishkaBlog.Comment\n  |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n  |> Ash.Query.load(:rendered_content)\n\n# ONE CAPPED PAGE AT A TIME. `:approved_by_post` hands back at most 100 rows and Ash shrinks a\n# bigger ask to that cap rather than refusing it, so asking for the whole conversation at once made\n# every comment past the hundredth unreachable while \"load more\" stayed on the page for ever.\n#\n# ONE ROW MORE THAN IS SHOWN SAYS WHETHER THERE ARE MORE, which is all \"load more\" asks: a count of\n# every top-level comment beside the rows was a second read of the same comments.\nprobe = wanted + 1\n\nEnum.reduce_while(Stream.iterate(0, &(&1 + 100)), {:ok, []}, fn offset, {:ok, gathered} ->\n  ask = min(probe - offset, 100)\n\n  MishkaBlog.Comment\n  |> Ash.Query.for_read(:approved_by_post, %{post_id: post_id}, read_as(visitor))\n  |> Ash.Query.filter(is_nil(parent_comment_id))\n  |> Ash.Query.sort(is_pinned: :desc, inserted_at: :asc)\n  |> Ash.Query.load([:rendered_content, replies: replies])\n  |> Ash.read(tenant: site_id(), page: [limit: ask, offset: offset])\n  |> paged()\n  |> case do\n    {:error, reason} ->\n      {:halt, {:error, reason}}\n\n    {:ok, %{rows: page}} ->\n      rows = gathered ++ page\n\n      case length(rows) < probe and length(page) == ask do\n        true -> {:cont, {:ok, rows}}\n        false -> {:halt, {:ok, rows}}\n      end\n  end\nend)\n|> case do\n  {:ok, rows} -> {:ok, {Enum.take(rows, wanted), length(rows) > wanted}}\n  {:error, reason} -> {:error, reason}\nend\n"
         },
         {
           "name": "handle_event",
@@ -2786,8 +2901,8 @@
         },
         {
           "name": "fetch",
-          "args": "asked",
-          "code": "case post_row(asked.slug, asked.language, asked.visitor) do\n  nil ->\n    {:ok, %{post: nil, comments: [], total: 0, shown: asked.shown, has_more: false}}\n\n  post ->\n    with {:ok, {found, total}} <- top_level(post.id, asked.shown, asked.visitor) do\n      names = author_names(found, asked.visitor)\n\n      comments =\n        Enum.map(found, fn comment ->\n          replies =\n            comment\n            |> approved_replies()\n            |> Enum.map(&shape(&1, names, asked.reader, []))\n\n          shape(comment, names, asked.reader, replies)\n        end)\n\n      {:ok,\n       %{\n         post: post,\n         comments: comments,\n         total: everything(post.id, asked.visitor, length(comments)),\n         shown: asked.shown,\n         has_more: total > length(comments)\n       }}\n    end\nend\n"
+          "args": "asked, source",
+          "code": "case post_row(source, asked.slug, asked.language, asked.visitor) do\n  nil ->\n    {:ok, %{post: nil, comments: [], total: 0, shown: asked.shown, has_more: false}}\n\n  post ->\n    with {:ok, {found, more?}} <- top_level(post.id, asked.shown, asked.visitor) do\n      names = author_names(found, asked.visitor)\n\n      comments =\n        Enum.map(found, fn comment ->\n          replies =\n            comment\n            |> approved_replies()\n            |> Enum.map(&shape(&1, names, asked.reader, []))\n\n          shape(comment, names, asked.reader, replies)\n        end)\n\n      {:ok,\n       %{\n         post: post,\n         comments: comments,\n         total: everything(post, asked.visitor, length(comments)),\n         shown: asked.shown,\n         has_more: more?\n       }}\n    end\nend\n"
         },
         {
           "name": "arrived",
@@ -2807,12 +2922,12 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:comments, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n# THE PAGE'S OWN ROWS GO WITH THE READ, into the task too, which has no socket to find them on.\nsource = source_of(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked, source))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:comments, fn -> fetch(asked, source) end)\n    end\nend\n"
         },
         {
           "name": "everything",
-          "args": "post_id, visitor, drawn",
-          "code": "# HOW MANY COMMENTS THE CONVERSATION HOLDS, replies included — the number beside the heading. One\n# read of one row, which carries the count Ash works out for the whole of the approved ones. Where\n# it cannot be had the number is what is drawn, never nothing.\nMishkaBlog.Comment\n|> Ash.Query.for_read(:approved_by_post, %{post_id: post_id}, read_as(visitor))\n|> Ash.read(tenant: site_id(), page: [limit: 1, count: true])\n|> case do\n  {:ok, %{count: count}} when is_integer(count) -> count\n  _unreadable -> drawn\nend\n"
+          "args": "post, visitor, drawn",
+          "code": "# HOW MANY COMMENTS THE CONVERSATION HOLDS, replies included — the number beside the heading. The\n# page reads it with the post, as this reader (`approved_comment_count`, counted through the\n# comments' public read). Where it cannot be had the number is what is drawn, never nothing.\nrequire Ash.Query\n\ncase post do\n  %{approved_comment_count: count} when is_integer(count) ->\n    count\n\n  # ONE READ OF ONE ROW, which carries the count Ash works out for the whole of the approved ones,\n  # through the read itself: what keeps a comment to its reader is a filter the read puts on as it\n  # runs, which a count of its own would not.\n  %{id: post_id} ->\n    MishkaBlog.Comment\n    |> Ash.Query.for_read(:approved_by_post, %{post_id: post_id}, read_as(visitor))\n    |> Ash.read(tenant: site_id(), page: [limit: 1, count: true])\n    |> case do\n      {:ok, %{count: count}} when is_integer(count) -> count\n      _unreadable -> drawn\n    end\nend\n"
         },
         {
           "name": "initial",
@@ -2901,6 +3016,14 @@
           }
         },
         {
+          "name": "page_source",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The rows the page read for this address, handed down by the page as page_source={assigns[:page_source]}. What it holds for exactly a read this block makes, for this same reader, is taken from it; anything else is read here, as it is without it."
+          }
+        },
+        {
           "name": "current_user",
           "type": "any",
           "opts": {
@@ -2940,6 +3063,16 @@
           "name": "read_as",
           "args": "visitor",
           "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of what is offered, and a page with nobody signed in reads as a guest.\n# The tenant goes with it, because a public action that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
+        },
+        {
+          "name": "source_of",
+          "args": "assigns",
+          "code": "# THE ROWS THE PAGE READ FOR THIS ADDRESS, when it handed them down (`page_source`) and read them for\n# this block's reader on this block's site; `nil` otherwise, and the block reads for itself. Read by\n# their shape, the one the extension's page source documents: a block calls nothing of its code.\nsite = site_id()\n\nvisitor =\n  case assigns[:current_user] do\n    %{id: id} -> id\n    _guest -> nil\n  end\n\ncase assigns[:page_source] do\n  %{rows_of: \"mishka_blog\", site_id: ^site, visitor: ^visitor} = source -> source\n  _not_for_this_block -> nil\nend\n"
+        },
+        {
+          "name": "shared",
+          "args": "source, read",
+          "code": "# ONE READ THIS BLOCK WOULD MAKE, answered by the rows the page read once for its head, its frame\n# and its blocks: `{:ok, rows}` where the page read exactly that, as this reader, and `:error` where\n# it did not, so the block reads it itself.\n#\n#   * `{:record, kind, slug, language}` — the post, category or tag the page's slug names in its\n#     language, or the blogger or team (`:any` language: one row in every language); `nil` where\n#     the reader's read found none;\n#   * `{:featured, limit, language}` — the front page's newest featured posts;\n#   * `{:total, category, tag, language}` — how many posts the reader may open in the language, of\n#     the category or the tag the page is of, or of none on the front page.\ncase {source, read} do\n  {%{kind: kind, slug: slug, language: language, record: record}, {:record, kind, slug, language}}\n  when kind != \"blog:home\" ->\n    {:ok, record}\n\n  {%{kind: kind, slug: slug, record: record}, {:record, kind, slug, :any}}\n  when kind in [\"blog:author\", \"blog:team\"] ->\n    {:ok, record}\n\n  {%{kind: \"blog:home\", language: language, featured: %{limit: limit, rows: rows}},\n   {:featured, limit, language}} ->\n    {:ok, rows}\n\n  {%{kind: \"blog:home\", language: language, total: total}, {:total, \"\", \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:category\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, slug, \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:tag\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, \"\", slug, language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  _not_read_for_this ->\n    :error\nend\n"
         },
         {
           "name": "trimmed",
@@ -2983,8 +3116,13 @@
         },
         {
           "name": "related",
-          "args": "slug, language, visitor, limit",
-          "code": "require Ash.Query\n\npost =\n  MishkaBlog.BlogPost\n  |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n  |> Ash.Query.filter(slug == ^to_string(slug))\n  |> only_language(language)\n  |> Ash.Query.select([:id, :language])\n  |> Ash.Query.load(collections: Ash.Query.select(MishkaBlog.Collection, [:id]))\n  |> Ash.read(tenant: site_id(), page: [limit: 1])\n  |> first_row()\n\ncase post do\n  nil ->\n    []\n\n  found ->\n    filed = if is_list(found.collections), do: Enum.map(found.collections, & &1.id), else: []\n\n    # THE SAME CATEGORIES FIRST, then whatever else is newest — which is what keeps a post in a\n    # category of one from being offered nothing at all.\n    same =\n      case filed do\n        [] -> []\n        ids -> listed(found, visitor, limit, ids, [found.id])\n      end\n\n    more =\n      case limit - length(same) do\n        missing when missing > 0 ->\n          listed(found, visitor, missing, [], [found.id | Enum.map(same, & &1.id)])\n\n        _enough ->\n          []\n      end\n\n    same ++ more\nend\n"
+          "args": "source, slug, language, visitor, limit",
+          "code": "require Ash.Query\n\n# THE POST BEING READ AND THE CATEGORIES IT IS FILED UNDER: the ones the page read once for its head\n# and its blocks, when it handed them down for this reader, else read here, as the visitor.\npost =\n  case shared(source, {:record, \"blog:post\", to_string(slug), trimmed(language)}) do\n    {:ok, row} -> row\n    :error -> read_post(slug, language, visitor)\n  end\n\ncase post do\n  nil ->\n    []\n\n  found ->\n    filed = if is_list(found.collections), do: Enum.map(found.collections, & &1.id), else: []\n\n    # THE SAME CATEGORIES FIRST, then whatever else is newest — which is what keeps a post in a\n    # category of one from being offered nothing at all.\n    same =\n      case filed do\n        [] -> []\n        ids -> listed(found, visitor, limit, ids, [found.id])\n      end\n\n    more =\n      case limit - length(same) do\n        missing when missing > 0 ->\n          listed(found, visitor, missing, [], [found.id | Enum.map(same, & &1.id)])\n\n        _enough ->\n          []\n      end\n\n    same ++ more\nend\n"
+        },
+        {
+          "name": "read_post",
+          "args": "slug, language, visitor",
+          "code": "# THE POST THE NEXT READS ARE CHOSEN FOR, read here, as the visitor, where the page handed no rows\n# of its own for it.\nrequire Ash.Query\n\nMishkaBlog.BlogPost\n|> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n|> Ash.Query.filter(slug == ^to_string(slug))\n|> only_language(language)\n|> Ash.Query.select([:id, :language])\n|> Ash.Query.load(collections: Ash.Query.select(MishkaBlog.Collection, [:id]))\n|> Ash.read(tenant: site_id(), page: [limit: 1])\n|> first_row()\n"
         },
         {
           "name": "asked",
@@ -2994,7 +3132,7 @@
         {
           "name": "load",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\n# READ AGAIN ONLY WHEN WHAT IT IS READ FOR CHANGED. `update/2` runs on every re-render of the page\n# holding this block, and three reads for the same three cards is not what a re-render asked for.\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  _before ->\n    posts =\n      case asked.slug do\n        \"\" -> []\n        slug -> related(slug, asked.language, asked.visitor, asked.limit)\n      end\n\n    Phoenix.Component.assign(socket, asked: asked, posts: posts)\nend\n"
+          "code": "asked = asked(socket.assigns)\n\n# READ AGAIN ONLY WHEN WHAT IT IS READ FOR CHANGED. `update/2` runs on every re-render of the page\n# holding this block, and three reads for the same three cards is not what a re-render asked for.\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  _before ->\n    posts =\n      case asked.slug do\n        \"\" -> []\n        slug -> related(source_of(socket.assigns), slug, asked.language, asked.visitor, asked.limit)\n      end\n\n    Phoenix.Component.assign(socket, asked: asked, posts: posts)\nend\n"
         }
       ],
       "permissions": [],
@@ -3304,6 +3442,14 @@
           }
         },
         {
+          "name": "page_source",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The rows the page read for this address, handed down by the page as page_source={assigns[:page_source]}. What it holds for exactly a read this block makes, for this same reader, is taken from it; anything else is read here, as it is without it."
+          }
+        },
+        {
           "name": "current_user",
           "type": "any",
           "opts": {
@@ -3373,6 +3519,16 @@
           "name": "read_as",
           "args": "visitor",
           "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
+        },
+        {
+          "name": "source_of",
+          "args": "assigns",
+          "code": "# THE ROWS THE PAGE READ FOR THIS ADDRESS, when it handed them down (`page_source`) and read them for\n# this block's reader on this block's site; `nil` otherwise, and the block reads for itself. Read by\n# their shape, the one the extension's page source documents: a block calls nothing of its code.\nsite = site_id()\n\nvisitor =\n  case assigns[:current_user] do\n    %{id: id} -> id\n    _guest -> nil\n  end\n\ncase assigns[:page_source] do\n  %{rows_of: \"mishka_blog\", site_id: ^site, visitor: ^visitor} = source -> source\n  _not_for_this_block -> nil\nend\n"
+        },
+        {
+          "name": "shared",
+          "args": "source, read",
+          "code": "# ONE READ THIS BLOCK WOULD MAKE, answered by the rows the page read once for its head, its frame\n# and its blocks: `{:ok, rows}` where the page read exactly that, as this reader, and `:error` where\n# it did not, so the block reads it itself.\n#\n#   * `{:record, kind, slug, language}` — the post, category or tag the page's slug names in its\n#     language, or the blogger or team (`:any` language: one row in every language); `nil` where\n#     the reader's read found none;\n#   * `{:featured, limit, language}` — the front page's newest featured posts;\n#   * `{:total, category, tag, language}` — how many posts the reader may open in the language, of\n#     the category or the tag the page is of, or of none on the front page.\ncase {source, read} do\n  {%{kind: kind, slug: slug, language: language, record: record}, {:record, kind, slug, language}}\n  when kind != \"blog:home\" ->\n    {:ok, record}\n\n  {%{kind: kind, slug: slug, record: record}, {:record, kind, slug, :any}}\n  when kind in [\"blog:author\", \"blog:team\"] ->\n    {:ok, record}\n\n  {%{kind: \"blog:home\", language: language, featured: %{limit: limit, rows: rows}},\n   {:featured, limit, language}} ->\n    {:ok, rows}\n\n  {%{kind: \"blog:home\", language: language, total: total}, {:total, \"\", \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:category\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, slug, \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:tag\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, \"\", slug, language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  _not_read_for_this ->\n    :error\nend\n"
         },
         {
           "name": "positive",
@@ -3456,13 +3612,18 @@
         },
         {
           "name": "blogger_row",
-          "args": "slug, visitor",
-          "code": "# THE PUBLIC READ OF ONE BLOGGER, AS THE VISITOR: an archived blogger is nobody here, and their page\n# says so rather than drawing the profile they took down.\ncase slug do\n  \"\" ->\n    {:ok, nil}\n\n  wanted ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_by_slug, %{slug: wanted}, read_as(visitor))\n    |> Ash.Query.select([:id, :display_name, :slug, :bio, :avatar_url, :social_links])\n    |> Ash.read_one(tenant: site_id())\nend\n"
+          "args": "source, slug, visitor",
+          "code": "# THE PUBLIC READ OF ONE BLOGGER, AS THE VISITOR: an archived blogger is nobody here, and their page\n# says so rather than drawing the profile they took down.\ncase slug do\n  \"\" ->\n    {:ok, nil}\n\n  wanted ->\n    case shared(source, {:record, \"blog:author\", wanted, :any}) do\n      {:ok, row} -> {:ok, row}\n      :error -> read_blogger(wanted, visitor)\n    end\nend\n"
+        },
+        {
+          "name": "read_blogger",
+          "args": "wanted, visitor",
+          "code": "# THE BLOGGER THE SLUG NAMES, read here, as the visitor, where the page handed no rows of its own\n# for them.\nrequire Ash.Query\n\nMishkaBlog.Blogger\n|> Ash.Query.for_read(:public_by_slug, %{slug: wanted}, read_as(visitor))\n|> Ash.Query.select([:id, :display_name, :slug, :bio, :avatar_url, :social_links])\n|> Ash.read_one(tenant: site_id())\n"
         },
         {
           "name": "teams_of",
           "args": "blogger, visitor",
-          "code": "require Ash.Query\n\n# THE TEAMS A READER CAN OPEN, which are the active ones: a team that is a draft, switched off or\n# archived has no page to lead to, so it is not named here either.\ncase blogger do\n  nil ->\n    []\n\n  %{id: blogger_id} ->\n    MishkaBlog.Team\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(members, id == ^blogger_id))\n    |> Ash.Query.sort(name: :asc)\n    |> Ash.Query.select([:id, :name, :slug, :avatar_url])\n    |> Ash.read(tenant: site_id(), page: [limit: 50])\n    |> rows()\nend\n"
+          "code": "require Ash.Query\n\n# THE TEAMS A READER CAN OPEN, which are the active ones: a team that is a draft, switched off or\n# archived has no page to lead to, so it is not named here either.\ncase blogger do\n  nil ->\n    []\n\n  # THE TEAMS THE PAGE READ WITH THE BLOGGER, as this reader, where it read it with them.\n  %{teams: found} when is_list(found) ->\n    found\n\n  %{id: blogger_id} ->\n    MishkaBlog.Team\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(members, id == ^blogger_id))\n    |> Ash.Query.sort(name: :asc)\n    |> Ash.Query.select([:id, :name, :slug, :avatar_url])\n    |> Ash.read(tenant: site_id(), page: [limit: 50])\n    |> rows()\nend\n"
         },
         {
           "name": "asked",
@@ -3476,8 +3637,8 @@
         },
         {
           "name": "fetch",
-          "args": "asked",
-          "code": "# RUN IN THE TASK, so nothing here may touch the socket — and nothing here builds an address,\n# because `site_path/2` answers for the site the page's own process renders for. A profile that\n# could not be read is an error, never \"nobody is here\": that is a different sentence to a reader.\nwith {:ok, blogger} <- blogger_row(asked.slug, asked.visitor) do\n  {:ok, %{blogger: blogger, teams: (asked.teams && teams_of(blogger, asked.visitor)) || []}}\nend\n"
+          "args": "asked, source",
+          "code": "# RUN IN THE TASK, so nothing here may touch the socket — and nothing here builds an address,\n# because `site_path/2` answers for the site the page's own process renders for. A profile that\n# could not be read is an error, never \"nobody is here\": that is a different sentence to a reader.\nwith {:ok, blogger} <- blogger_row(source, asked.slug, asked.visitor) do\n  {:ok, %{blogger: blogger, teams: (asked.teams && teams_of(blogger, asked.visitor)) || []}}\nend\n"
         },
         {
           "name": "posts_page",
@@ -3522,7 +3683,7 @@
         {
           "name": "load_profile",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:profile, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n# THE PAGE'S OWN ROWS GO WITH THE READ, into the task too, which has no socket to find them on.\nsource = source_of(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked, source))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:profile, fn -> fetch(asked, source) end)\n    end\nend\n"
         },
         {
           "name": "load_posts",
@@ -3903,6 +4064,14 @@
           }
         },
         {
+          "name": "page_source",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "The rows the page read for this address, handed down by the page as page_source={assigns[:page_source]}. What it holds for exactly a read this block makes, for this same reader, is taken from it; anything else is read here, as it is without it."
+          }
+        },
+        {
           "name": "current_user",
           "type": "any",
           "opts": {
@@ -3974,6 +4143,16 @@
           "code": "# THE VISITOR THE READ IS FOR, AS ITS ACTOR, so a post, a category or a tag locked to permissions\n# it does not hold is left out of the rows, the count and the pages by the public action's own rules,\n# and a page with nobody signed in reads as a guest. The tenant goes with it, because a public action\n# that checks its tenant does so as it is prepared.\n[actor: visitor, tenant: site_id()]\n"
         },
         {
+          "name": "source_of",
+          "args": "assigns",
+          "code": "# THE ROWS THE PAGE READ FOR THIS ADDRESS, when it handed them down (`page_source`) and read them for\n# this block's reader on this block's site; `nil` otherwise, and the block reads for itself. Read by\n# their shape, the one the extension's page source documents: a block calls nothing of its code.\nsite = site_id()\n\nvisitor =\n  case assigns[:current_user] do\n    %{id: id} -> id\n    _guest -> nil\n  end\n\ncase assigns[:page_source] do\n  %{rows_of: \"mishka_blog\", site_id: ^site, visitor: ^visitor} = source -> source\n  _not_for_this_block -> nil\nend\n"
+        },
+        {
+          "name": "shared",
+          "args": "source, read",
+          "code": "# ONE READ THIS BLOCK WOULD MAKE, answered by the rows the page read once for its head, its frame\n# and its blocks: `{:ok, rows}` where the page read exactly that, as this reader, and `:error` where\n# it did not, so the block reads it itself.\n#\n#   * `{:record, kind, slug, language}` — the post, category or tag the page's slug names in its\n#     language, or the blogger or team (`:any` language: one row in every language); `nil` where\n#     the reader's read found none;\n#   * `{:featured, limit, language}` — the front page's newest featured posts;\n#   * `{:total, category, tag, language}` — how many posts the reader may open in the language, of\n#     the category or the tag the page is of, or of none on the front page.\ncase {source, read} do\n  {%{kind: kind, slug: slug, language: language, record: record}, {:record, kind, slug, language}}\n  when kind != \"blog:home\" ->\n    {:ok, record}\n\n  {%{kind: kind, slug: slug, record: record}, {:record, kind, slug, :any}}\n  when kind in [\"blog:author\", \"blog:team\"] ->\n    {:ok, record}\n\n  {%{kind: \"blog:home\", language: language, featured: %{limit: limit, rows: rows}},\n   {:featured, limit, language}} ->\n    {:ok, rows}\n\n  {%{kind: \"blog:home\", language: language, total: total}, {:total, \"\", \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:category\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, slug, \"\", language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  {%{kind: \"blog:tag\", slug: slug, language: language, record: %{listed_post_count: total}},\n   {:total, \"\", slug, language}}\n  when is_integer(total) ->\n    {:ok, total}\n\n  _not_read_for_this ->\n    :error\nend\n"
+        },
+        {
           "name": "positive",
           "args": "value, fallback",
           "code": "cond do\n  is_integer(value) and value > 0 ->\n    value\n\n  is_binary(value) ->\n    case Integer.parse(value) do\n      {number, _rest} when number > 0 -> number\n      _not_a_number -> fallback\n    end\n\n  true ->\n    fallback\nend\n"
@@ -4040,13 +4219,18 @@
         },
         {
           "name": "team_row",
-          "args": "slug, visitor",
-          "code": "# THE PUBLIC READ OF ONE TEAM, AS THE VISITOR: a team that is a draft, switched off or archived is\n# not here, and its page says so rather than drawing it.\ncase slug do\n  \"\" ->\n    {:ok, nil}\n\n  wanted ->\n    MishkaBlog.Team\n    |> Ash.Query.for_read(:public_by_slug, %{slug: wanted}, read_as(visitor))\n    |> Ash.Query.select([:id, :name, :slug, :description, :avatar_url, :cover_image_url])\n    |> Ash.read_one(tenant: site_id())\nend\n"
+          "args": "source, slug, visitor",
+          "code": "# THE PUBLIC READ OF ONE TEAM, AS THE VISITOR: a team that is a draft, switched off or archived is\n# not here, and its page says so rather than drawing it.\ncase slug do\n  \"\" ->\n    {:ok, nil}\n\n  wanted ->\n    case shared(source, {:record, \"blog:team\", wanted, :any}) do\n      {:ok, row} -> {:ok, row}\n      :error -> read_team(wanted, visitor)\n    end\nend\n"
+        },
+        {
+          "name": "read_team",
+          "args": "wanted, visitor",
+          "code": "# THE TEAM THE SLUG NAMES, read here, as the visitor, where the page handed no rows of its own for\n# it.\nrequire Ash.Query\n\nMishkaBlog.Team\n|> Ash.Query.for_read(:public_by_slug, %{slug: wanted}, read_as(visitor))\n|> Ash.Query.select([:id, :name, :slug, :description, :avatar_url, :cover_image_url])\n|> Ash.read_one(tenant: site_id())\n"
         },
         {
           "name": "members_of",
           "args": "team, visitor",
-          "code": "require Ash.Query\n\n# THE MEMBERS A READER CAN SEE, which leaves out a blogger who is archived.\ncase team do\n  nil ->\n    []\n\n  %{id: team_id} ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(teams, id == ^team_id))\n    |> Ash.Query.sort(display_name: :asc)\n    |> Ash.Query.select([:id, :display_name, :slug, :avatar_url, :bio])\n    |> Ash.Query.load(:post_count)\n    |> Ash.read(tenant: site_id(), page: [limit: 100])\n    |> rows()\nend\n"
+          "code": "require Ash.Query\n\n# THE MEMBERS A READER CAN SEE, which leaves out a blogger who is archived.\ncase team do\n  nil ->\n    []\n\n  # THE MEMBERS THE PAGE READ WITH THE TEAM, as this reader, where it read it with them.\n  %{members: found} when is_list(found) ->\n    found\n\n  %{id: team_id} ->\n    MishkaBlog.Blogger\n    |> Ash.Query.for_read(:public_list, %{}, read_as(visitor))\n    |> Ash.Query.filter(exists(teams, id == ^team_id))\n    |> Ash.Query.sort(display_name: :asc)\n    |> Ash.Query.select([:id, :display_name, :slug, :avatar_url, :bio])\n    |> Ash.Query.load(:post_count)\n    |> Ash.read(tenant: site_id(), page: [limit: 100])\n    |> rows()\nend\n"
         },
         {
           "name": "asked",
@@ -4060,8 +4244,8 @@
         },
         {
           "name": "fetch",
-          "args": "asked",
-          "code": "# RUN IN THE TASK, so nothing here may touch the socket — and nothing here builds an address,\n# because `site_path/2` answers for the site the page's own process renders for. A profile that\n# could not be read is an error, never \"nobody is here\": that is a different sentence to a reader.\nwith {:ok, team} <- team_row(asked.slug, asked.visitor) do\n  {:ok, %{team: team, members: (asked.members && members_of(team, asked.visitor)) || []}}\nend\n"
+          "args": "asked, source",
+          "code": "# RUN IN THE TASK, so nothing here may touch the socket — and nothing here builds an address,\n# because `site_path/2` answers for the site the page's own process renders for. A profile that\n# could not be read is an error, never \"nobody is here\": that is a different sentence to a reader.\nwith {:ok, team} <- team_row(source, asked.slug, asked.visitor) do\n  {:ok, %{team: team, members: (asked.members && members_of(team, asked.visitor)) || []}}\nend\n"
         },
         {
           "name": "posts_page",
@@ -4106,7 +4290,7 @@
         {
           "name": "load_profile",
           "args": "socket",
-          "code": "asked = asked(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:profile, fn -> fetch(asked) end)\n    end\nend\n"
+          "code": "asked = asked(socket.assigns)\n# THE PAGE'S OWN ROWS GO WITH THE READ, into the task too, which has no socket to find them on.\nsource = source_of(socket.assigns)\n\ncase socket.assigns[:asked] do\n  ^asked ->\n    socket\n\n  before ->\n    socket = Phoenix.Component.assign(socket, :asked, asked)\n\n    case cold?(socket) or is_nil(before) do\n      true ->\n        arrived(socket, fetch(asked, source))\n\n      false ->\n        socket\n        |> Phoenix.Component.assign(loading: true, failed: false)\n        |> MishkaGervaz.Messages.start_async(:profile, fn -> fetch(asked, source) end)\n    end\nend\n"
         },
         {
           "name": "load_posts",
