@@ -123,6 +123,17 @@ defmodule MishkaBlog.VisitorListsTest do
     assert visible(BlogPost, ctx.site, ctx.member, page: [limit: 10, count: true]).count == 3
   end
 
+  # A COUNT IS OF WHAT THE LIST HOLDS. `Ash.count/2` runs none of a read's `before_action` hooks, so a
+  # list narrowed to its visitor only there counted the posts and the categories they may not open.
+  test "a count of a list counts what its visitor may open, as the list lists it", ctx do
+    for {visitor, posts, categories} <- [{nil, 1, 1}, {ctx.member, 3, 3}] do
+      assert BlogPost |> read_as(ctx.site, visitor) |> Ash.count!(tenant: ctx.site.id) == posts
+
+      assert Collection |> read_as(ctx.site, visitor) |> Ash.count!(tenant: ctx.site.id) ==
+               categories
+    end
+  end
+
   test "a page's lists of categories and tags hold what its visitor may open", ctx do
     locked =
       create_blog_tag!(site_id: ctx.site.id, language: "en", permissions: ["members:read"])
