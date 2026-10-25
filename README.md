@@ -40,11 +40,13 @@ Mishka Blog is an extension of [Mishka CMS](https://mishka.tools/cms), an open s
 
 ## 🚀 Getting started
 
-Mishka Blog is installed with [Mishka CMS](https://github.com/mishka-group/mishka_cms#-getting-started). The package is not on Hex. Mishka CMS loads it from `__extensions/mishka_blog` when that folder exists, and otherwise from GitHub at the revision pinned in `mix.lock`:
+Mishka Blog is installed with [Mishka CMS](https://github.com/mishka-group/mishka_cms#-getting-started). Add it from Hex:
 
 ```elixir
-{:mishka_blog, github: "mishka-group/mishka_blog", branch: "master", override: true}
+{:mishka_blog, "~> 0.0.1"}
 ```
+
+[Mishka CMS](https://github.com/mishka-group/mishka_cms) loads it from `__extensions/mishka_blog` instead when that folder exists.
 
 Mishka CMS registers it in three places: `MishkaBlog` in `ash_domains` and `MishkaBlogWeb` in the core's `extensions` list, both in `config/config.exs`, and `MishkaBlog` in the domains of the JSON:API router.
 
