@@ -192,7 +192,7 @@ defmodule MishkaBlog.Provision do
   @app :mishka_blog
   @section "blog"
 
-  @typedoc "See `MishkaCmsCore.Runtime.ExtensionProvision.report/0`."
+  @typedoc "See `t:MishkaCmsCore.Runtime.ExtensionProvision.report/0`."
   @type report :: ExtensionProvision.report()
 
   # THE BLOG'S OWN AREAS, created when the blog is installed — with its components and its pages,

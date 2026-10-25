@@ -26,9 +26,12 @@ defmodule MishkaBlog.MixProject do
       docs: [
         main: "readme",
         source_ref: "v#{@version}",
-        extras: ["README.md"],
+        extras: ["README.md", LICENSE: [title: "License"]],
         source_url: @source_url
-      ]
+      ],
+      # `test/support` is compiled in the test env, where `mix ci` runs dialyzer, and it calls
+      # `ExUnit`, which is not in the default PLT.
+      dialyzer: [plt_add_apps: [:ex_unit]]
     ]
   end
 
@@ -47,9 +50,21 @@ defmodule MishkaBlog.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:decimal, "~> 3.2", override: true},
+      {:decimal, "~> 3.2"},
       {:sourceror, "~> 1.13", only: [:dev, :test]},
       {:lazy_html, "~> 0.1", only: :test},
+      # The editor's Heroicons catalogue (`MishkaCmsCore.Runtime.PageBuilder.Icons.Heroicons`) reads
+      # these SVGs at compile time, out of the deps of the project being built. A host brings its own
+      # copy, so this one serves only this library's own suite, and it is never a requirement of the
+      # Hex package.
+      {:heroicons,
+       github: "tailwindlabs/heroicons",
+       tag: "v2.2.0",
+       sparse: "optimized",
+       app: false,
+       compile: false,
+       depth: 1,
+       only: [:dev, :test]},
       {:open_api_spex, "~> 3.22"},
       {:ash_paper_trail, "~> 0.8"},
       {:ash_archival, "~> 2.0"},
@@ -70,18 +85,34 @@ defmodule MishkaBlog.MixProject do
       {:makeup_ts, "~> 0.2"},
       {:makeup_css, "~> 0.2"},
       {:oban, "~> 2.24"},
-      {:mishka_installer, "~> 0.1.14"},
+      mishka_dep(:mishka_installer, "~> 0.1.14"),
       {:guarded_struct, "~> 0.1.4"},
-      {:mishka_cms_core, path: "../mishka_cms_core"},
-      {:mishka_gervaz, path: "../mishka_gervaz"},
+      mishka_dep(:mishka_cms_core, "~> 0.0.1"),
+      mishka_dep(:mishka_gervaz, "~> 0.0.2"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:jump_credo_checks, "~> 0.6", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
       {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      # `mix hex.publish` builds the docs with it.
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false}
     ]
+  end
+
+  # A Mishka package is its sibling checkout `../<name>` when there is one, and its Hex release
+  # otherwise. Only a git checkout counts, so the copy Mix fetched into a host's `deps/` never does,
+  # and a `hex.*` task (`mix hex.build`, `mix hex.publish`) always takes Hex, as a package must.
+  defp mishka_dep(name, requirement) do
+    sibling? =
+      File.dir?(Path.expand("../#{name}/.git", __DIR__)) and
+        not Enum.any?(System.argv(), &String.starts_with?(&1, "hex."))
+
+    case sibling? do
+      true -> {name, path: "../#{name}"}
+      false -> {name, requirement}
+    end
   end
 
   defp description() do

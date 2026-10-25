@@ -8,6 +8,8 @@ path = [
   ".gitignore",
   ".tool-versions",
   "README.md",
+  "CHANGELOG.md",
+  "SECURITY.md",
   "mix.lock",
   ".github/workflows/*.yml",
   "**/*.yml",

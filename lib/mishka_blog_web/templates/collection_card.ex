@@ -64,7 +64,7 @@ defmodule MishkaBlogWeb.Templates.CollectionCard do
 
   @doc """
   The switcher draws this glyph for the card view. It is the grid of four squares the design uses, and
-  `MishkaCmsCoreWeb.UIAdapters.Admin.switcher_icon/1` renders it inline — the runtime CSS compiler
+  `MishkaGervaz.UIAdapters.Tailwind.switcher_icon_class/1` renders it inline — the runtime CSS compiler
   cannot emit a mask for a name it only sees at runtime.
   """
   @impl true

@@ -16,8 +16,9 @@ erl_crash.dump
 # Also ignore archive artifacts (built via "mix archive.build").
 *.ez
 
-# Ignore package tarball (built via "mix hex.build").
-mishka_cms_core_resources-*.tar
+# `mix hex.build` output: the package tarball and the folder `--unpack` writes.
+mishka_blog-*.tar
+/mishka_blog-*/
 
 # Temporary files, for example, from tests.
 /tmp/
