@@ -25,6 +25,7 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
   alias MishkaBlog.Provision
   alias MishkaBlog.Test.VersionHelpers
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
+  alias MishkaCmsCore.Install.Extensions
   alias MishkaCmsCore.Runtime.{Component, ExtensionProvision}
   alias MishkaCmsCore.Runtime.Handlers.UiKitUpgrade
   alias MishkaCmsCore.Runtime.Page
@@ -72,6 +73,16 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
       |> Map.update!(:req_headers, &[{"host", "localhost"} | List.keydelete(&1, "host", 0)])
 
     {:ok, conn: conn, site: site}
+  end
+
+  # THE SITE AS THE INSTALLER LEAVES IT: what the blog ships, and the record core writes once the run
+  # is over. That record is the whole answer to whether a site has the blog
+  # (`Extensions.installed?/2`) — a site holding every component and page and no record opens on the
+  # installer, and the modal this suite is about is not on that screen.
+  defp set_up!(site) do
+    report = Provision.ensure!(site)
+
+    :ok = Extensions.mark_installed!(site.id, :mishka_blog, report.version)
   end
 
   defp components(site) do
@@ -144,7 +155,7 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
 
   describe "a master who may edit the site's runtime" do
     setup %{conn: conn, site: site} do
-      Provision.ensure!(site)
+      set_up!(site)
 
       {:ok, conn: log_in(conn, admin_with!("blogkit@example.com", "*"))}
     end
@@ -342,7 +353,7 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
   # page kept the one it had, with nothing anywhere comparing the two.
   describe "the sample pages" do
     setup %{conn: conn, site: site} do
-      Provision.ensure!(site)
+      set_up!(site)
 
       {:ok, conn: log_in(conn, admin_with!("blogpages@example.com", "*"))}
     end
@@ -496,7 +507,7 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
   # a holder of them alone: the components' update and the sample page's draft.
   describe "a holder of the names the set-up asks for" do
     setup %{site: site} do
-      Provision.ensure!(site)
+      set_up!(site)
       age!(site)
       aged_page!(site)
 
@@ -539,7 +550,7 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
 
   describe "an editor who may not" do
     setup %{site: site} do
-      Provision.ensure!(site)
+      set_up!(site)
       age!(site)
 
       :ok
@@ -571,7 +582,7 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
   # Analytics, and a set-up site's dashboard says nothing about either until it is asked.
   describe "the header icon" do
     setup %{conn: conn, site: site} do
-      Provision.ensure!(site)
+      set_up!(site)
 
       {:ok, conn: log_in(conn, admin_with!("blogicon@example.com", "*"))}
     end
