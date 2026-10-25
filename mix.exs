@@ -73,7 +73,7 @@ defmodule MishkaBlog.MixProject do
       {:mishka_installer, "~> 0.1.14"},
       {:guarded_struct, "~> 0.1.4"},
       {:mishka_cms_core, path: "../mishka_cms_core"},
-      {:mishka_gervaz, path: "../mishka_gervaz"},
+      {:mishka_gervaz, "~> 0.0.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
