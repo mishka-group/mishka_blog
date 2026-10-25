@@ -28,7 +28,10 @@ defmodule MishkaBlog.MixProject do
         source_ref: "v#{@version}",
         extras: ["README.md", LICENSE: [title: "License"]],
         source_url: @source_url
-      ]
+      ],
+      # `test/support` is compiled in the test env, where `mix ci` runs dialyzer, and it calls
+      # `ExUnit`, which is not in the default PLT.
+      dialyzer: [plt_add_apps: [:ex_unit]]
     ]
   end
 
