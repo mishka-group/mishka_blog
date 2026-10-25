@@ -82,7 +82,7 @@ defmodule MishkaBlog.Kit do
   straight away rather than replaced by a skeleton while they are read again. Every later read —
   another page, another filter, another sort — runs in a task, and while it does the block draws a
   skeleton; when a read fails it draws a line and a button to ask again. `cold?/1` still answers
-  for the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers.cold/2`
+  for the builder's canvas and the Preview, where `MishkaCmsCore.Runtime.LiveViewHelpers`
   renders a component with no process at all, and reads inline there too. That is
   `blog-post-list`, `blog-featured-posts`, `blog-tag-cloud`, `blog-category-list`,
   `blog-post-comments`, `blog-people`, and both profiles — `blog-author-profile` and

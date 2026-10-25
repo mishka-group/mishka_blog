@@ -5,7 +5,12 @@
 defmodule MishkaBlog.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
-  @moduledoc false
+  @moduledoc """
+  The blog's OTP application. It supervises the task supervisor that highlights a post's code blocks
+  and every mishka_installer plugin the extension ships (`plugins/0`): the dashboard widgets, the
+  notification producers, the settings, sidebar, install, SEO, share card, stylesheet and page
+  plugins. A plugin registers on the event it listens on once it is supervised here.
+  """
 
   use Application
 
