@@ -2017,9 +2017,10 @@ defmodule MishkaBlog.Collection do
 
     # THE OTHER EDITIONS OF THE CATEGORY AS ITS READER MAY OPEN THEM: the rows of its group of
     # translations — keyed by the master's own id, which the master itself may not carry
-    # (`MishkaCmsCore.LanguageEditions`) — through the public read, so one that is not active, one locked by its own lock or a parent's, and one whose page is
-    # closed to the reader are not among them. Loaded with the category a page reads
-    # (`MishkaBlog.PageSource`), as that page's visitor.
+    # (`MishkaCmsCore.LanguageEditions`) — through the public read, so one that is not active, one
+    # locked by its own lock or a parent's, and one whose page is closed to the reader are not
+    # among them. Loaded with the category a page reads (`MishkaBlog.PageSource`), as that page's
+    # visitor.
     has_many :editions, MishkaBlog.Collection do
       public? false
       no_attributes? true
