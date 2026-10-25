@@ -40,23 +40,6 @@ defmodule MishkaBlog.Test.BlogPostContentFactsTest do
 
   defp stored(post), do: Ash.get!(BlogPost, post.id, action: :read_any, authorize?: false)
 
-  # THIS BUILD HAS NO `deps/heroicons`, so the stock Heroicons set ships nothing here. With no set
-  # configured, the `hero-` glyphs the installed Chelekom kit bundles register themselves
-  # (`MishkaCmsCore.Runtime.PageBuilder.Icons.Bundled`) — what a host without heroicons draws from.
-  defp bundled_icons(_context) do
-    original = Application.get_env(:mishka_cms_core, :icon_libraries)
-    Application.put_env(:mishka_cms_core, :icon_libraries, [])
-
-    on_exit(fn ->
-      case original do
-        nil -> Application.delete_env(:mishka_cms_core, :icon_libraries)
-        libraries -> Application.put_env(:mishka_cms_core, :icon_libraries, libraries)
-      end
-    end)
-
-    :ok
-  end
-
   describe "reading_time_minutes" do
     test "is set when the post is created", %{site: site} do
       post = create_blog_post!(site_id: site.id, content: words(450))
@@ -152,8 +135,6 @@ defmodule MishkaBlog.Test.BlogPostContentFactsTest do
   end
 
   describe "content_icons" do
-    setup :bundled_icons
-
     test "are the icons the content's markers and HTML name, each once", %{site: site} do
       post =
         create_blog_post!(
@@ -270,8 +251,6 @@ defmodule MishkaBlog.Test.BlogPostContentFactsTest do
   # AN ICON A POST NAMES IS IN NO TEMPLATE EITHER: a marker's `icon="hero-cloud"` reaches its
   # component as an expression, and a `<span class="hero-inbox">` in the body is never scanned.
   describe "the icons a site's stylesheet hears" do
-    setup :bundled_icons
-
     test "are those its published posts name, each once", %{site: site} do
       create_blog_post!(
         site_id: site.id,
@@ -375,7 +354,7 @@ defmodule MishkaBlog.Test.BlogPostContentFactsTest do
   # component name live does. `TailwindCompiler.schedule/1` enqueues nothing under the `:env_test?`
   # flag, so it is switched off once the posts a test starts from exist.
   describe "a write that changes the icons a published post names" do
-    setup [:bundled_icons, :open_site]
+    setup :open_site
 
     test "rebuilds the site's stylesheet when it names one no published post did", ctx do
       write!(ctx.post, :update, %{content: ~s(<span class="hero-cloud hero-inbox"></span>)}, ctx)

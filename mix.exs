@@ -50,6 +50,18 @@ defmodule MishkaBlog.MixProject do
       {:decimal, "~> 3.2"},
       {:sourceror, "~> 1.13", only: [:dev, :test]},
       {:lazy_html, "~> 0.1", only: :test},
+      # The editor's Heroicons catalogue (`MishkaCmsCore.Runtime.PageBuilder.Icons.Heroicons`) reads
+      # these SVGs at compile time, out of the deps of the project being built. A host brings its own
+      # copy, so this one serves only this library's own suite, and it is never a requirement of the
+      # Hex package.
+      {:heroicons,
+       github: "tailwindlabs/heroicons",
+       tag: "v2.2.0",
+       sparse: "optimized",
+       app: false,
+       compile: false,
+       depth: 1,
+       only: [:dev, :test]},
       {:open_api_spex, "~> 3.22"},
       {:ash_paper_trail, "~> 0.8"},
       {:ash_archival, "~> 2.0"},
