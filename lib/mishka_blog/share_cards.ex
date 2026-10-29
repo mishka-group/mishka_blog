@@ -52,6 +52,21 @@ defmodule MishkaBlog.ShareCards do
   def target(_not_shown), do: nil
 
   @doc """
+  What the after-save plugins do with a saved record: look at its card again in the background
+  (`MishkaCmsCore.Runtime.ShareCard.refresh/3`) when it shows one, and hand the record back as it
+  was.
+  """
+  @spec refresh(struct()) :: struct()
+  def refresh(record) do
+    with site_id when is_binary(site_id) <- record.site_id,
+         {:record, _kind, _captures} = target <- target(record) do
+      MishkaCmsCore.Runtime.ShareCard.refresh(site_id, target)
+    end
+
+    record
+  end
+
+  @doc """
   Every share card the blog shows on the site `site_id`, as `target/1` names it: each published
   post, active category and tag in its own language, and each blogger and active team once in each
   language the site publishes in (`MishkaCmsCore.Runtime.Languages.site/1`), the language in its
