@@ -35,6 +35,7 @@ defmodule MishkaBlogWeb.Templates.CollectionCard do
 
   import MishkaGervaz.Helpers, only: [dynamic_component: 1]
 
+  alias MishkaBlogWeb.Templates.CardRecord
   alias MishkaBlogWeb.Templates.EditionChips
   alias MishkaCmsCore.LanguageAccent
   alias MishkaCmsCoreWeb.Templates.CardChrome, as: Shared
@@ -267,17 +268,10 @@ defmodule MishkaBlogWeb.Templates.CollectionCard do
   One entry per value of the `status` attribute, falling back to `:draft` — the attribute's own default.
   """
   @spec status_badge(map()) :: %{label: String.t(), chip: String.t()}
-  def status_badge(%{status: status}) when is_map_key(@statuses, status), do: @statuses[status]
-  def status_badge(_record), do: @statuses.draft
+  def status_badge(record), do: CardRecord.status_badge(record, @statuses, :draft)
 
   @doc "One aggregate off the record, or 0 when it arrived unloaded."
-  @spec count(map(), atom()) :: non_neg_integer()
-  def count(record, key) do
-    case Map.get(record, key) do
-      value when is_integer(value) and value >= 0 -> value
-      _unloaded -> 0
-    end
-  end
+  defdelegate count(record, key), to: CardRecord
 
   defp site_name(%{site: %{name: name}}) when is_binary(name), do: name
   defp site_name(_record), do: nil

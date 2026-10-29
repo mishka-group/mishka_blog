@@ -33,6 +33,7 @@ defmodule MishkaBlogWeb.Templates.TeamCard do
 
   import MishkaGervaz.Helpers, only: [dynamic_component: 1]
 
+  alias MishkaBlogWeb.Templates.CardRecord
   alias MishkaCmsCoreWeb.Templates.CardChrome, as: Shared
   alias MishkaGervaz.Table.Templates.Shared, as: Gervaz
 
@@ -139,7 +140,7 @@ defmodule MishkaBlogWeb.Templates.TeamCard do
       |> assign(:followers, count(record, :follower_count))
       |> assign(:members_shown, Enum.take(members, @members_shown))
       |> assign(:members_rest, length(members) - @members_shown)
-      |> assign(:site, site_name(record, state))
+      |> assign(:site, CardRecord.site_name(record, state))
       |> assign(
         :visible_row_actions,
         Enum.filter(assigns.static.row_actions, &Gervaz.action_visible?(&1, record, state))
@@ -286,17 +287,10 @@ defmodule MishkaBlogWeb.Templates.TeamCard do
   default.
   """
   @spec status_badge(map()) :: %{label: String.t(), chip: String.t()}
-  def status_badge(%{status: status}) when is_map_key(@statuses, status), do: @statuses[status]
-  def status_badge(_record), do: @statuses.draft
+  def status_badge(record), do: CardRecord.status_badge(record, @statuses, :draft)
 
   @doc "One aggregate off the record, or 0 when it arrived unloaded."
-  @spec count(map(), atom()) :: non_neg_integer()
-  def count(record, key) do
-    case Map.get(record, key) do
-      value when is_integer(value) and value >= 0 -> value
-      _unloaded -> 0
-    end
-  end
+  defdelegate count(record, key), to: CardRecord
 
   @doc "The tint a member's face wears at a given position, cycling so neighbours never match."
   @spec member_tint(non_neg_integer()) :: String.t()
@@ -338,9 +332,6 @@ defmodule MishkaBlogWeb.Templates.TeamCard do
       letter -> String.upcase(letter)
     end
   end
-
-  defp site_name(%{site: %{name: name}}, %{master_user?: true}) when is_binary(name), do: name
-  defp site_name(_record, _state), do: nil
 
   @impl true
   def render_loading(assigns), do: Shared.loading(assigns)
