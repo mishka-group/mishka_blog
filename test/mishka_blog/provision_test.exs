@@ -10,8 +10,13 @@ defmodule MishkaBlog.ProvisionTest do
   `MishkaBlog.Provision.ensure!/2` is reached from two screens that can both run at any moment: the install
   wizard, for the extensions an operator ticked, and a button an admin can press as often as they
   like — both through `installer:extension:install`. So
-  every case here is written around the second run: the components, pages and snippet a site already
-  has must come through it untouched, including the ones an admin edited, archived or replaced.
+  every case here is written around the second run: the components and pages a site already has must
+  come through it untouched, including the ones an admin edited, archived or replaced.
+
+  The sidebar snippet is not written here. The core keeps no snippet of its own: the run hands it to
+  whichever visual editor the host installed, on `runtime:provision:snippets`, and the editor saves
+  it once per site. This suite has no editor, so a run reports no snippet; where a case is about what
+  the blog hands an editor, `MishkaBlog.Test.Plugins.ProvisionSnippetSaved` stands in for one.
 
   The templates are not rendered here. `Page :master_create` compiles every one of them through
   `Validations.PageCodeCompiles` before it writes the row, so a sample page that does not compile
@@ -24,6 +29,7 @@ defmodule MishkaBlog.ProvisionTest do
 
   alias MishkaBlog.Plugins.{Installer, PageFrame}
   alias MishkaBlog.Provision
+  alias MishkaBlog.Test.Plugins.ProvisionSnippetSaved
   alias MishkaCmsCore.Install
   alias MishkaCmsCore.Install.{Bootstrap, Extensions}
   alias MishkaCmsCore.Runtime.Component
@@ -34,8 +40,8 @@ defmodule MishkaBlog.ProvisionTest do
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.PageProvision
   alias MishkaCmsCore.Runtime.SiteLayout
-  alias MishkaCmsCore.Runtime.Snippet
   alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Test.Installer, as: TestInstaller
   alias MishkaInstaller.Event.EventHandler
 
   require Ash.Query
@@ -78,12 +84,10 @@ defmodule MishkaBlog.ProvisionTest do
 
   defp page(site, path), do: Enum.find(pages(site), &(&1.path == path))
 
-  defp snippets(site) do
-    Snippet
-    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
-    |> Ash.Query.filter(site_id == ^site.id)
-    |> Ash.read!(page: [limit: 100])
-    |> then(& &1.results)
+  # A VISUAL EDITOR ON THE SNIPPET'S EVENT, for the length of the test. The suite has none of its
+  # own: the snippet is the editor's to save, and the core answers `snippets: []` without one.
+  defp with_an_editor do
+    TestInstaller.register!(ProvisionSnippetSaved, "runtime:provision:snippets")
   end
 
   # THE CALLS A STORED TEMPLATE MAKES, as the templates are written: `<.component …/>` with one
@@ -121,10 +125,12 @@ defmodule MishkaBlog.ProvisionTest do
   defp written_as("{" <> rest), do: {:expression, String.trim_trailing(rest, "}")}
   defp written_as(other), do: {:neither, other}
 
-  # Every page this module writes, and the snippet, by the name to put in a failure message.
+  # Every page this module writes, and the snippet, by the name to put in a failure message. The
+  # snippet is the markup the run hands an editor for this site, the manifest's own function applied
+  # to the site's name, since no editor here saves it.
   defp templates(site) do
     Enum.map(pages(site), &{&1.path, &1.template}) ++
-      Enum.map(snippets(site), &{&1.name, &1.source})
+      [{Provision.snippet_name(), Provision.manifest().snippet.source.(site.name)}]
   end
 
   # Both spellings, for the reason `ComponentCompiler.declared_keys/1` takes both: a declaration is a
@@ -533,16 +539,27 @@ defmodule MishkaBlog.ProvisionTest do
              "no URL was read out of the sample pages, so this asserts nothing of them"
     end
 
-    test "saves the sidebar as a snippet the page editor can offer", %{site: site} do
+    test "hands the sidebar to the page editor as a snippet", %{site: site} do
+      with_an_editor()
+
       report = Provision.ensure!(site)
 
       assert report.snippets == [Provision.snippet_name()]
 
-      assert [snippet] = snippets(site)
-      assert snippet.name == Provision.snippet_name()
-      assert snippet.section == :page
-      assert snippet.scope == :shared
-      assert snippet.source =~ "blog-tag-cloud"
+      assert_received {:snippet_offered, offered}
+      assert offered.app == :mishka_blog
+      assert offered.snippet.name == Provision.snippet_name()
+      assert offered.snippet.source =~ "blog-tag-cloud"
+      assert offered.site_id == site.id
+      assert offered.site_name == site.name
+    end
+
+    test "reports no snippet without an editor, and gives the site the rest", %{site: site} do
+      report = Provision.ensure!(site)
+
+      assert report.snippets == []
+      assert length(report.pages) == length(Provision.page_paths())
+      assert length(components(site)) == length(Provision.component_names())
     end
 
     test "takes a site id as well as the record", %{site: site} do
@@ -574,7 +591,6 @@ defmodule MishkaBlog.ProvisionTest do
 
       assert length(components(site)) == length(Provision.component_names())
       assert length(pages(site)) == length(Provision.page_paths())
-      assert length(snippets(site)) == 1
     end
 
     # THE REASON THE WHOLE MODULE IS WRITTEN THE WAY IT IS. `UiKitHandler.install_kit!/2` upserts, so
@@ -705,6 +721,8 @@ defmodule MishkaBlog.ProvisionTest do
   # no later run was ever going to write it. A held name is now answered with the next free one.
   describe "a name that is not free" do
     test "is answered with another name, at the address the blog is read at", %{site: site} do
+      with_an_editor()
+
       mine =
         create_page!(
           site_id: site.id,
@@ -794,42 +812,11 @@ defmodule MishkaBlog.ProvisionTest do
     :ok
   end
 
-  describe "the sidebar snippet" do
-    # `Snippet`'s `unique_name_per_scope` is `[:name, :site_id, :section, :document_id]` with
-    # `nils_distinct? false`, so a snippet an author saved out of ONE page's editor under this name
-    # holds a different key entirely — the shared one the sidebar needs is still free. Counting it
-    # would leave the site with nothing to drop into a page and report `snippets: []` as though it
-    # had it.
-    test "is still created beside one an author saved under the same name on a page", %{
-      site: site
-    } do
-      page = create_page!(site_id: site.id, path: "/keeper", template: ~S(<div>mine</div>))
-
-      Snippet
-      |> Ash.Changeset.for_create(
-        :master_create,
-        %{
-          name: Provision.snippet_name(),
-          source: ~S(<div>mine</div>),
-          section: :page,
-          scope: :page,
-          document_id: page.id,
-          site_id: site.id
-        },
-        authorize?: false
-      )
-      |> Ash.create!()
-
-      assert Provision.ensure!(site).snippets == [Provision.snippet_name()]
-
-      assert [shared] = Enum.filter(snippets(site), &is_nil(&1.document_id))
-      assert shared.scope == :shared
-      assert shared.source =~ "blog-tag-cloud"
-    end
-  end
-
   describe "installing on request" do
-    setup do: listening!()
+    setup do
+      listening!()
+      with_an_editor()
+    end
 
     # THE EVENT IS THE ONLY DOOR. Core never names this module; it fires the event and whichever
     # plugin answers to the key does the work — which is what makes a second extension nothing more
@@ -839,7 +826,7 @@ defmodule MishkaBlog.ProvisionTest do
 
       assert length(components(site)) == length(Provision.component_names())
       assert Enum.sort(Enum.map(pages(site), & &1.path)) == Enum.sort(Provision.page_paths())
-      assert length(snippets(site)) == 1
+      assert report.snippets == [Provision.snippet_name()]
       assert report.pages != []
     end
 
@@ -850,7 +837,7 @@ defmodule MishkaBlog.ProvisionTest do
 
       assert components(site) == []
       assert pages(site) == []
-      assert snippets(site) == []
+      refute_received {:snippet_offered, _offered}
     end
 
     # THE SITE REMEMBERS, IN THE SITE'S OWN SETTINGS. That is what sends an admin to the dashboard
@@ -928,7 +915,7 @@ defmodule MishkaBlog.ProvisionTest do
 
       assert components(site) == []
       assert pages(site) == []
-      assert snippets(site) == []
+      refute_received {:snippet_offered, _offered}
     end
   end
 
@@ -941,6 +928,7 @@ defmodule MishkaBlog.ProvisionTest do
       on_exit(fn -> :persistent_term.erase(:mishka_installed) end)
 
       listening!()
+      with_an_editor()
     end
 
     test "a request with nobody behind it installs while the CMS is not installed yet", %{
@@ -969,7 +957,7 @@ defmodule MishkaBlog.ProvisionTest do
       refute Extensions.installed?(site.id, :mishka_blog)
       assert components(site) == []
       assert pages(site) == []
-      assert snippets(site) == []
+      refute_received {:snippet_offered, _offered}
       assert stored_permissions(names) == []
     end
 
