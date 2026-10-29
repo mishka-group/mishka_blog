@@ -13,7 +13,6 @@ defmodule MishkaBlogWeb.Test.SettingsTabTest do
   use MishkaBlog.ConnCase
 
   import Phoenix.LiveViewTest
-  import MishkaBlog.Test.Factory
 
   require Ash.Query
 

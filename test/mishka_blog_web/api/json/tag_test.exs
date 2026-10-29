@@ -13,7 +13,7 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
   """
   use MishkaBlog.ConnCase
   import MishkaBlog.Test.Factory
-  import MishkaBlog.Test.VersionHelpers
+  import MishkaCmsCore.Test.VersionHelpers
   require Ash.Query
 
   @moduletag :unit

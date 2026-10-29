@@ -8,7 +8,6 @@ defmodule MishkaBlogWeb.Api.Json.OwnParentTest do
   for a master, and naming another record as the parent still works.
   """
   use MishkaBlog.ConnCase
-  import MishkaBlog.Test.Factory
 
   @moduletag :capture_log
 

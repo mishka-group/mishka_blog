@@ -16,7 +16,6 @@ defmodule MishkaBlogWeb.Test.PostContentEditorTest do
   use MishkaBlog.ConnCase
 
   import Phoenix.LiveViewTest
-  import MishkaBlog.Test.Factory
 
   alias MishkaCmsCore.Runtime.States.SiteState
 

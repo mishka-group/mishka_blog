@@ -19,7 +19,6 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
 
   import ExUnit.CaptureLog, only: [with_log: 1]
   import Phoenix.LiveViewTest
-  import MishkaBlog.Test.Factory
 
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}

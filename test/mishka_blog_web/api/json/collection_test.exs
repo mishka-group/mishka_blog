@@ -9,7 +9,7 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
 
   use MishkaBlog.ConnCase
   import MishkaBlog.Test.Factory
-  import MishkaBlog.Test.VersionHelpers
+  import MishkaCmsCore.Test.VersionHelpers
 
   @moduletag :unit
   @moduletag :capture_log
