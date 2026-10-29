@@ -270,7 +270,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.VersionsModal do
 
   defp with_total(record, resource, record_id, current_user) do
     resource
-    |> Module.concat(Version)
+    |> AshPaperTrail.Resource.Info.version_resource()
     |> Ash.Query.for_read(:read_any, %{}, actor: current_user)
     |> Ash.Query.filter(version_source_id: record_id)
     |> Ash.count(actor: current_user)

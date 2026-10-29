@@ -41,6 +41,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
 
   alias MishkaBlog.BlogPost
   alias MishkaBlog.Comment
+  alias MishkaBlog.Dashboard.Figures
   alias MishkaBlog.Dashboard.Scope
   alias MishkaBlog.PostView
 
@@ -96,9 +97,9 @@ defmodule MishkaBlog.Dashboard.Analytics do
       views_yesterday: count(on_day(views, Date.add(today, -1))),
       visitors: visitors(rows),
       comments_window: comments_window,
-      engagement_rate: rate(comments_window, views_window),
+      engagement_rate: Figures.rate(comments_window, views_window),
       engagement_previous:
-        rate(count(in_days(comments, previous_from, previous_to)), views_previous),
+        Figures.rate(count(in_days(comments, previous_from, previous_to)), views_previous),
       series: daily,
       peak: Enum.max_by(daily, & &1.count),
       referrers: referrers(rows),
@@ -197,16 +198,12 @@ defmodule MishkaBlog.Dashboard.Analytics do
   defp in_days(query, from, to) do
     Ash.Query.filter(
       query,
-      inserted_at >= ^beginning_of_day(from) and inserted_at < ^beginning_of_day(Date.add(to, 1))
+      inserted_at >= ^Figures.beginning_of_day(from) and
+        inserted_at < ^Figures.beginning_of_day(Date.add(to, 1))
     )
   end
 
   defp on_day(query, date), do: in_days(query, date, date)
-
-  defp beginning_of_day(date), do: DateTime.new!(date, ~T[00:00:00])
-
-  defp rate(_interactions, 0), do: 0
-  defp rate(interactions, views), do: round(interactions * 100 / views)
 
   defp count(query), do: Scope.count(query)
 end

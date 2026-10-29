@@ -18,15 +18,7 @@ defmodule MishkaBlog.Plugins.BloggerShareCard do
     initial: %{priority: 60}
 
   alias MishkaBlog.ShareCards
-  alias MishkaCmsCore.Runtime.ShareCard
 
   @impl true
-  def call(record, _meta) do
-    with site_id when is_binary(site_id) <- record.site_id,
-         {:record, _kind, _captures} = target <- ShareCards.target(record) do
-      ShareCard.refresh(site_id, target)
-    end
-
-    {:reply, record}
-  end
+  def call(record, _meta), do: {:reply, ShareCards.refresh(record)}
 end

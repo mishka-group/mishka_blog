@@ -36,6 +36,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
 
   import MishkaGervaz.Helpers, only: [dynamic_component: 1]
 
+  alias MishkaBlogWeb.Templates.CardRecord
   alias MishkaBlogWeb.Templates.EditionChips
   alias MishkaCmsCore.LanguageAccent
   alias MishkaCmsCoreWeb.Templates.CardChrome, as: Shared
@@ -230,13 +231,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
   def tint(_record), do: hd(@tints)
 
   @doc "One aggregate off the record, or 0 when it arrived unloaded."
-  @spec count(map(), atom()) :: non_neg_integer()
-  def count(record, key) do
-    case Map.get(record, key) do
-      value when is_integer(value) and value >= 0 -> value
-      _unloaded -> 0
-    end
-  end
+  defdelegate count(record, key), to: CardRecord
 
   @impl true
   def render_loading(assigns), do: Shared.loading(assigns)

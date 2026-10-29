@@ -42,6 +42,7 @@ defmodule MishkaBlog.Dashboard.Overview do
   alias MishkaBlog.BlogPost
   alias MishkaBlog.Collection
   alias MishkaBlog.Comment
+  alias MishkaBlog.Dashboard.Figures
   alias MishkaBlog.Dashboard.Scope
   alias MishkaBlog.PostView
   alias MishkaBlog.Tag
@@ -83,7 +84,7 @@ defmodule MishkaBlog.Dashboard.Overview do
   def load(user) do
     today = Date.utc_today()
     now = DateTime.utc_now()
-    month_start = beginning_of_day(Date.beginning_of_month(today))
+    month_start = Figures.beginning_of_day(Date.beginning_of_month(today))
     window_start = DateTime.add(now, -@window_days, :day)
     previous_start = DateTime.add(now, -2 * @window_days, :day)
 
@@ -107,9 +108,9 @@ defmodule MishkaBlog.Dashboard.Overview do
       bloggers_active: count(Scope.query(Blogger, user)),
       bloggers_new: count(since(Scope.query(Blogger, user), month_start)),
       bloggers_publishers: count(publishers(Scope.query(Blogger, user))),
-      engagement_rate: rate(count(between(comments, window_start, now)), views_window),
+      engagement_rate: Figures.rate(count(between(comments, window_start, now)), views_window),
       engagement_previous:
-        rate(count(between(comments, previous_start, window_start)), views_previous),
+        Figures.rate(count(between(comments, previous_start, window_start)), views_previous),
       collections_total: count(Scope.query(Collection, user)),
       posts_organised: count(in_a_collection(posts)),
       posts_published: count(with_status(posts, :published)),
@@ -126,7 +127,7 @@ defmodule MishkaBlog.Dashboard.Overview do
       month_posts: count(published_since(with_status(posts, :published), month_start)),
       month_views: month_views,
       month_comments: month_comments,
-      month_engagement: rate(month_comments, month_views),
+      month_engagement: Figures.rate(month_comments, month_views),
       activity: activity(user)
     }
   end
@@ -144,8 +145,8 @@ defmodule MishkaBlog.Dashboard.Overview do
   @spec calendar(map(), Date.t()) :: map()
   def calendar(user, date) do
     month = Date.beginning_of_month(date)
-    from = beginning_of_day(month)
-    to = beginning_of_day(Date.add(Date.end_of_month(month), 1))
+    from = Figures.beginning_of_day(month)
+    to = Figures.beginning_of_day(Date.add(Date.end_of_month(month), 1))
 
     # A month is bounded by the calendar, not by a page: a master reads it through `:read_any`, the
     # master read of a post that reads every row at once.
@@ -277,13 +278,8 @@ defmodule MishkaBlog.Dashboard.Overview do
     do: Ash.Query.filter(query, inserted_at >= ^from and inserted_at < ^to)
 
   defp on_day(query, date) do
-    between(query, beginning_of_day(date), beginning_of_day(Date.add(date, 1)))
+    between(query, Figures.beginning_of_day(date), Figures.beginning_of_day(Date.add(date, 1)))
   end
-
-  defp beginning_of_day(date), do: DateTime.new!(date, ~T[00:00:00])
-
-  defp rate(_interactions, 0), do: 0
-  defp rate(interactions, views), do: round(interactions * 100 / views)
 
   defp count(query), do: Scope.count(query)
 end

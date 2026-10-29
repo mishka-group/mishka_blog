@@ -44,6 +44,7 @@ defmodule MishkaBlogWeb.Templates.BloggerCard do
 
   import MishkaGervaz.Helpers, only: [dynamic_component: 1]
 
+  alias MishkaBlogWeb.Templates.CardRecord
   alias MishkaCmsCoreWeb.Templates.CardChrome, as: Shared
   alias MishkaGervaz.Table.Templates.Shared, as: Gervaz
 
@@ -148,7 +149,7 @@ defmodule MishkaBlogWeb.Templates.BloggerCard do
       |> assign(:expertise_rest, length(expertise) - @expertise_shown)
       |> assign(:posts, count(record, :post_count))
       |> assign(:followers, count(record, :follower_count))
-      |> assign(:site, site_name(record, state))
+      |> assign(:site, CardRecord.site_name(record, state))
       |> assign(
         :visible_row_actions,
         Enum.filter(assigns.static.row_actions, &Gervaz.action_visible?(&1, record, state))
@@ -312,18 +313,7 @@ defmodule MishkaBlogWeb.Templates.BloggerCard do
   def expertise(_record), do: []
 
   @doc "One aggregate off the record, or 0 when it arrived unloaded."
-  @spec count(map(), atom()) :: non_neg_integer()
-  def count(record, key) do
-    case Map.get(record, key) do
-      value when is_integer(value) and value >= 0 -> value
-      _unloaded -> 0
-    end
-  end
-
-  # A tenant admin only ever sees their own site, so naming it on every card is noise; a master is
-  # reading across sites and needs to know which one each blogger belongs to.
-  defp site_name(%{site: %{name: name}}, %{master_user?: true}) when is_binary(name), do: name
-  defp site_name(_record, _state), do: nil
+  defdelegate count(record, key), to: CardRecord
 
   @impl true
   def render_loading(assigns), do: Shared.loading(assigns)

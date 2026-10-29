@@ -41,6 +41,7 @@ defmodule MishkaBlogWeb.Templates.PostCard do
 
   import MishkaGervaz.Helpers, only: [dynamic_component: 1]
 
+  alias MishkaBlogWeb.Templates.CardRecord
   alias MishkaBlogWeb.Templates.EditionChips
   alias MishkaCmsCore.LanguageAccent
   alias MishkaCmsCore.Localized
@@ -167,7 +168,7 @@ defmodule MishkaBlogWeb.Templates.PostCard do
       |> assign(:accent, LanguageAccent.of(record))
       |> assign(:editions, EditionChips.editions(record))
       |> assign(:editions_shown, @editions_shown)
-      |> assign(:site, site_name(record, state))
+      |> assign(:site, CardRecord.site_name(record, state))
       |> assign(:date, date_label(record))
       |> assign(:views, count(record, :view_count))
       |> assign(:comments, count(record, :comment_count))
@@ -340,8 +341,7 @@ defmodule MishkaBlogWeb.Templates.PostCard do
   default.
   """
   @spec status_badge(map()) :: %{label: String.t(), chip: String.t()}
-  def status_badge(%{status: status}) when is_map_key(@statuses, status), do: @statuses[status]
-  def status_badge(_record), do: @statuses.draft
+  def status_badge(record), do: CardRecord.status_badge(record, @statuses, :draft)
 
   @doc "The thumbnail tint for a post with no image, picked from its id so it never flickers."
   @spec tint(map()) :: String.t()
@@ -349,13 +349,7 @@ defmodule MishkaBlogWeb.Templates.PostCard do
   def tint(_record), do: hd(@tints)
 
   @doc "One aggregate off the record, or 0 when it arrived unloaded."
-  @spec count(map(), atom()) :: non_neg_integer()
-  def count(record, key) do
-    case Map.get(record, key) do
-      value when is_integer(value) and value >= 0 -> value
-      _unloaded -> 0
-    end
-  end
+  defdelegate count(record, key), to: CardRecord
 
   @doc """
   When the post went out, or when it was written if it never did.
@@ -369,11 +363,6 @@ defmodule MishkaBlogWeb.Templates.PostCard do
   def date_label(%{published_at: %DateTime{} = at}), do: Localized.date(at, :yMMMd)
   def date_label(%{inserted_at: %DateTime{} = at}), do: Localized.date(at, :yMMMd)
   def date_label(_record), do: "—"
-
-  # A tenant admin only ever sees their own site, so naming it on every row is noise; a master is
-  # reading across sites and needs to know which one each post belongs to.
-  defp site_name(%{site: %{name: name}}, %{master_user?: true}) when is_binary(name), do: name
-  defp site_name(_record, _state), do: nil
 
   @impl true
   def render_loading(assigns), do: Shared.loading(assigns)
