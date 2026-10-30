@@ -43,7 +43,7 @@ Mishka Blog is an extension of [Mishka CMS](https://mishka.tools/cms), an open s
 Mishka Blog is installed with [Mishka CMS](https://github.com/mishka-group/mishka_cms#-getting-started). Add it from Hex:
 
 ```elixir
-{:mishka_blog, "~> 0.0.1"}
+{:mishka_blog, "~> 0.0.2"}
 ```
 
 [Mishka CMS](https://github.com/mishka-group/mishka_cms) loads it from `__extensions/mishka_blog` instead when that folder exists.
