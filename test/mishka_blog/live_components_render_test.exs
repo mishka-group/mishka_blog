@@ -1452,13 +1452,25 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
   end
 
   describe "blog-post-detail" do
-    test "says nothing is chosen when the URL names no post", %{site: site} do
+    # THE LINE THAT SAYS WHAT IS MISSING IS FOR WHOEVER BUILDS THE PAGE. On a published page that
+    # names no post it told a reader to "pick a post", which a reader cannot do; the builder's canvas
+    # and the Preview still say it, where the author can.
+    test "draws nothing for a reader when the URL names no post", %{site: site} do
       publish!(site, ["A"])
 
       {:ok, view, _html} = mount_page(site, "blog-post-detail")
 
-      assert text_of(view, ~s([data-role="blog-detail-idle"])) != []
+      assert text_of(view, ~s([data-role="blog-detail-idle"])) == []
       assert text_of(view, ~s([data-role="blog-detail-article"])) == []
+    end
+
+    test "and says nothing is chosen on the builder's canvas", %{site: site} do
+      publish!(site, ["A"])
+
+      html = cold(site, "blog-post-detail")
+
+      assert roles(html, "blog-detail-idle") == 1
+      assert html =~ "Pick a post to read it here."
     end
 
     test "draws the post the URL names", %{site: site} do
@@ -3006,7 +3018,6 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       [post] = publish!(site, ["Ours"])
 
       quiet = [
-        {"blog-post-detail", %{}, "blog-detail-idle"},
         {"blog-tag-cloud", %{}, "blog-tag-empty"},
         {"blog-post-comments", %{slug: post.slug}, "blog-comments-empty"}
       ]
@@ -3034,6 +3045,17 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
 
         assert class =~ "border-dashed", "#{role} was drawn as words where it was a box"
       end
+
+      # The idle line under an article is drawn on the builder's canvas alone, and as words there.
+      assert [class] =
+               site
+               |> cold("blog-post-detail")
+               |> LazyHTML.from_fragment()
+               |> LazyHTML.query(~s([data-role="blog-detail-idle"]))
+               |> Enum.map(&LazyHTML.attribute(&1, "class"))
+               |> List.flatten()
+
+      refute class =~ "border-dashed", "blog-detail-idle was drawn as a box where it was words"
     end
   end
 
@@ -3684,8 +3706,11 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     end
 
     test "says nothing is chosen, and that nobody is here, by which it was asked", %{site: site} do
+      # To the author, on the canvas; a reader of a page that names nobody is shown nothing.
+      assert roles(cold(site, "blog-author-profile"), "blog-author-idle") == 1
+
       {:ok, idle, _html} = mount_page(site, "blog-author-profile")
-      assert has_element?(idle, ~s([data-role="blog-author-idle"]))
+      refute has_element?(idle, ~s([data-role="blog-author-idle"]))
       refute has_element?(idle, ~s([data-role="blog-author-card"]))
 
       {:ok, missing, _html} = mount_page(site, "blog-author-profile", %{slug: "nobody"})
@@ -3923,7 +3948,8 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       refute has_element?(archived, ~s([data-role="blog-team-card"]))
 
       {:ok, idle, _html} = mount_page(site, "blog-team-profile")
-      assert has_element?(idle, ~s([data-role="blog-team-idle"]))
+      refute has_element?(idle, ~s([data-role="blog-team-idle"]))
+      assert roles(cold(site, "blog-team-profile"), "blog-team-idle") == 1
     end
 
     test "answers a page of its posts nobody has with the site's 404", %{site: site} do
