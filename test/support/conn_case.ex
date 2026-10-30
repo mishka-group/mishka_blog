@@ -8,9 +8,13 @@ defmodule MishkaBlog.ConnCase do
 
   Same contract as the CMS's — a sandboxed connection per test and a `conn` to drive it with — but
   pointed at this extension's own `MishkaBlog.TestEndpoint`, so the suite runs without the CMS around
-  it. See the test-only `MishkaBlog.Repo` shim for how the database is reached.
+  it. See the test-only `MishkaBlog.Repo` shim for how the database is reached. The sandbox is the
+  core's (`MishkaCmsCore.DataCase.setup_sandbox/1`), and so are the sites, users and runtime records
+  a request needs (`MishkaCmsCore.Test.Factory`); the blog's own records are `MishkaBlog.Test.Factory`.
 
   `make_api_request/3` is here rather than in the factory: it builds requests, it does not build data.
+  It is not the core's `MishkaCmsCore.ConnCase.make_api_request/3`, which folds two levels of brackets
+  back into the params: the blog's filters go three deep (`filter[author][email][contains]=x`).
   """
 
   use ExUnit.CaseTemplate
@@ -21,13 +25,13 @@ defmodule MishkaBlog.ConnCase do
 
       import Plug.Conn
       import Phoenix.ConnTest
+      import MishkaCmsCore.Test.Factory
       import MishkaBlog.ConnCase
     end
   end
 
   setup tags do
-    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(MishkaBlog.Repo, shared: not tags[:async])
-    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+    MishkaCmsCore.DataCase.setup_sandbox(tags)
 
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end

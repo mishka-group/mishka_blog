@@ -7,7 +7,7 @@ defmodule MishkaBlog.Test.CollectionTest do
   Tests for MishkaBlog.Collection resource.
   """
   use MishkaBlog.DataCase, async: false
-  import MishkaBlog.Test.VersionHelpers
+  import MishkaCmsCore.Test.VersionHelpers
 
   if Code.ensure_loaded?(MishkaBlog) do
     require Ash.Query

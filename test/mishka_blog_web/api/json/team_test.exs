@@ -9,7 +9,7 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
 
   use MishkaBlog.ConnCase
   import MishkaBlog.Test.Factory
-  import MishkaBlog.Test.VersionHelpers
+  import MishkaCmsCore.Test.VersionHelpers
   require Ash.Query
 
   @moduletag :unit

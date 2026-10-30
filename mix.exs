@@ -53,7 +53,7 @@ defmodule MishkaBlog.MixProject do
       {:decimal, "~> 3.2"},
       {:sourceror, "~> 1.13", only: [:dev, :test]},
       {:lazy_html, "~> 0.1", only: :test},
-      # The editor's Heroicons catalogue (`MishkaCmsCore.Runtime.PageBuilder.Icons.Heroicons`) reads
+      # The core's Heroicons catalogue (`MishkaCmsCore.Runtime.Authoring.Icons.Heroicons`) reads
       # these SVGs at compile time, out of the deps of the project being built. A host brings its own
       # copy, so this one serves only this library's own suite, and it is never a requirement of the
       # Hex package.
@@ -87,7 +87,7 @@ defmodule MishkaBlog.MixProject do
       {:oban, "~> 2.24"},
       mishka_dep(:mishka_installer, "~> 0.1.14"),
       {:guarded_struct, "~> 0.1.4"},
-      mishka_dep(:mishka_cms_core, "~> 0.0.2"),
+      mishka_dep(:mishka_cms_core, "~> 0.0.3"),
       mishka_dep(:mishka_gervaz, "~> 0.0.2"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},

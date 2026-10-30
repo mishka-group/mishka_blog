@@ -11,15 +11,15 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
   same component with another noun, and a second file would test the same module twice and leave
   the two free to drift in their wording instead.
 
-  The blog is the one driven because it is the extension with the most to install: nine pages, a
-  snippet, and a name (`Blog`) a site may well hold already, which is what makes the rename path
-  reachable at all.
+  The blog is the one driven because it is the extension with the most to install: nine pages and a
+  name (`Blog`) a site may well hold already, which is what makes the rename path reachable at all.
+  Its sidebar snippet is the visual editor's to save (`runtime:provision:snippets`), and this suite
+  has none, so no count here names a snippet.
   """
   use MishkaBlog.ConnCase
 
   import ExUnit.CaptureLog, only: [with_log: 1]
   import Phoenix.LiveViewTest
-  import MishkaBlog.Test.Factory
 
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
@@ -161,7 +161,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
         |> render_submit()
 
       assert html =~
-               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages, 1 snippet."
+               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages."
 
       assert Enum.sort(paths(site)) == Enum.sort(Provision.page_paths())
 
@@ -193,7 +193,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
         |> render_submit()
 
       assert html =~
-               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages, 1 snippet. 1 page created under another name."
+               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages. 1 page created under another name."
 
       assert has_element?(view, "#blog-provision-report")
       assert has_element?(view, "#blog-provision-renamed-0", "/:lang/blog")
@@ -240,7 +240,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
           |> form("#blog-provision-form", %{"site_id" => site.id})
           |> render_submit()
 
-        assert html =~ "#{@components} components, #{@pages - 1} pages, 1 snippet."
+        assert html =~ "#{@components} components, #{@pages - 1} pages."
         assert has_element?(view, "#blog-provision-skipped-0", "/:lang/blog")
         assert has_element?(view, "#blog-provision-skipped-0", ~s("/blog"))
         refute "/:lang/blog" in paths(site)
@@ -321,7 +321,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       assert has_element?(
                view,
                "#blog-provision-added",
-               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages, 1 snippet."
+               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages."
              )
 
       Ash.destroy!(gone, action: :permanent_destroy, authorize?: false)
@@ -340,7 +340,7 @@ defmodule MishkaBlogWeb.Test.ProvisionButtonTest do
       assert has_element?(
                view,
                "#blog-provision-added",
-               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages, 1 snippet."
+               "Added #{@permissions} permissions, #{@components} components, #{@pages} pages."
              )
 
       close(view)
