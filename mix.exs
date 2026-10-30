@@ -87,7 +87,7 @@ defmodule MishkaBlog.MixProject do
       {:oban, "~> 2.24"},
       mishka_dep(:mishka_installer, "~> 0.1.14"),
       {:guarded_struct, "~> 0.1.4"},
-      mishka_dep(:mishka_cms_core, "~> 0.0.2"),
+      mishka_dep(:mishka_cms_core, "~> 0.0.3"),
       mishka_dep(:mishka_gervaz, "~> 0.0.2"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
