@@ -5309,6 +5309,11 @@
       "dependencies": [],
       "examples": [],
       "extra": {
+        "furnishing": {
+          "attrs": {
+            "text": "Nothing here yet."
+          }
+        },
         "icon": "info",
         "ui_kit": "mishka_blog"
       },

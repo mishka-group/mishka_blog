@@ -255,6 +255,21 @@ defmodule MishkaBlog.KitTest do
       end
     end
 
+    # DROPPED ON ITS OWN, THE NOTICE SAYS SOMETHING. Its text defaults to nothing, which is right for
+    # a block that always hands it a line, and left an author who dragged it onto a page an empty
+    # dashed box. The kit's furnishing is what the editor writes on a plain drop; the core's own
+    # reader of it is asked, so a shape it would drop fails here.
+    test "and the notice arrives on a plain drop with neutral words, not an empty box" do
+      notice = Enum.find(components(), &(&1["name"] == "blog-notice"))
+
+      assert {:ok, furnishing} =
+               MishkaCmsCore.Builder.Furnishing.build(notice["extra"]["furnishing"])
+
+      assert %{"text" => text} = furnishing.attrs
+      assert String.trim(text) != ""
+      refute String.contains?(text, "\u2014"), "the notice's words carry an em dash"
+    end
+
     # NOBODY MAY ASK FOR MORE ROWS THAN THEY WILL BE GIVEN. Every public read these components run
     # caps a page, and Ash SHRINKS a larger ask down to that cap rather than refusing it — so an
     # over-ask is silent. A comment thread asking for the whole conversation dead-ended at the
@@ -528,6 +543,13 @@ defmodule MishkaBlog.KitTest do
       for [class] <- monokai_classes, class != "hll" do
         assert sheet.content =~ ".highlight .#{class} {", "nothing colours .#{class}"
       end
+    end
+
+    # What the editor's palette reads off the row, through the same calculation.
+    test "the notice's drop text reaches the installed row", %{site: site} do
+      notice = "blog-notice" |> row(site) |> Ash.load!(:furnishing, authorize?: false)
+
+      assert notice.furnishing["attrs"]["text"] == "Nothing here yet."
     end
 
     test "twice changes nothing and raises nothing", %{site: site} do
