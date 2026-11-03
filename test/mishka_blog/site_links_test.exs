@@ -51,9 +51,6 @@ defmodule MishkaBlog.SiteLinksTest do
     {Blogger, :user_id, :user}
   ]
 
-  # The links a site user's `:create` takes from the actor, whatever it sends.
-  @from_actor [{Comment, :author_id}]
-
   # {join resource, parent kind, parent field, other kind, other field}
   @joins [
     {PostTag, :post, :post_id, :tag, :tag_id},
@@ -264,8 +261,7 @@ defmodule MishkaBlog.SiteLinksTest do
         assert {:ok, created} =
                  site_create(@resource, ctx.site_a, %{@field => ours.id}, ctx.admin_a)
 
-        assert Map.fetch!(created, @field) ==
-                 if({@resource, @field} in @from_actor, do: ctx.admin_a.id, else: ours.id)
+        assert Map.fetch!(created, @field) == ours.id
 
         record = make(kind(@resource), ctx.site_a)
         other = make(@target, ctx.site_a)

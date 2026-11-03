@@ -159,6 +159,89 @@ defmodule MishkaBlog.Test.CommentTest do
       end
     end
 
+    describe "create action author" do
+      setup do
+        site = create_site!()
+
+        %{
+          site: site,
+          post: create_blog_post!(site_id: site.id),
+          admin: create_user_with_permissions!(["*"], site_id: site.id)
+        }
+      end
+
+      defp admin_create(ctx, params) do
+        Comment
+        |> Ash.Changeset.for_create(
+          :create,
+          Map.merge(%{post_id: ctx.post.id, content: "Admin comment", status: :approved}, params),
+          actor: ctx.admin,
+          tenant: ctx.site.id
+        )
+        |> Ash.create()
+      end
+
+      test "an admin's comment keeps the author it names", ctx do
+        reader = create_user!(site_id: ctx.site.id)
+
+        assert {:ok, comment} = admin_create(ctx, %{author_id: reader.id})
+
+        assert comment.author_id == reader.id
+      end
+
+      test "an admin's comment is the admin's own when it names no author", ctx do
+        assert {:ok, comment} = admin_create(ctx, %{})
+
+        assert comment.author_id == ctx.admin.id
+      end
+
+      test "an admin's comment is the admin's own when the author is nil", ctx do
+        assert {:ok, comment} = admin_create(ctx, %{author_id: nil})
+
+        assert comment.author_id == ctx.admin.id
+      end
+
+      test "an admin's comment refuses a user of another site as the author", ctx do
+        stranger = create_user!(site_id: create_site!().id)
+
+        assert {:error, %Ash.Error.Invalid{errors: errors}} =
+                 admin_create(ctx, %{author_id: stranger.id})
+
+        assert Enum.any?(errors, &(Map.get(&1, :field) == :author_id))
+
+        assert Comment
+               |> Ash.Query.filter(post_id == ^ctx.post.id)
+               |> Ash.read!(tenant: ctx.site.id, authorize?: false) == []
+      end
+
+      test "a public comment is the reader's own and takes no other author", ctx do
+        reader = create_user!(site_id: ctx.site.id)
+        other = create_user!(site_id: ctx.site.id)
+        published = create_blog_post!(site_id: ctx.site.id, status: :published)
+
+        public_create = fn params ->
+          Comment
+          |> Ash.Changeset.for_create(
+            :create_public,
+            Map.merge(%{post_id: published.id, content: "Public comment"}, params),
+            actor: reader,
+            tenant: ctx.site.id,
+            authorize?: false
+          )
+          |> Ash.create()
+        end
+
+        assert {:ok, comment} = public_create.(%{})
+        assert comment.author_id == reader.id
+
+        assert {:error, %Ash.Error.Invalid{}} = public_create.(%{author_id: other.id})
+
+        assert Comment
+               |> Ash.Query.filter(author_id == ^other.id)
+               |> Ash.read!(tenant: ctx.site.id, authorize?: false) == []
+      end
+    end
+
     describe "threaded comments (parent-child relationships)" do
       test "creates top-level comment (no parent)" do
         site = create_site!()
