@@ -1,3 +1,7 @@
+# Changelog for MishkaBlog 0.0.3
+
+- A comment an admin creates keeps the author it names, a user of the same site, where it was always stored as the admin's own. A comment that names no author (or a `nil` one) is still the admin's own, and an author from another site is refused
+
 # Changelog for MishkaBlog 0.0.2
 
 - The visual editor now comes from the `mishka_cms_builder` package instead of `mishka_cms_core`. The blog runs on `mishka_cms_core` 0.0.4, `mishka_gervaz` 0.0.3 and `mishka_installer` 0.1.15 from Hex

@@ -1090,9 +1090,12 @@ defmodule MishkaBlog.Comment do
         Ash.Changeset.force_change_attribute(changeset, :site_id, context.tenant)
       end
 
-      change relate_actor(:author, allow_nil?: true)
+      change relate_actor(:author, allow_nil?: true), where: absent(:author_id)
 
-      description "Creates a new comment within tenant context"
+      description """
+      Creates a new comment within tenant context. The comment is the actor's own unless it names an
+      `author_id` of a user of the same site.
+      """
     end
 
     create :master_create do
