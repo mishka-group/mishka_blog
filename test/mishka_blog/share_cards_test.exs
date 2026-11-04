@@ -34,6 +34,7 @@ defmodule MishkaBlog.ShareCardsTest do
   defp register(plugin) do
     PluginRegistrations.reconcile(false)
     {:ok, _} = plugin.register()
+    {:ok, _} = plugin.start()
     on_exit(fn -> Event.unregister(:name, plugin, false) end)
     :ok = EventHandler.do_compile(plugin.config(:__event__), :start, false)
   end
