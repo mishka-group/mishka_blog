@@ -449,7 +449,8 @@ defmodule MishkaBlog.SiteBoundaryTest do
     end
 
     test "Comment :update refuses another site's user as the author", ctx do
-      comment = create_comment!(site_id: ctx.site_a.id)
+      author = create_user!(site_id: ctx.site_a.id)
+      comment = create_comment!(site_id: ctx.site_a.id, author_id: author.id)
       user_b = create_user!(site_id: ctx.site_b.id)
 
       result =
@@ -465,7 +466,8 @@ defmodule MishkaBlog.SiteBoundaryTest do
     end
 
     test "Comment :update takes its own site's user as the author", ctx do
-      comment = create_comment!(site_id: ctx.site_a.id)
+      author = create_user!(site_id: ctx.site_a.id)
+      comment = create_comment!(site_id: ctx.site_a.id, author_id: author.id)
       user_a = create_user!(site_id: ctx.site_a.id)
 
       assert {:ok, updated} =

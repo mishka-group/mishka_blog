@@ -92,7 +92,10 @@ defmodule MishkaBlog.SiteLinksTest do
   defp make(:tag, site), do: create_blog_tag!(site_id: site.id)
   defp make(:collection, site), do: create_collection!(site_id: site.id, status: :active)
   defp make(:post, site), do: create_blog_post!(site_id: site.id, status: :published)
-  defp make(:comment, site), do: create_comment!(site_id: site.id)
+
+  defp make(:comment, site),
+    do: create_comment!(site_id: site.id, author_id: make(:user, site).id)
+
   defp make(:blogger, site), do: create_blogger!(site_id: site.id)
   defp make(:team, site), do: create_team!(site_id: site.id, status: :active)
   defp make(:user, site), do: create_user!(site_id: site.id)

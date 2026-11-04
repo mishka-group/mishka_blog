@@ -242,6 +242,227 @@ defmodule MishkaBlog.Test.CommentTest do
       end
     end
 
+    describe "guest comments" do
+      setup do
+        site = create_site!()
+
+        %{
+          site: site,
+          post: create_blog_post!(site_id: site.id, status: :published),
+          admin: create_user_with_permissions!(["*"], site_id: site.id)
+        }
+      end
+
+      @guest %{
+        guest_name: "Ada Guest",
+        guest_email: "Ada.Guest@Example.com",
+        guest_website: "https://ada.example.com/about"
+      }
+
+      defp refused_on?(result, field) do
+        assert {:error, %Ash.Error.Invalid{errors: errors}} = result
+
+        Enum.any?(errors, fn error ->
+          Map.get(error, :field) == field or field in List.wrap(Map.get(error, :fields))
+        end)
+      end
+
+      defp written(ctx),
+        do:
+          Comment
+          |> Ash.Query.filter(post_id == ^ctx.post.id)
+          |> Ash.read!(tenant: ctx.site.id, authorize?: false)
+
+      test "an admin writes a guest's comment, and is not its author", ctx do
+        assert {:ok, comment} = admin_create(ctx, @guest)
+
+        assert comment.author_id == nil
+        assert comment.guest_name == "Ada Guest"
+        assert comment.guest_email == "ada.guest@example.com"
+        assert comment.guest_website == "https://ada.example.com/about"
+      end
+
+      test "a guest's email and website are optional", ctx do
+        assert {:ok, comment} = admin_create(ctx, %{guest_name: "Ada Guest"})
+
+        assert comment.author_id == nil
+        assert comment.guest_email == nil
+        assert comment.guest_website == nil
+      end
+
+      test "a comment with neither an author nor a guest's name is refused", ctx do
+        result =
+          Comment
+          |> Ash.Changeset.for_create(
+            :create,
+            %{post_id: ctx.post.id, content: "From nobody", status: :approved},
+            tenant: ctx.site.id,
+            authorize?: false
+          )
+          |> Ash.create()
+
+        assert refused_on?(result, :guest_name)
+        assert written(ctx) == []
+      end
+
+      test "a comment that is both a user's and a guest's is refused", ctx do
+        reader = create_user!(site_id: ctx.site.id)
+
+        assert refused_on?(admin_create(ctx, Map.put(@guest, :author_id, reader.id)), :author_id)
+        assert written(ctx) == []
+
+        {:ok, guests} = admin_create(ctx, @guest)
+
+        result =
+          guests
+          |> Ash.Changeset.for_update(:update, %{author_id: reader.id},
+            actor: ctx.admin,
+            tenant: ctx.site.id
+          )
+          |> Ash.update()
+
+        assert refused_on?(result, :author_id)
+      end
+
+      test "a guest's email or website without the guest's name is refused", ctx do
+        assert refused_on?(admin_create(ctx, %{guest_email: "ada@example.com"}), :guest_email)
+
+        assert refused_on?(
+                 admin_create(ctx, %{guest_website: "https://ada.example"}),
+                 :guest_email
+               )
+
+        assert written(ctx) == []
+      end
+
+      test "an email that is not one is refused", ctx do
+        for email <- ["not-an-email", "ada@", "ada@example", "ada guest@example.com"] do
+          assert refused_on?(admin_create(ctx, %{@guest | guest_email: email}), :guest_email),
+                 "#{email} was accepted"
+        end
+
+        assert written(ctx) == []
+      end
+
+      test "a website that is not an http or https address is refused", ctx do
+        for website <- [
+              "javascript:alert(1)",
+              "data:text/html,<b>hi</b>",
+              "ftp://ada.example.com",
+              "ada.example.com",
+              "//ada.example.com",
+              "https://"
+            ] do
+          assert refused_on?(
+                   admin_create(ctx, %{@guest | guest_website: website}),
+                   :guest_website
+                 ),
+                 "#{website} was accepted"
+        end
+
+        assert written(ctx) == []
+      end
+
+      test "a guest's name is plain text, and one of markup alone is refused", ctx do
+        assert {:ok, comment} =
+                 admin_create(ctx, %{guest_name: ~s[<b>Ada</b> <img src=x onerror="alert(1)">]})
+
+        assert comment.guest_name == "Ada"
+
+        assert refused_on?(admin_create(ctx, %{guest_name: "<b></b>"}), :guest_name)
+      end
+
+      test "a reader cannot write a guest's fields", ctx do
+        reader = create_user!(site_id: ctx.site.id)
+
+        public =
+          Comment
+          |> Ash.Changeset.for_create(
+            :create_public,
+            Map.merge(%{post_id: ctx.post.id, content: "Pretending"}, @guest),
+            actor: reader,
+            tenant: ctx.site.id
+          )
+          |> Ash.create()
+
+        assert {:error, %Ash.Error.Invalid{}} = public
+
+        admin_action =
+          Comment
+          |> Ash.Changeset.for_create(
+            :create,
+            Map.merge(%{post_id: ctx.post.id, content: "Pretending", status: :approved}, @guest),
+            actor: reader,
+            tenant: ctx.site.id
+          )
+          |> Ash.create()
+
+        assert {:error, %Ash.Error.Forbidden{}} = admin_action
+        assert written(ctx) == []
+      end
+
+      test "only a moderator reads a guest's email, through any read", ctx do
+        {:ok, comment} = admin_create(ctx, @guest)
+
+        moderator =
+          create_user_with_permissions!(["admin:dashboard:blog:comment"], site_id: ctx.site.id)
+
+        editor =
+          create_user_with_permissions!(["admin:dashboard:blog:post"], site_id: ctx.site.id)
+
+        reader = create_user!(site_id: ctx.site.id)
+
+        read = fn action, args, actor ->
+          Comment
+          |> Ash.Query.for_read(action, args, actor: actor, tenant: ctx.site.id)
+          |> Ash.Query.filter(id == ^comment.id)
+          |> Ash.read_one!()
+        end
+
+        for {action, args} <- [
+              {:public_list, %{}},
+              {:public_get, %{}},
+              {:approved_by_post, %{post_id: ctx.post.id}}
+            ],
+            actor <- [nil, reader, editor] do
+          found = read.(action, args, actor)
+
+          assert found.guest_name == "Ada Guest"
+          assert found.guest_website == "https://ada.example.com/about"
+          assert %Ash.ForbiddenField{} = found.guest_email
+        end
+
+        assert read.(:public_list, %{}, moderator).guest_email == "ada.guest@example.com"
+        assert read.(:read, %{}, ctx.admin).guest_email == "ada.guest@example.com"
+      end
+
+      test "a filter on a guest's email matches nothing for a reader, and the comment for a moderator",
+           ctx do
+        {:ok, comment} = admin_create(ctx, @guest)
+
+        moderator =
+          create_user_with_permissions!(["admin:dashboard:blog:comment"], site_id: ctx.site.id)
+
+        found = fn actor ->
+          Comment
+          |> Ash.Query.for_read(:public_list, %{}, actor: actor, tenant: ctx.site.id)
+          |> Ash.Query.filter_input(%{guest_email: "ada.guest@example.com"})
+          |> Ash.read!()
+          |> Enum.map(& &1.id)
+        end
+
+        assert found.(nil) == []
+        assert found.(create_user!(site_id: ctx.site.id)) == []
+        assert found.(moderator) == [comment.id]
+      end
+
+      test "a guest's email never shows when a comment is inspected", ctx do
+        {:ok, comment} = admin_create(ctx, @guest)
+
+        refute inspect(comment) =~ "ada.guest@example.com"
+      end
+    end
+
     describe "threaded comments (parent-child relationships)" do
       test "creates top-level comment (no parent)" do
         site = create_site!()

@@ -82,6 +82,8 @@ defmodule MishkaBlog.Dev.Generator do
     "I implemented this in my project and it works great!"
   ]
 
+  @guest_names ["Sam Rivera", "Noor Haddad", "Lena Fischer", "Kenji Sato", "Priya Nair"]
+
   @team_names [
     "Core Contributors",
     "Technical Writers",
@@ -400,6 +402,10 @@ defmodule MishkaBlog.Dev.Generator do
     )
   end
 
+  @doc """
+  A comment. One that names no `author_id` is a guest's, named `"Guest <n>"`, since a comment is
+  a user's or a guest's.
+  """
   def comment(opts \\ [], tenant \\ nil) do
     changeset_generator(
       MishkaBlog.Comment,
@@ -413,7 +419,10 @@ defmodule MishkaBlog.Dev.Generator do
         content: sequence(:comment_content, &"This is test comment content number #{&1}"),
         status: :pending,
         sender_data: %{},
-        is_pinned: false
+        is_pinned: false,
+        guest_name: guest(opts[:author_id], sequence(:comment_guest, &"Guest #{&1}")),
+        guest_email: nil,
+        guest_website: nil
       ],
       overrides: opts
     )
@@ -658,7 +667,7 @@ defmodule MishkaBlog.Dev.Generator do
   @doc """
   A realistic comment. Moderation status is weighted the way a live queue looks — mostly approved with
   a thin tail of pending, spam and flagged rows — and pinning stays rare so the pinned marker keeps its
-  meaning.
+  meaning. One that names no `author_id` is a guest's, with a name, an email and, for some, a website.
   """
   def dev_comment(opts \\ [], tenant \\ nil) do
     changeset_generator(
@@ -683,7 +692,15 @@ defmodule MishkaBlog.Dev.Generator do
           StreamData.frequency([
             {97, StreamData.constant(false)},
             {3, StreamData.constant(true)}
-          ])
+          ]),
+        guest_name: guest(opts[:author_id], StreamData.member_of(@guest_names)),
+        guest_email:
+          guest(opts[:author_id], sequence(:dev_comment_guest, &"guest-#{&1}@example.com")),
+        guest_website:
+          guest(
+            opts[:author_id],
+            StreamData.member_of([nil, nil, "https://example.com", "https://example.org"])
+          )
       ],
       overrides: opts
     )
@@ -764,6 +781,12 @@ defmodule MishkaBlog.Dev.Generator do
       }
     ]
   end
+
+  # A comment is a user's or a guest's, so a guest's field is given only when it names no author.
+  # Each is always given, `nil` included: `changeset_generator` makes up a value for any accepted
+  # field it is not handed.
+  defp guest(nil, value), do: value
+  defp guest(_author_id, _value), do: nil
 
   defp sender_data do
     %{

@@ -47,7 +47,7 @@ defmodule MishkaBlogWeb.Test.CommentAuthorLabelTest do
      by_colleague: comment!(site, post, colleague),
      by_master: comment!(site, post, master),
      by_named_master: comment!(site, post, named_master),
-     by_guest: comment!(site, post, nil)}
+     by_guest: guest_comment!(site, post)}
   end
 
   describe "the word for an author the card shows no email for" do
@@ -142,6 +142,23 @@ defmodule MishkaBlogWeb.Test.CommentAuthorLabelTest do
       %{post_id: post.id, content: "A comment #{System.unique_integer()}", status: :pending},
       tenant: site.id,
       actor: author,
+      authorize?: false
+    )
+    |> Ash.create!()
+  end
+
+  defp guest_comment!(site, post) do
+    MishkaBlog.Comment
+    |> Ash.Changeset.for_create(
+      :create,
+      %{
+        post_id: post.id,
+        content: "A guest's comment #{System.unique_integer()}",
+        status: :pending,
+        guest_name: "Ada Guest",
+        guest_email: "ada.guest@example.com"
+      },
+      tenant: site.id,
       authorize?: false
     )
     |> Ash.create!()
