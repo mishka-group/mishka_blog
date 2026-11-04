@@ -147,6 +147,56 @@ defmodule MishkaBlog.Test.ContentScrubberTest do
     end
   end
 
+  describe "style, object, embed and applet" do
+    test "style and object are dropped with everything inside them" do
+      out =
+        clean(
+          ~s|<p>keep</p><!-- hidden --><style>body { background: url(https://evil.example/x.png) }</style>| <>
+            ~s|<object data="https://evil.example/x.swf" type="application/x-shockwave-flash" class="c">| <>
+            ~s|<param name="movie" value="https://evil.example/x.swf">fallback</object>|
+        )
+
+      refute out =~ "<style"
+      refute out =~ "<object"
+      refute out =~ "<param"
+      refute out =~ "background"
+      refute out =~ "fallback"
+      refute out =~ "evil.example"
+      refute out =~ "hidden"
+      assert out =~ "<p>keep</p>"
+    end
+
+    test "embed and applet stay removed" do
+      out =
+        clean(
+          ~s|<p>keep</p><embed src="https://evil.example/x.swf" type="application/x-shockwave-flash">| <>
+            ~s|<applet code="Evil.class" archive="https://evil.example/x.jar"></applet>|
+        )
+
+      refute out =~ "<embed"
+      refute out =~ "<applet"
+      refute out =~ "evil.example"
+      assert out =~ "<p>keep</p>"
+    end
+
+    test "figures, srcset and iframe embeds next to them are kept" do
+      out =
+        clean(
+          ~s|<style>p { color: red }</style><figure class="g"><img src="/a.jpg" srcset="/a.jpg 1x, /b.jpg 2x">| <>
+            ~s|<figcaption>c</figcaption></figure><object data="/x.swf"></object>| <>
+            ~s|<iframe src="https://www.youtube.com/embed/x" allowfullscreen allow="autoplay"></iframe>|
+        )
+
+      assert attrs_of(out, "figure")["class"] == "g"
+      assert out =~ "<figcaption>c</figcaption>"
+      assert attrs_of(out, "img")["srcset"] == "/a.jpg 1x, /b.jpg 2x"
+      assert attrs_of(out, "iframe")["allow"] == "autoplay"
+      assert Map.has_key?(attrs_of(out, "iframe"), "allowfullscreen")
+      refute out =~ "<style"
+      refute out =~ "<object"
+    end
+  end
+
   describe "everything else follows html5" do
     test "scripts, on* attributes and dangerous URLs are removed everywhere" do
       html = """

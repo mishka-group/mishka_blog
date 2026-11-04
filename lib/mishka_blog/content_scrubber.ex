@@ -14,9 +14,14 @@ defmodule MishkaBlog.ContentScrubber do
     * `allowfullscreen` and `allow` on `<iframe>`. `allow` keeps only the permission tokens
       in `allowed_permissions/0`, without origin lists, and is dropped when none remain.
 
+  It removes two tags html5 allows, each with everything inside it:
+
+    * `<style>`, whose rules would restyle the whole page around the post.
+    * `<object>`, which loads a plugin or another document from its `data` URL.
+
   Every other tag and attribute follows html5, so scripts, `on*` handlers, `javascript:`
-  and `data:` URLs and the rest stay removed. `<picture>` is not allowed by html5, so only
-  its children stay.
+  and `data:` URLs and the rest stay removed. html5 does not allow `<embed>` or `<applet>`
+  either. `<picture>` is not allowed by html5, so only its children stay.
 
   `GuardedStruct` reaches it through the `sanitize_derive` option, as `sanitize(blog_html)`.
   """
@@ -31,6 +36,7 @@ defmodule MishkaBlog.ContentScrubber do
                           accelerometer gyroscope web-share)
   @descriptor ~r/\A\d+(\.\d+)?[wx]\z/
   @sizes ~r/\A[A-Za-z0-9\s(),:.%+\-*\/]+\z/
+  @dropped_tags ["style", "object"]
 
   # Registering a tag here makes this module scrub its attributes, so the clauses below apply
   # to it instead of html5's own.
@@ -55,6 +61,8 @@ defmodule MishkaBlog.ContentScrubber do
   def sanitize(input, :blog_html) when is_binary(input), do: sanitize(input)
   def sanitize(input, :blog_html), do: input
   def sanitize(_input, _op), do: nil
+
+  def scrub({tag, _attributes, _children}) when tag in @dropped_tags, do: ""
 
   def scrub_attribute(tag, attribute) when tag in ["figure", "figcaption"],
     do: HTML5.scrub_attribute("div", attribute)
