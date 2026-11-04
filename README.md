@@ -36,7 +36,7 @@ Mishka Blog is an extension of [Mishka CMS](https://mishka.tools/cms), an open s
 - A notification to the blog's admins when a post is published, and dashboard widgets for recent posts, top posts, drafts and scheduled posts, comments to moderate, and bloggers.
 - A JSON:API for admins at `/api/json/v1/master/admin/mishka-blog/…` and `/api/json/v1/tenant/admin/mishka-blog/…`, and one for readers at `/api/json/v1/user/mishka-blog/…` (published posts, comments, ratings, bookmarks, follows and votes), described in the CMS's OpenAPI spec.
 - Permissions `admin:dashboard:blog:post` and `admin:dashboard:blog:comment`, with `admin:api:` twins for the API, so a moderator can hold the comments alone.
-- Events for plugins, such as `blog:blog_post:after_publish` and `blog:comment:after_create`.
+- Events for plugins, such as `blog:blog_post:after_publish` and `blog:comment:after_create`. An extension adds buttons to the header of the dashboard on `blog:dashboard:actions`: a plugin answers `%{actions: [...]}` with an `id`, `label`, `icon`, `priority` and a `path:` or a `js:` command (see `MishkaBlog.Dashboard.Actions`).
 
 ## 🚀 Getting started
 

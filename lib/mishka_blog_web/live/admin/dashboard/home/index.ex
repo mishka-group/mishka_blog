@@ -45,7 +45,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
 
   require Logger
 
-  alias MishkaBlog.Dashboard.Overview
+  alias MishkaBlog.Dashboard.{Actions, Overview}
   alias MishkaBlog.Kit
   alias MishkaCmsCore.Dashboard.Widget
   alias MishkaCmsCore.Localized
@@ -147,6 +147,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
     socket =
       socket
       |> assign(:blog_areas, areas)
+      |> assign(:header_actions, Actions.collect(socket.assigns[:current_user]))
       |> activity_feed(areas)
       |> assign(
         page_title: "MishkaBlog",
