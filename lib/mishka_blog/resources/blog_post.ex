@@ -1428,6 +1428,7 @@ defmodule MishkaBlog.BlogPost do
 
   guardedstruct do
     auto_wire true
+    sanitize_derive MishkaBlog.ContentScrubber
 
     field :title, :string,
       validator: {MishkaCmsCore.PlainText, :field},
@@ -1440,7 +1441,7 @@ defmodule MishkaBlog.BlogPost do
     field :slug, :string,
       derives: "sanitize(trim) validate(string, not_empty, min_len=1, max_len=255)"
 
-    field :content, :string, derives: "sanitize(html5) validate(string, not_empty)"
+    field :content, :string, derives: "sanitize(blog_html) validate(string, not_empty)"
 
     field :excerpt, :string,
       derives: "sanitize(basic_html, trim) validate(optional=[string, max_len=1000])"
