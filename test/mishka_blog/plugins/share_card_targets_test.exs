@@ -22,6 +22,7 @@ defmodule MishkaBlog.Plugins.ShareCardTargetsTest do
   setup do
     PluginRegistrations.reconcile(false)
     {:ok, _} = ShareCardTargets.register()
+    {:ok, _} = ShareCardTargets.start()
     on_exit(fn -> Event.unregister(:name, ShareCardTargets, false) end)
     :ok = EventHandler.do_compile(ShareCard.targets_event(), :start, false)
 
