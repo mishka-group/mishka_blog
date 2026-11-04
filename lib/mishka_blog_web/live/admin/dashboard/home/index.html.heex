@@ -55,6 +55,26 @@ SPDX-License-Identifier: Apache-2.0
           id="blog-kit-upgrade"
           allowed?={@may_provision?}
         />
+        <%!-- BUTTONS AN EXTENSION ADDS on `blog:dashboard:actions` (`MishkaBlog.Dashboard.Actions`). --%>
+        <%= for action <- @header_actions do %>
+          <.link
+            :if={action[:path]}
+            id={"blog-action-#{action.id}"}
+            navigate={path(@socket, action.path)}
+            class="inline-flex h-10 items-center gap-2 rounded-[11px] border border-[#ecebe6] bg-white px-4 text-[13px] font-semibold text-[#5c5a54] transition-colors hover:bg-[#f7f6f3] max-[560px]:flex-1! max-[560px]:justify-center!"
+          >
+            <.icon name={action.icon} class="size-[15px]" /> {action.label}
+          </.link>
+          <button
+            :if={action[:js]}
+            id={"blog-action-#{action.id}"}
+            type="button"
+            phx-click={action.js}
+            class="inline-flex h-10 items-center gap-2 rounded-[11px] border border-[#ecebe6] bg-white px-4 text-[13px] font-semibold text-[#5c5a54] transition-colors hover:bg-[#f7f6f3] max-[560px]:flex-1! max-[560px]:justify-center!"
+          >
+            <.icon name={action.icon} class="size-[15px]" /> {action.label}
+          </button>
+        <% end %>
         <.link
           :if={@blog_areas.post}
           id="blog-analytics-btn"

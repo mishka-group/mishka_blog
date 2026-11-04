@@ -1,5 +1,6 @@
 # Changelog for MishkaBlog 0.0.3
 
+- An extension adds buttons to the header of the Blog dashboard on the `blog:dashboard:actions` event. A plugin is handed `%{actions: [], current_user: user}` and answers `%{actions: [...]}` with an `id`, `label`, `icon`, `priority` and a `path:` or a `js:` command
 - A comment an admin creates keeps the author it names, a user of the same site, where it was always stored as the admin's own. A comment that names no author (or a `nil` one) is still the admin's own, and an author from another site is refused
 
 # Changelog for MishkaBlog 0.0.2
