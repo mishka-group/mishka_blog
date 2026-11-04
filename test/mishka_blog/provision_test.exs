@@ -805,9 +805,10 @@ defmodule MishkaBlog.ProvisionTest do
   # `register/0` IS THE PLUGIN'S OWN, and it is an upsert keyed on the plugin name — so this is safe
   # whether or not the extension's supervisor already registered it at boot. `Event.write/1` is not:
   # it would leave two rows answering to one key, which is exactly what `Extensions.install/3`
-  # refuses to pretend is one install.
+  # refuses to pretend is one install. Only a started plugin is run, so it is started too.
   defp listening! do
     {:ok, _registered} = Installer.register()
+    {:ok, _started} = Installer.start()
     :ok = EventHandler.do_compile(@event, :start, false)
     :ok
   end
