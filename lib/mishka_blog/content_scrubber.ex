@@ -40,13 +40,16 @@ defmodule MishkaBlog.ContentScrubber do
   allow_tag_with_these_attributes("source")
   allow_tag_with_these_attributes("iframe")
 
-  @doc "The `allow` permission tokens an iframe keeps."
+  @doc """
+  Permissions an embedded player needs (fullscreen, autoplay, picture-in-picture and similar).
+  Powerful ones such as camera, microphone and geolocation are never on the list.
+  """
   @spec allowed_permissions() :: [String.t()]
   def allowed_permissions, do: @allowed_permissions
 
   @doc """
-  The `GuardedStruct` `sanitize_derive` entry point. Handles `:blog_html`; every other op
-  returns `nil` so the next sanitizer module can serve it.
+  Serves `sanitize(blog_html)` in a guardedstruct `derives` string. Any other op returns `nil`,
+  which tells GuardedStruct this module does not handle it and the next sanitizer should.
   """
   @spec sanitize(term(), atom()) :: term()
   def sanitize(input, :blog_html) when is_binary(input), do: sanitize(input)
