@@ -8,7 +8,8 @@ defmodule MishkaBlogWeb.Test.CommentAuthorLabelTest do
 
   A master reads every author's email. A site admin reads its own site's people by email, a master
   by the name of its blogger profile on the site or else as "Master", and never the master's email
-  or any part of it. A comment written signed out reads "Guest".
+  or any part of it. A guest's comment reads as the name the guest gave, with the guest's email
+  beside it, and one with neither an author nor a guest reads "Guest".
   """
   use MishkaBlog.ConnCase
 
@@ -59,6 +60,18 @@ defmodule MishkaBlogWeb.Test.CommentAuthorLabelTest do
       assert CommentCard.author(%{author_id: id, author_master?: true}) == "Master"
     end
 
+    test "is the name a guest gave on a guest's comment" do
+      assert CommentCard.author(%{author_id: nil, guest_name: "Ada Guest"}) == "Ada Guest"
+    end
+
+    test "never shows an email the reader's read withheld" do
+      assert CommentCard.guest_email(%{guest_email: "ada.guest@example.com"}) ==
+               "ada.guest@example.com"
+
+      assert CommentCard.guest_email(%{guest_email: %Ash.ForbiddenField{}}) == nil
+      assert CommentCard.guest_email(%{guest_email: nil}) == nil
+    end
+
     test "reads in the admin's language" do
       Gettext.put_locale(MishkaCmsCore.Gettext, "fa")
       id = Ash.UUID.generate()
@@ -92,7 +105,9 @@ defmodule MishkaBlogWeb.Test.CommentAuthorLabelTest do
         assert read.(view, ctx.by_colleague) == to_string(ctx.colleague.email)
         assert read.(view, ctx.by_master) == to_string(ctx.master.email)
         assert read.(view, ctx.by_named_master) == to_string(ctx.named_master.email)
-        assert read.(view, ctx.by_guest) == "Guest"
+        assert read.(view, ctx.by_guest) == "Ada Guest"
+        assert guest_email(view, ctx.by_guest, template) == "ada.guest@example.com"
+        refute has_element?(view, guest_email_selector(ctx.by_colleague, template))
       end
     end
   end
@@ -121,7 +136,8 @@ defmodule MishkaBlogWeb.Test.CommentAuthorLabelTest do
         assert read.(view, ctx.by_colleague) == to_string(ctx.colleague.email)
         assert read.(view, ctx.by_master) == "Master"
         assert read.(view, ctx.by_named_master) == "Platform Team"
-        assert read.(view, ctx.by_guest) == "Guest"
+        assert read.(view, ctx.by_guest) == "Ada Guest"
+        assert guest_email(view, ctx.by_guest, template) == "ada.guest@example.com"
         assert initials.(view, ctx.by_master) == "M"
       end
 
@@ -182,6 +198,12 @@ defmodule MishkaBlogWeb.Test.CommentAuthorLabelTest do
   defp card_initials(view, comment), do: text(view, ~s([id$="#{comment.id}-initials"]))
   defp table_author(view, comment), do: text(view, "#comment-author-#{comment.id}")
   defp table_initial(view, comment), do: text(view, "#comment-author-initial-#{comment.id}")
+
+  defp guest_email(view, comment, template),
+    do: text(view, guest_email_selector(comment, template))
+
+  defp guest_email_selector(comment, "comment_card"), do: ~s([id$="#{comment.id}-guest-email"])
+  defp guest_email_selector(comment, "table"), do: "#comment-guest-email-#{comment.id}"
 
   defp text(view, selector) do
     view

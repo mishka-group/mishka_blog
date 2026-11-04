@@ -249,10 +249,23 @@ defmodule MishkaBlog.Comment do
         end
 
         # The author's initial tile and name, at the row's scale — the same pair the card leads
-        # with; see `MishkaBlogWeb.Templates.CommentCard.author/1` for who the name is.
+        # with; see `MishkaBlogWeb.Templates.CommentCard.author/1` for who the name is. A guest's
+        # email sits under the name for a moderator, the only reader the comment's field policy
+        # gives it to.
         column :author_info do
           static true
-          requires [:id, :author, :author_id, :author_profile, :author_master?, :inserted_at]
+
+          requires [
+            :id,
+            :author,
+            :author_id,
+            :author_profile,
+            :author_master?,
+            :guest_name,
+            :guest_email,
+            :inserted_at
+          ]
+
           label fn -> dgettext("mishka_gervaz", "Author") end
           visible fn state -> state.template.name() == :table end
 
@@ -266,6 +279,7 @@ defmodule MishkaBlog.Comment do
             assigns = %{
               id: record.id,
               author: author,
+              guest_email: MishkaBlogWeb.Templates.CommentCard.guest_email(record),
               initial: author |> String.first() |> String.upcase(),
               date: MishkaCmsCore.Localized.date(record.inserted_at, :yMMMd)
             }
@@ -284,6 +298,15 @@ defmodule MishkaBlog.Comment do
                   title={@author}
                 >
                   {@author}
+                </div>
+                <div
+                  :if={@guest_email}
+                  id={"comment-guest-email-#{@id}"}
+                  dir="ltr"
+                  class="truncate text-[11px] font-medium text-[#8a877f]"
+                  title={@guest_email}
+                >
+                  {@guest_email}
                 </div>
                 <div class="text-[11px] font-medium text-[#a8a5a0]">{@date}</div>
               </div>
