@@ -15,7 +15,16 @@ defmodule MishkaBlog.Test.CommentGuardedStructTest do
 
     describe "guardedstruct wiring" do
       test "GS covers every Ash attribute" do
-        assert MapSet.new([:content, :status, :sender_data, :is_pinned, :site_id]) ==
+        assert MapSet.new([
+                 :content,
+                 :status,
+                 :sender_data,
+                 :is_pinned,
+                 :site_id,
+                 :guest_name,
+                 :guest_email,
+                 :guest_website
+               ]) ==
                  Comment.__guarded_field_name_set__()
       end
     end
@@ -47,6 +56,20 @@ defmodule MishkaBlog.Test.CommentGuardedStructTest do
                     message: "Your sent data form status field is not in the allowed list"
                   }
                 ]} = Comment.__guarded_change__(%{status: :bogus})
+      end
+
+      test "a guest's name is plain text, the email lowercased, the website trimmed" do
+        assert {:ok,
+                %{
+                  guest_name: "Ada",
+                  guest_email: "ada@example.com",
+                  guest_website: "https://ada.example.com"
+                }} =
+                 Comment.__guarded_change__(%{
+                   guest_name: " <b>Ada</b> ",
+                   guest_email: " ADA@Example.com ",
+                   guest_website: " https://ada.example.com "
+                 })
       end
 
       test "empty content → not_empty error" do

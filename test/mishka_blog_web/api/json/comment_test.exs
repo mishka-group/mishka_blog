@@ -964,6 +964,95 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
       end
     end
 
+    describe "guest_email (the address a guest gave)" do
+      @guest_email "ada.guest@example.com"
+
+      setup %{site: site} do
+        post = create_blog_post!(site_id: site.id, status: :published)
+
+        comment =
+          MishkaBlog.Comment
+          |> Ash.Changeset.for_create(
+            :create,
+            %{
+              post_id: post.id,
+              content: "From a guest",
+              status: :approved,
+              guest_name: "Ada Guest",
+              guest_email: @guest_email,
+              guest_website: "https://ada.example.com"
+            },
+            tenant: site.id,
+            authorize?: false
+          )
+          |> Ash.create!()
+
+        %{post: post, comment: comment}
+      end
+
+      defp get_json(path, token) do
+        headers = if token, do: [{"authorization", "Bearer #{token}"}], else: []
+        response = make_api_request(path, %{}, method: :get, headers: headers)
+        assert response.status == 200
+        response
+      end
+
+      test "a visitor reads the guest's name and website, never the email", %{post: post} do
+        response = get_json("#{@api_public_approved_path}?post_id=#{post.id}", nil)
+
+        [comment] = Jason.decode!(response.resp_body)["data"]
+        assert comment["attributes"]["guest_name"] == "Ada Guest"
+        assert comment["attributes"]["guest_website"] == "https://ada.example.com"
+        refute Map.has_key?(comment["attributes"], "guest_email")
+        refute response.resp_body =~ @guest_email
+      end
+
+      test "a signed-in user who is not an admin never receives it, even asking for it", %{
+        post: post,
+        regular_user: regular_user
+      } do
+        token = sign_in_tenant(regular_user)
+
+        for path <- [
+              "#{@api_public_approved_path}?post_id=#{post.id}&fields[comment]=content,guest_email",
+              "/api/json/v1/user/mishka-blog/post/published/#{post.id}?include=comments"
+            ] do
+          refute get_json(path, token).resp_body =~ @guest_email
+          refute get_json(path, nil).resp_body =~ @guest_email
+        end
+      end
+
+      test "a filter on it tells a visitor nothing, one guess at a time", %{post: post} do
+        approved = "#{@api_public_approved_path}?post_id=#{post.id}&"
+        posts = "/api/json/v1/user/mishka-blog/post/published?"
+
+        data =
+          &(&1
+            |> get_json(nil)
+            |> Map.fetch!(:resp_body)
+            |> Jason.decode!()
+            |> Map.fetch!("data"))
+
+        for {hit, miss} <- [
+              {"#{approved}filter[guest_email]=#{@guest_email}",
+               "#{approved}filter[guest_email]=nobody@example.com"},
+              {"#{approved}filter[guest_email][contains]=ada.guest",
+               "#{approved}filter[guest_email][contains]=nothing-like-it"},
+              {"#{posts}filter[comments][guest_email]=#{@guest_email}",
+               "#{posts}filter[comments][guest_email]=nobody@example.com"}
+            ] do
+          assert data.(hit) == data.(miss), "#{hit} told the guest's email apart"
+        end
+      end
+
+      test "a tenant admin receives it", %{comment: comment, tenant_admin: tenant_admin} do
+        response = get_json("#{@api_tenant_path}/#{comment.id}", sign_in_tenant(tenant_admin))
+
+        assert Jason.decode!(response.resp_body)["data"]["attributes"]["guest_email"] ==
+                 @guest_email
+      end
+    end
+
     describe "my-comments - an author's own comments in every status" do
       test "a comment waiting for moderation is visible to its author", %{
         site: site,

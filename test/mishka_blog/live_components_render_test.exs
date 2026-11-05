@@ -3304,7 +3304,14 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
 
       comment!(site, post, content: "From Ada", author_id: known.id)
       comment!(site, post, content: "From a stranger", author_id: stranger.id)
-      comment!(site, post, content: "From nobody")
+
+      # Neither an author nor a guest: the comment of an account that is gone.
+      Ash.Seed.seed!(MishkaBlog.Comment, %{
+        site_id: site.id,
+        post_id: post.id,
+        status: :approved,
+        content: "From nobody"
+      })
 
       {:ok, view, _html} = mount_page(site, "blog-post-comments", %{slug: post.slug})
 
@@ -3313,6 +3320,72 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert "Ada Lovelace" in names
       assert Enum.count(names, &(&1 == "Reader")) == 2
       refute Enum.any?(names, &String.contains?(&1, "@"))
+    end
+
+    # A GUEST IS THE NAME THEY GAVE, linked to their website for a reader and kept from passing a
+    # search engine's credit to it; their email is never on the page.
+    test "names a guest, links their website with nofollow, and never shows their email", %{
+      site: site
+    } do
+      [post] = publish!(site, ["Ours"])
+
+      linked =
+        comment!(site, post,
+          content: "From a guest with a site",
+          guest_name: "Grace Guest",
+          guest_email: "grace.guest@example.com",
+          guest_website: "https://grace.example.com"
+        )
+
+      comment!(site, post,
+        content: "A guest's reply",
+        parent_comment_id: linked.id,
+        guest_name: "Rex Replier",
+        guest_website: "https://rex.example.com"
+      )
+
+      comment!(site, post,
+        content: "From a guest without one",
+        guest_name: "Una Unlinked",
+        guest_email: "una.unlinked@example.com"
+      )
+
+      {:ok, view, _html} = mount_page(site, "blog-post-comments", %{slug: post.slug})
+
+      names = text_of(view, ~s([data-role="blog-comment-author"]))
+      assert Enum.sort(names) == ["Grace Guest", "Rex Replier", "Una Unlinked"]
+
+      links = ~s(a[data-role="blog-comment-author"])
+      assert text_of(view, links) == ["Grace Guest", "Rex Replier"]
+      assert hrefs(view, links) == ["https://grace.example.com", "https://rex.example.com"]
+      assert Enum.uniq(attrs_of(view, links, "rel")) == ["nofollow ugc noopener"]
+
+      assert text_of(view, ~s(span[data-role="blog-comment-author"])) == ["Una Unlinked"]
+
+      html = render(view)
+      refute html =~ "grace.guest@example.com"
+      refute html =~ "una.unlinked@example.com"
+    end
+
+    # THE COMMENT REFUSES ANY OTHER WEBSITE WHEN IT IS WRITTEN, and a row stored around that rule is
+    # still never an `href`.
+    test "never links a guest's website that is not an http or https address", %{site: site} do
+      [post] = publish!(site, ["Ours"])
+
+      Ash.Seed.seed!(MishkaBlog.Comment, %{
+        site_id: site.id,
+        post_id: post.id,
+        status: :approved,
+        content: "Stored around the rule",
+        guest_name: "Mallory",
+        guest_website: "javascript:alert(1)"
+      })
+
+      {:ok, view, _html} = mount_page(site, "blog-post-comments", %{slug: post.slug})
+
+      assert text_of(view, ~s([data-role="blog-comment-author"])) == ["Mallory"]
+      assert hrefs(view, ~s([data-role="blog-comment-author"])) == []
+      refute render(view) =~ "javascript:"
     end
 
     test "offers a signed-out reader a way in, and no box to type in", %{site: site} do

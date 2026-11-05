@@ -158,6 +158,7 @@ defmodule MishkaBlogWeb.Templates.CommentCard do
       |> assign(:tint, tint(record))
       |> assign(:initials, initials(record))
       |> assign(:author, author(record))
+      |> assign(:guest_email, guest_email(record))
       |> assign(:post_title, post_title(record))
       |> assign(:date, Localized.date(record.inserted_at, :yMMMd))
       |> assign(
@@ -211,6 +212,14 @@ defmodule MishkaBlogWeb.Templates.CommentCard do
             class="truncate font-['Space_Grotesk'] text-[13.5px] font-semibold text-[#17161a]"
           >
             {@author}
+          </span>
+          <span
+            :if={@guest_email}
+            id={"#{@id}-guest-email"}
+            dir="ltr"
+            class="truncate text-[11.5px] font-medium text-[#8a877f]"
+          >
+            {@guest_email}
           </span>
           <span class="text-[11px] font-medium text-[#a8a5a0]">{@date}</span>
 
@@ -312,21 +321,35 @@ defmodule MishkaBlogWeb.Templates.CommentCard do
   Who wrote the comment, for the reader whose read loaded it.
 
   The author's email when the reader may see it. For a master, the name of its blogger profile on
-  the comment's site, else "Master". "Guest" for a comment written signed out, "Unknown" for an
-  author the reader's read did not return. Load `:author`, `:author_profile` and `:author_master?`.
+  the comment's site, else "Master". A guest's comment is the name the guest gave, "Unknown" is an
+  author the reader's read did not return, and "Guest" is a comment with neither, such as one
+  whose author's account is gone. Load `:author`, `:author_profile` and `:author_master?`.
   """
   @spec author(map()) :: String.t()
   def author(record) do
     Helper.who(
       Map.get(record, :author),
       Map.get(record, :author_master?) == true,
-      (Map.get(record, :author_id) && :unknown) || :guest,
+      no_account(record),
       profile_name(record)
     )
   end
 
+  defp no_account(%{author_id: id}) when is_binary(id), do: :unknown
+  defp no_account(%{guest_name: name}) when is_binary(name), do: name
+  defp no_account(_record), do: :guest
+
   defp profile_name(%{author_profile: %{display_name: name}}) when is_binary(name), do: name
   defp profile_name(_record), do: nil
+
+  @doc """
+  The email a guest gave, for a reader the comment's field policy shows it to: one with the
+  comment permission. `nil` on a user's comment, and for any other reader, whose read returns
+  `%Ash.ForbiddenField{}` in its place.
+  """
+  @spec guest_email(map()) :: String.t() | nil
+  def guest_email(%{guest_email: email}) when is_binary(email), do: email
+  def guest_email(_record), do: nil
 
   @doc "The two letters the avatar tile shows for an author."
   @spec initials(map()) :: String.t()
