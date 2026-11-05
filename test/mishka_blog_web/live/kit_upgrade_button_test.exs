@@ -29,11 +29,10 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
   alias MishkaCmsCore.Runtime.Handlers.UiKitUpgrade
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.PageDraft
-  alias MishkaCmsCore.Runtime.ShareCard
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Workers.{ShareCardPlanWorker, ShareCardRefreshWorker}
   alias MishkaCmsCore.Test.VersionHelpers
-  alias MishkaInstaller.Event.{Event, EventHandler}
+  alias MishkaInstaller.Event.Event
 
   require Ash.Query
 
@@ -302,7 +301,7 @@ defmodule MishkaBlogWeb.Test.KitUpgradeButtonTest do
       MishkaCmsCore.PluginRegistrations.reconcile(false)
       {:ok, _} = ShareCardTargets.register()
       on_exit(fn -> Event.unregister(:name, ShareCardTargets, false) end)
-      :ok = EventHandler.do_compile(ShareCard.targets_event(), :start, false)
+      {:ok, _} = Event.start(:name, ShareCardTargets, false)
 
       create_blog_post!(site_id: site.id, status: :published, slug: "shared", language: "en")
 
