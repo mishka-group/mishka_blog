@@ -395,6 +395,32 @@ defmodule MishkaBlog.Test.CommentTest do
         assert written(ctx) == []
       end
 
+      # A REQUEST EDITED ON ITS WAY IN, string keys as a form or a proxy sends them: a reader's create
+      # takes no guest field, alone or together, and stores nothing for trying.
+      test "a reader's tampered create carrying a guest's fields is refused", ctx do
+        reader = create_user!(site_id: ctx.site.id)
+
+        for tampered <- [
+              %{"guest_name" => "Not Me"},
+              %{"guest_email" => "not.me@example.com"},
+              %{"guest_name" => "Not Me", "guest_email" => "not.me@example.com"}
+            ] do
+          result =
+            Comment
+            |> Ash.Changeset.for_create(
+              :create_public,
+              Map.merge(%{"post_id" => ctx.post.id, "content" => "Tampered"}, tampered),
+              actor: reader,
+              tenant: ctx.site.id
+            )
+            |> Ash.create()
+
+          assert {:error, %Ash.Error.Invalid{}} = result, "#{inspect(tampered)} was accepted"
+        end
+
+        assert written(ctx) == []
+      end
+
       test "only a moderator reads a guest's email, through any read", ctx do
         {:ok, comment} = admin_create(ctx, @guest)
 
