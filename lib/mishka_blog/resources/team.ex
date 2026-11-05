@@ -746,7 +746,7 @@ defmodule MishkaBlog.Team do
 
       url_sync do
         mode :bidirectional
-        params [:filters, :sort, :page, :search]
+        params [:filters, :sort, :page, :search, :template]
         prefix "teams"
         max_filter_length 500
       end
