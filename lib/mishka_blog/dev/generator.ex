@@ -421,8 +421,7 @@ defmodule MishkaBlog.Dev.Generator do
         sender_data: %{},
         is_pinned: false,
         guest_name: guest(opts[:author_id], sequence(:comment_guest, &"Guest #{&1}")),
-        guest_email: nil,
-        guest_website: nil
+        guest_email: nil
       ],
       overrides: opts
     )
@@ -667,7 +666,7 @@ defmodule MishkaBlog.Dev.Generator do
   @doc """
   A realistic comment. Moderation status is weighted the way a live queue looks — mostly approved with
   a thin tail of pending, spam and flagged rows — and pinning stays rare so the pinned marker keeps its
-  meaning. One that names no `author_id` is a guest's, with a name, an email and, for some, a website.
+  meaning. One that names no `author_id` is a guest's, with a name and an email.
   """
   def dev_comment(opts \\ [], tenant \\ nil) do
     changeset_generator(
@@ -695,12 +694,7 @@ defmodule MishkaBlog.Dev.Generator do
           ]),
         guest_name: guest(opts[:author_id], StreamData.member_of(@guest_names)),
         guest_email:
-          guest(opts[:author_id], sequence(:dev_comment_guest, &"guest-#{&1}@example.com")),
-        guest_website:
-          guest(
-            opts[:author_id],
-            StreamData.member_of([nil, nil, "https://example.com", "https://example.org"])
-          )
+          guest(opts[:author_id], sequence(:dev_comment_guest, &"guest-#{&1}@example.com"))
       ],
       overrides: opts
     )

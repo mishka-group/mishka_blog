@@ -2,7 +2,7 @@
 
 - An extension adds buttons to the header of the Blog dashboard on the `blog:dashboard:actions` event. A plugin is handed `%{actions: [], current_user: user}` and answers `%{actions: [...]}` with an `id`, `label`, `icon`, `priority` and a `path:` or a `js:` command
 - A comment an admin creates keeps the author it names, a user of the same site, where it was always stored as the admin's own. A comment that names no author (or a `nil` one) is still the admin's own, and an author from another site is refused
-- A comment can be a guest's: a guest's name, and the email and website they gave, in place of a user author. The name and email are plain text, their tags taken out. Only the admin's create writes them, a comment with neither an author nor a guest's name is refused, and so is a bad email or a website that is not an `http` or `https` address. The post names a guest and links their website with `rel="nofollow ugc noopener"`, and the Comments page shows a guest's email to moderators, the only readers who ever get it
+- A comment can be a guest's: a guest's name, and the email they gave, in place of a user author. The name and email are plain text, their tags taken out. Only the admin's create writes them, a comment with neither an author nor a guest's name is refused, and so is a bad email. The post names a guest, and the Comments page shows a guest's email to moderators, the only readers who ever get it
 
 # Changelog for MishkaBlog 0.0.2
 

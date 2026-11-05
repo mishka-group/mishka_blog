@@ -979,8 +979,7 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
               content: "From a guest",
               status: :approved,
               guest_name: "Ada Guest",
-              guest_email: @guest_email,
-              guest_website: "https://ada.example.com"
+              guest_email: @guest_email
             },
             tenant: site.id,
             authorize?: false
@@ -997,12 +996,11 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
         response
       end
 
-      test "a visitor reads the guest's name and website, never the email", %{post: post} do
+      test "a visitor reads the guest's name, never the email", %{post: post} do
         response = get_json("#{@api_public_approved_path}?post_id=#{post.id}", nil)
 
         [comment] = Jason.decode!(response.resp_body)["data"]
         assert comment["attributes"]["guest_name"] == "Ada Guest"
-        assert comment["attributes"]["guest_website"] == "https://ada.example.com"
         refute Map.has_key?(comment["attributes"], "guest_email")
         refute response.resp_body =~ @guest_email
       end

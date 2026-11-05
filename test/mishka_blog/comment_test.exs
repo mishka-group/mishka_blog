@@ -253,11 +253,7 @@ defmodule MishkaBlog.Test.CommentTest do
         }
       end
 
-      @guest %{
-        guest_name: "Ada Guest",
-        guest_email: "Ada.Guest@Example.com",
-        guest_website: "https://ada.example.com/about"
-      }
+      @guest %{guest_name: "Ada Guest", guest_email: "Ada.Guest@Example.com"}
 
       defp refused_on?(result, field) do
         assert {:error, %Ash.Error.Invalid{errors: errors}} = result
@@ -279,15 +275,21 @@ defmodule MishkaBlog.Test.CommentTest do
         assert comment.author_id == nil
         assert comment.guest_name == "Ada Guest"
         assert comment.guest_email == "ada.guest@example.com"
-        assert comment.guest_website == "https://ada.example.com/about"
       end
 
-      test "a guest's email and website are optional", ctx do
+      test "a guest's email is optional", ctx do
         assert {:ok, comment} = admin_create(ctx, %{guest_name: "Ada Guest"})
 
         assert comment.author_id == nil
         assert comment.guest_email == nil
-        assert comment.guest_website == nil
+      end
+
+      test "a comment takes no guest's website", ctx do
+        assert {:error, %Ash.Error.Invalid{}} =
+                 admin_create(ctx, Map.put(@guest, :guest_website, "https://ada.example.com"))
+
+        refute Map.has_key?(Comment.__struct__(), :guest_website)
+        assert written(ctx) == []
       end
 
       test "a comment with neither an author nor a guest's name is refused", ctx do
@@ -324,14 +326,8 @@ defmodule MishkaBlog.Test.CommentTest do
         assert refused_on?(result, :author_id)
       end
 
-      test "a guest's email or website without the guest's name is refused", ctx do
+      test "a guest's email without the guest's name is refused", ctx do
         assert refused_on?(admin_create(ctx, %{guest_email: "ada@example.com"}), :guest_email)
-
-        assert refused_on?(
-                 admin_create(ctx, %{guest_website: "https://ada.example"}),
-                 :guest_email
-               )
-
         assert written(ctx) == []
       end
 
@@ -339,25 +335,6 @@ defmodule MishkaBlog.Test.CommentTest do
         for email <- ["not-an-email", "ada@", "ada@example", "ada guest@example.com"] do
           assert refused_on?(admin_create(ctx, %{@guest | guest_email: email}), :guest_email),
                  "#{email} was accepted"
-        end
-
-        assert written(ctx) == []
-      end
-
-      test "a website that is not an http or https address is refused", ctx do
-        for website <- [
-              "javascript:alert(1)",
-              "data:text/html,<b>hi</b>",
-              "ftp://ada.example.com",
-              "ada.example.com",
-              "//ada.example.com",
-              "https://"
-            ] do
-          assert refused_on?(
-                   admin_create(ctx, %{@guest | guest_website: website}),
-                   :guest_website
-                 ),
-                 "#{website} was accepted"
         end
 
         assert written(ctx) == []
@@ -445,7 +422,6 @@ defmodule MishkaBlog.Test.CommentTest do
           found = read.(action, args, actor)
 
           assert found.guest_name == "Ada Guest"
-          assert found.guest_website == "https://ada.example.com/about"
           assert %Ash.ForbiddenField{} = found.guest_email
         end
 

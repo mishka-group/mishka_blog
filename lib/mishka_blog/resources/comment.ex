@@ -38,16 +38,14 @@ defmodule MishkaBlog.Comment do
 
   A comment is written by a user (`author_id`) or by a guest who has no account here, such as a
   visitor whose comment was moved in from another system. A guest's comment carries the name the
-  guest gave (`guest_name`) and, when given, an email (`guest_email`) and a website
-  (`guest_website`, an `http` or `https` address).
+  guest gave (`guest_name`) and, when given, an email (`guest_email`).
 
   - Only `:create`, the admin's create, writes them. Given a `guest_name` and no `author_id`, it
     leaves the author empty instead of making the acting admin the author. `:create_public`
     takes no guest fields: a reader's comment is always the reader's own.
   - `:create` refuses a comment with neither an author nor a guest name, and every create or
-    update that sets `author_id` refuses one with both. A guest's email or website without the
-    guest's name is refused, and so is an email that is not one or a website that is not an
-    `http` or `https` address.
+    update that sets `author_id` refuses one with both. A guest's email without the guest's
+    name is refused, and so is an email that is not one.
   - The name and the email are plain text, as `content` is: their tags are taken out
     (`MishkaCmsCore.PlainText`) and an `&` is kept as typed. The email is then lowercased and
     checked as an email.
@@ -123,7 +121,7 @@ defmodule MishkaBlog.Comment do
     :site_id
   ]
 
-  @guest_fields [:guest_name, :guest_email, :guest_website]
+  @guest_fields [:guest_name, :guest_email]
 
   # Database configuration for comments storage with indexing
   postgres do
@@ -1094,9 +1092,6 @@ defmodule MishkaBlog.Comment do
     field :guest_email, :string,
       validator: {MishkaCmsCore.PlainText, :field},
       derives: "sanitize(trim, downcase) validate(optional=[string, max_len=255])"
-
-    field :guest_website, :string,
-      derives: "sanitize(trim) validate(optional=[string, max_len=500])"
   end
 
   # WHO may read which FIELD of a comment they can see. Ash requires that once any field policy
@@ -1155,32 +1150,17 @@ defmodule MishkaBlog.Comment do
         message dgettext_noop("errors", "A comment needs its author or the guest's name.")
       end
 
-      validate absent([:guest_email, :guest_website]),
+      validate absent(:guest_email),
         where: [absent(:guest_name)],
-        message: dgettext_noop("errors", "A guest's email and website need the guest's name.")
+        message: dgettext_noop("errors", "A guest's email needs the guest's name.")
 
       validate {MishkaCmsCore.Accounts.Validations.ValidEmail, field: :guest_email},
         before_action?: true
 
-      validate fn changeset, _context ->
-        website = Ash.Changeset.get_attribute(changeset, :guest_website)
-
-        case is_nil(website) or MishkaCmsCore.Runtime.OriginValidator.web_url?(website) do
-          true ->
-            :ok
-
-          false ->
-            {:error,
-             field: :guest_website,
-             message:
-               dgettext_noop("errors", "A guest's website must be an http or https address.")}
-        end
-      end
-
       description """
       Creates a new comment within tenant context. The comment is the actor's own unless it names an
       `author_id` of a user of the same site, or is a guest's: a `guest_name`, with the guest's
-      `guest_email` and `guest_website` when given, and no author.
+      `guest_email` when given, and no author.
       """
     end
 
@@ -1787,13 +1767,6 @@ defmodule MishkaBlog.Comment do
       sensitive? true
       constraints max_length: 255
       description "The email a guest gave, for moderators only"
-    end
-
-    attribute :guest_website, :string do
-      allow_nil? true
-      public? true
-      constraints max_length: 500
-      description "The http or https address a guest gave, linked from their name"
     end
 
     attribute :site_id, :uuid do

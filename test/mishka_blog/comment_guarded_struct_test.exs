@@ -22,8 +22,7 @@ defmodule MishkaBlog.Test.CommentGuardedStructTest do
                  :is_pinned,
                  :site_id,
                  :guest_name,
-                 :guest_email,
-                 :guest_website
+                 :guest_email
                ]) ==
                  Comment.__guarded_field_name_set__()
       end
@@ -58,17 +57,11 @@ defmodule MishkaBlog.Test.CommentGuardedStructTest do
                 ]} = Comment.__guarded_change__(%{status: :bogus})
       end
 
-      test "a guest's name is plain text, the email lowercased, the website trimmed" do
-        assert {:ok,
-                %{
-                  guest_name: "Ada",
-                  guest_email: "ada@example.com",
-                  guest_website: "https://ada.example.com"
-                }} =
+      test "a guest's name is plain text, the email lowercased" do
+        assert {:ok, %{guest_name: "Ada", guest_email: "ada@example.com"}} =
                  Comment.__guarded_change__(%{
                    guest_name: " <b>Ada</b> ",
-                   guest_email: " ADA@Example.com ",
-                   guest_website: " https://ada.example.com "
+                   guest_email: " ADA@Example.com "
                  })
       end
 
