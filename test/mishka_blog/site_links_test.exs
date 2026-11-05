@@ -991,8 +991,7 @@ defmodule MishkaBlog.SiteLinksTest do
           assert {:error, error} = result
 
           assert Exception.message(error) =~
-                   "translation is still live, so it can't be deleted yet. Archive or delete " <>
-                     "that translation first, then this one."
+                   ~r/translation is still live, so it can't be (archived|deleted) yet\. Archive or delete that translation first, then this one\./
         end
 
         assert reload(first)

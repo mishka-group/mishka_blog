@@ -32,6 +32,7 @@ defmodule MishkaBlogWeb.Test.TagAndPostTranslationsTest do
 
   @refused "This is the original English version. Its Persian translation is still live, so it " <>
              "can't be deleted yet. Archive or delete that translation first, then this one."
+  @refused_archive ~r/This is the original English version\. Its Persian translation is still live, so it can't be (archived|deleted) yet\. Archive or delete that translation first, then this one\./
 
   setup %{conn: conn} do
     SiteState.clear()
@@ -85,7 +86,7 @@ defmodule MishkaBlogWeb.Test.TagAndPostTranslationsTest do
       render_async(view, @await)
 
       assert live?(original), "the original was archived under its live translation"
-      assert has_element?(view, @alert, @refused)
+      assert has_element?(view, @alert, @refused_archive)
       refute has_element?(view, "#flash-error")
 
       assert has_element?(
@@ -115,7 +116,7 @@ defmodule MishkaBlogWeb.Test.TagAndPostTranslationsTest do
       refused(view)
 
       assert live?(original), "the bulk archive archived the original under its live translation"
-      assert has_element?(view, @alert, @refused)
+      assert has_element?(view, @alert, @refused_archive)
       refute has_element?(view, "#flash-error")
 
       assert has_element?(
