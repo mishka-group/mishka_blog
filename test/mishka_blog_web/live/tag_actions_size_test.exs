@@ -19,8 +19,6 @@ defmodule MishkaBlogWeb.Test.TagActionsSizeTest do
   require Ash.Query
 
   @password "Password123!"
-  @collections_path "/admin/dashboard/blog/collections"
-  @posts_path "/admin/dashboard/blog/posts"
 
   setup %{conn: conn} do
     SiteState.clear()
