@@ -9,6 +9,7 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
 
   use MishkaBlog.ConnCase
   import MishkaBlog.Test.Factory
+  require Ash.Query
 
   @moduletag :unit
   @moduletag :capture_log
@@ -235,6 +236,41 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
         assert body["data"]["attributes"]["content"] == "Public comment"
         # Public comments should default to pending
         assert body["data"]["attributes"]["status"] in ["pending", "approved"]
+      end
+
+      # A BODY EDITED ON ITS WAY IN, as a proxy lets a visitor do: the public create takes no guest
+      # field, alone or together, and stores nothing for trying.
+      test "a reader's tampered create carrying a guest's fields is refused", %{
+        site: site,
+        regular_user: regular_user
+      } do
+        token = sign_in_tenant(regular_user)
+        post = create_blog_post!(site_id: site.id, status: :published)
+
+        for tampered <- [
+              %{"guest_name" => "Not Me"},
+              %{"guest_email" => "not.me@example.com"},
+              %{"guest_name" => "Not Me", "guest_email" => "not.me@example.com"}
+            ] do
+          response =
+            make_api_request(
+              @api_public_create_path,
+              %{
+                "type" => "comment",
+                "attributes" =>
+                  Map.merge(%{"content" => "Tampered", "post_id" => post.id}, tampered)
+              },
+              method: :post,
+              headers: [{"authorization", "Bearer #{token}"}]
+            )
+
+          assert response.status == 400, "#{inspect(tampered)} was answered #{response.status}"
+          assert Jason.decode!(response.resp_body)["errors"] != []
+        end
+
+        assert MishkaBlog.Comment
+               |> Ash.Query.filter(post_id == ^post.id)
+               |> Ash.read!(tenant: site.id, authorize?: false) == []
       end
     end
 
@@ -979,8 +1015,7 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
               content: "From a guest",
               status: :approved,
               guest_name: "Ada Guest",
-              guest_email: @guest_email,
-              guest_website: "https://ada.example.com"
+              guest_email: @guest_email
             },
             tenant: site.id,
             authorize?: false
@@ -997,12 +1032,11 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
         response
       end
 
-      test "a visitor reads the guest's name and website, never the email", %{post: post} do
+      test "a visitor reads the guest's name, never the email", %{post: post} do
         response = get_json("#{@api_public_approved_path}?post_id=#{post.id}", nil)
 
         [comment] = Jason.decode!(response.resp_body)["data"]
         assert comment["attributes"]["guest_name"] == "Ada Guest"
-        assert comment["attributes"]["guest_website"] == "https://ada.example.com"
         refute Map.has_key?(comment["attributes"], "guest_email")
         refute response.resp_body =~ @guest_email
       end
