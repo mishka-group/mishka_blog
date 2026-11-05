@@ -209,7 +209,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       <div
         :if={@has_actions?}
         data-role="tag-actions"
-        class="flex flex-none items-center [&_button]:size-[22px] [&_button]:rounded-md"
+        class="flex flex-none items-center [&_[aria-haspopup]]:size-[22px] [&_[aria-haspopup]]:rounded-md"
       >
         <Gervaz.render_row_actions
           row_actions={@static.row_actions}
