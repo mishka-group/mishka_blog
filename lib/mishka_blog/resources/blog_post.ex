@@ -989,7 +989,7 @@ defmodule MishkaBlog.BlogPost do
 
       url_sync do
         mode :bidirectional
-        params [:filters, :sort, :page, :search]
+        params [:filters, :sort, :page, :search, :template]
         prefix "posts"
         max_filter_length 500
       end

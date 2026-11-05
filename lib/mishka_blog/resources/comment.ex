@@ -886,7 +886,7 @@ defmodule MishkaBlog.Comment do
 
       url_sync do
         mode :bidirectional
-        params [:filters, :sort, :page, :search]
+        params [:filters, :sort, :page, :search, :template]
         prefix "comments"
         max_filter_length 500
       end
