@@ -372,6 +372,23 @@ defmodule MishkaBlog.Test.CommentTest do
         assert refused_on?(admin_create(ctx, %{guest_name: "<b></b>"}), :guest_name)
       end
 
+      test "a guest's name and email are plain text, and the email is checked without its tags",
+           ctx do
+        assert {:ok, comment} =
+                 admin_create(ctx, %{
+                   guest_name: "Tom <b>x</b> & Jerry's",
+                   guest_email: "<b>Ada.Guest@Example.com</b>"
+                 })
+
+        assert comment.guest_name == "Tom x & Jerry's"
+        assert comment.guest_email == "ada.guest@example.com"
+
+        assert refused_on?(
+                 admin_create(ctx, %{guest_name: "Ada", guest_email: "<i>not-an-email</i>"}),
+                 :guest_email
+               )
+      end
+
       test "a reader cannot write a guest's fields", ctx do
         reader = create_user!(site_id: ctx.site.id)
 

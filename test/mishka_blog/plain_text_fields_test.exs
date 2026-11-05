@@ -5,8 +5,8 @@
 defmodule MishkaBlog.Test.PlainTextFieldsTest do
   @moduledoc """
   The blog's plain-text fields — a post's title and subtitle, a category's, a tag's, a team's and an
-  auto-posting's name and description, a blogger's name, a comment and its guest's name — store
-  what was typed, without its markup and with nothing escaped (`MishkaCmsCore.PlainText`).
+  auto-posting's name and description, a blogger's name, a comment and its guest's name and email —
+  store what was typed, without its markup and with nothing escaped (`MishkaCmsCore.PlainText`).
   Escaping is the page's and the head's job.
   """
   use MishkaBlog.DataCase, async: false
@@ -34,6 +34,17 @@ defmodule MishkaBlog.Test.PlainTextFieldsTest do
         do: {resource, name}
   end
 
+  # What a plain-text field keeps of `text`: the text itself, lowercased where the field lowercases
+  # what it stores, as a guest's email does.
+  defp kept(resource, field, text) do
+    %{__derive_ops__: ops} = Enum.find(resource.__guarded_fields__(), &(&1.name == field))
+
+    case :downcase in List.wrap(ops[:sanitize]) do
+      true -> String.downcase(text)
+      false -> text
+    end
+  end
+
   describe "every plain-text field" do
     test "is one the blog shows as text" do
       assert MapSet.new(plain_text_fields()) ==
@@ -46,6 +57,7 @@ defmodule MishkaBlog.Test.PlainTextFieldsTest do
                  {MishkaBlog.Blogger, :display_name},
                  {MishkaBlog.Collection, :description},
                  {MishkaBlog.Comment, :content},
+                 {MishkaBlog.Comment, :guest_email},
                  {MishkaBlog.Comment, :guest_name},
                  {MishkaBlog.Collection, :name},
                  {MishkaBlog.Tag, :description},
@@ -58,11 +70,13 @@ defmodule MishkaBlog.Test.PlainTextFieldsTest do
     test "keeps what was typed without its markup, and keeping it again changes nothing" do
       for {resource, field} <- plain_text_fields() do
         label = "#{inspect(resource)}.#{field}"
+        kept = kept(resource, field, @kept)
+        script = kept(resource, field, "alert(1)Hi")
 
-        assert {:ok, %{^field => @kept}} = resource.__guarded_change__(%{field => @typed}), label
-        assert {:ok, %{^field => @kept}} = resource.__guarded_change__(%{field => @kept}), label
+        assert {:ok, %{^field => ^kept}} = resource.__guarded_change__(%{field => @typed}), label
+        assert {:ok, %{^field => ^kept}} = resource.__guarded_change__(%{field => kept}), label
 
-        assert {:ok, %{^field => "alert(1)Hi"}} =
+        assert {:ok, %{^field => ^script}} =
                  resource.__guarded_change__(%{field => "<script>alert(1)</script>Hi"}),
                label
       end

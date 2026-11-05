@@ -48,7 +48,9 @@ defmodule MishkaBlog.Comment do
     update that sets `author_id` refuses one with both. A guest's email or website without the
     guest's name is refused, and so is an email that is not one or a website that is not an
     `http` or `https` address.
-  - The name is plain text, as `content` is. The email is lowercased.
+  - The name and the email are plain text, as `content` is: their tags are taken out
+    (`MishkaCmsCore.PlainText`) and an `&` is kept as typed. The email is then lowercased and
+    checked as an email.
   - The email is for moderators only. Like `sender_data`, a field policy gives it to an actor
     with the comment permission and `%Ash.ForbiddenField{}` to everyone else, so a public read
     and the public JSON:API never return it, and a filter or sort on it matches nothing for
@@ -1090,6 +1092,7 @@ defmodule MishkaBlog.Comment do
       derives: "sanitize(trim) validate(optional=[string, not_empty, max_len=255])"
 
     field :guest_email, :string,
+      validator: {MishkaCmsCore.PlainText, :field},
       derives: "sanitize(trim, downcase) validate(optional=[string, max_len=255])"
 
     field :guest_website, :string,
@@ -1156,7 +1159,8 @@ defmodule MishkaBlog.Comment do
         where: [absent(:guest_name)],
         message: dgettext_noop("errors", "A guest's email and website need the guest's name.")
 
-      validate {MishkaCmsCore.Accounts.Validations.ValidEmail, field: :guest_email}
+      validate {MishkaCmsCore.Accounts.Validations.ValidEmail, field: :guest_email},
+        before_action?: true
 
       validate fn changeset, _context ->
         website = Ash.Changeset.get_attribute(changeset, :guest_website)

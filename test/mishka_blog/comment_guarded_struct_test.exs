@@ -72,6 +72,14 @@ defmodule MishkaBlog.Test.CommentGuardedStructTest do
                  })
       end
 
+      test "a guest's name and email lose their tags and keep an ampersand as typed" do
+        assert {:ok, %{guest_name: "Tom x & Jerry", guest_email: "a&b@example.com"}} =
+                 Comment.__guarded_change__(%{
+                   guest_name: "Tom <b>x</b> & Jerry",
+                   guest_email: " <b>A&B@Example.com</b> "
+                 })
+      end
+
       test "empty content → not_empty error" do
         assert {:error, errs} = Comment.__guarded_change__(%{content: ""})
         assert Enum.any?(errs, &match?(%{field: :content, action: :not_empty}, &1))
