@@ -79,14 +79,14 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Team.Index do
     {:noreply,
      socket
      |> close_modal(@form_modal)
-     |> put_flash(:info, gettext("Team created successfully"))}
+     |> put_flash(:success, gettext("Team created successfully"))}
   end
 
   def handle_info({:form_saved, :update, _result}, socket) do
     {:noreply,
      socket
      |> close_modal(@form_modal)
-     |> put_flash(:info, gettext("Team updated successfully"))}
+     |> put_flash(:success, gettext("Team updated successfully"))}
   end
 
   def handle_info({:form_cancelled, _resource}, socket) do

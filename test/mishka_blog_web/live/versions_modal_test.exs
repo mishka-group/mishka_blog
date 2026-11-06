@@ -170,7 +170,7 @@ defmodule MishkaBlogWeb.Test.VersionsModalTest do
           |> render_click()
 
           assert Map.fetch!(read(resource, record, site), field) == before
-          assert has_element?(view, "#flash-info", "Version restored successfully")
+          assert has_element?(view, "#flash-success", "Version restored successfully")
           refute has_element?(view, "##{unquote(panel)}-#{version.id}")
         end
 

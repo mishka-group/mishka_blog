@@ -105,14 +105,14 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Post.Index do
     {:noreply,
      socket
      |> close_modal(@form_modal)
-     |> put_flash(:info, gettext("Post created successfully"))}
+     |> put_flash(:success, gettext("Post created successfully"))}
   end
 
   def handle_info({:form_saved, :update, _result}, socket) do
     {:noreply,
      socket
      |> close_modal(@form_modal)
-     |> put_flash(:info, gettext("Post updated successfully"))}
+     |> put_flash(:success, gettext("Post updated successfully"))}
   end
 
   def handle_info({:form_cancelled, _resource}, socket) do
