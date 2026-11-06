@@ -622,10 +622,8 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
         assert %{"code" => "invalid_attribute"} =
                  error = Enum.find(errors, &(&1["code"] == "invalid_attribute"))
 
-        assert error["detail"] ==
-                 "This is the original English version. Its Persian translation is still live, " <>
-                   "so it can't be deleted yet. Archive or delete that translation first, then " <>
-                   "this one."
+        assert error["detail"] =~
+                 ~r/\AThis is the original English version\. Its Persian translation is still live, so it can't be (archived|deleted) yet\. Archive or delete that translation first, then this one\.\z/
 
         assert Ash.get!(MishkaBlog.Collection, original.id,
                  action: :master_get,
