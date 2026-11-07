@@ -33,7 +33,8 @@ defmodule MishkaBlog.Test.BlogPostGuardedStructTest do
                  :permissions,
                  :featured,
                  :language,
-                 :language_group_id
+                 :language_group_id,
+                 :number
                ]) == BlogPost.__guarded_field_name_set__()
       end
     end
