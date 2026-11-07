@@ -189,6 +189,44 @@ defmodule MishkaBlogWeb.Test.AdminFormFieldsTest do
       assert saved_post(ctx.site, "Persian قیمت‌گذاری").slug == "persian-قیمتگذاری"
     end
 
+    test "is left empty with the reason under the title when the title spells no slug", ctx do
+      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["en", "fa"], site_id: ctx.site.id)
+      {:error, reason} = MishkaSlug.slugify("Привет мир", locales: ["en", "fa"])
+      view = open(ctx, @posts)
+
+      type(view, @form, :title, "Привет мир")
+      assert shown(view, @form, :slug) in [nil, ""]
+      assert view |> element(@form) |> render() =~ MishkaSlug.Messages.error(reason)
+
+      type(view, @form, :title, "Привет мир, hello")
+      assert shown(view, @form, :slug) == "hello"
+      refute view |> element(@form) |> render() =~ MishkaSlug.Messages.error(reason)
+    end
+
+    test "is remade with the languages of the site a master picks, and saved as shown", ctx do
+      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["fa", "en"], site_id: ctx.site.id)
+      view = open_as_master(ctx, @posts)
+
+      type(view, @form, :title, "Persian قیمت")
+      assert shown(view, @form, :slug) == "persian"
+
+      view
+      |> with_target("#post_form-form-wrapper")
+      |> render_hook("relation_select", %{
+        "filter" => "site_id",
+        "id" => ctx.site.id,
+        "label" => ctx.site.name
+      })
+
+      assert shown(view, @form, :slug) == "persian-قیمت"
+
+      view
+      |> form(@form, %{"form" => %{"status" => "draft"}})
+      |> render_submit(%{"form" => %{"content" => "<p>Body</p>"}})
+
+      assert saved_post(ctx.site, "Persian قیمت").slug == "persian-قیمت"
+    end
+
     test "stays as the author typed it once they type one", ctx do
       view = open(ctx, @posts)
 
