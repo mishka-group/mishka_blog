@@ -258,15 +258,117 @@ defmodule MishkaBlog.PageSourceTest do
     end
   end
 
+  # A SITE MOVED FROM WORDPRESS KEEPS ITS ADDRESSES: its post page may name a post by its slug alone,
+  # by its date and slug, by its number or by its category and slug. The captures must name the post
+  # the read found, or the address is missing and the next page that matches it is tried.
+  describe "a post at an address WordPress gave it" do
+    defp post_at(site, params, visitor \\ nil, language \\ "en") do
+      {sample, page} = page(site, :post)
+
+      SourcePlugin.call(
+        CorePageSource.given(%{page | language: language},
+          site_id: site.id,
+          current_user: visitor,
+          extra: sample.extra,
+          params: Map.put(params, "lang", language)
+        )
+      )
+      |> then(fn {:reply, :halt, %{source: source}} -> source end)
+    end
+
+    setup %{site: site} do
+      post = post!(site, "hello-world", "Hello", number: 42)
+      create_post_collection!(post_id: post.id, collection_id: category!(site, "news", []).id)
+
+      persian =
+        post!(site, "سلام-دنیا", "سلام", language: "fa", published_at: ~U[2026-03-21 08:00:00Z])
+
+      {:ok, post: post, persian: persian}
+    end
+
+    test "is found by its date and slug, and missing on another date", %{site: site, post: post} do
+      assert %PageSource{record: %{id: id}} =
+               post_at(site, %{"year" => "2026", "monthnum" => "09", "slug" => "hello-world"})
+
+      assert id == post.id
+
+      assert %PageSource{record: %{id: ^id}} =
+               post_at(site, %{
+                 "year" => "2026",
+                 "monthnum" => "09",
+                 "day" => "01",
+                 "slug" => "hello-world"
+               })
+
+      assert :missing ==
+               post_at(site, %{"year" => "2025", "monthnum" => "09", "slug" => "hello-world"})
+
+      assert :missing ==
+               post_at(site, %{"year" => "2026", "monthnum" => "10", "slug" => "hello-world"})
+    end
+
+    test "is found by its number, and keyed to its own slug for the page's blocks", %{
+      site: site,
+      post: post
+    } do
+      assert %PageSource{record: %{id: id}, slug: "hello-world", asked: %{"post_id" => "42"}} =
+               post_at(site, %{"post_id" => "42"})
+
+      assert id == post.id
+      assert :missing == post_at(site, %{"post_id" => "43"})
+      assert :missing == post_at(site, %{"post_id" => "forty-two"})
+    end
+
+    test "is found under one of its categories, and missing under another", %{site: site} do
+      assert %PageSource{record: %{slug: "hello-world"}} =
+               post_at(site, %{"category" => "news", "slug" => "hello-world"})
+
+      assert :missing == post_at(site, %{"category" => "sports", "slug" => "hello-world"})
+    end
+
+    test "is found by a Persian slug in its own language, and missing in another", %{
+      site: site,
+      persian: persian
+    } do
+      assert %PageSource{record: %{id: id}} = post_at(site, %{"slug" => "سلام-دنیا"}, nil, "fa")
+      assert id == persian.id
+
+      assert %PageSource{record: %{id: ^id}} =
+               post_at(
+                 site,
+                 %{"year" => "2026", "monthnum" => "03", "slug" => "سلام-دنیا"},
+                 nil,
+                 "fa"
+               )
+
+      assert :missing == post_at(site, %{"slug" => "سلام-دنیا"}, nil, "en")
+    end
+
+    test "locked, keeps its page for its lock rather than going missing", %{
+      site: site,
+      member: member
+    } do
+      post!(site, "members-only", "Members only", permissions: @lock, number: 77)
+
+      assert %PageSource{record: nil} = post_at(site, %{"post_id" => "77"})
+
+      assert %PageSource{record: %{slug: "members-only"}} =
+               post_at(site, %{"post_id" => "77"}, member)
+
+      assert :missing ==
+               post_at(site, %{"year" => "2020", "monthnum" => "01", "slug" => "members-only"})
+    end
+  end
+
   describe "a draft" do
-    test "is no row and has no lock, for a guest and for a reader holding every lock", %{
+    test "is missing and has no lock, for a guest and for a reader holding every lock", %{
       site: site,
       member: member
     } do
       post!(site, "not-yet", "Not yet", status: :draft)
 
       for visitor <- [nil, member] do
-        assert %PageSource{record: nil} = source(site, :post, "not-yet", visitor)
+        assert CorePageSource.missing?(source(site, :post, "not-yet", visitor))
 
         head = head(site, :post, "not-yet", visitor)
         refute inspect(head) =~ "Not yet"

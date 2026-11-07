@@ -88,7 +88,7 @@ defmodule MishkaBlog.PageSource do
   require Ash.Query
   require Ash.Sort
 
-  alias MishkaBlog.{Blogger, BlogPost, Collection, Provision, Tag, Team}
+  alias MishkaBlog.{Address, Blogger, BlogPost, Collection, Provision, Tag, Team}
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.PageSource, as: CorePageSource
 
@@ -99,6 +99,7 @@ defmodule MishkaBlog.PageSource do
     :language,
     :kind,
     :slug,
+    :asked,
     :record,
     :featured,
     :total,
@@ -113,6 +114,7 @@ defmodule MishkaBlog.PageSource do
           language: String.t() | nil,
           kind: String.t(),
           slug: String.t() | nil,
+          asked: %{String.t() => String.t()} | nil,
           record: struct() | nil,
           featured: %{limit: pos_integer(), rows: [struct()]} | nil,
           total: non_neg_integer() | nil,
@@ -136,6 +138,7 @@ defmodule MishkaBlog.PageSource do
     :language,
     :language_group_id,
     :reading_time_minutes,
+    :number,
     :seo_tags,
     :schema,
     :permissions
@@ -186,7 +189,8 @@ defmodule MishkaBlog.PageSource do
     :published_at,
     :featured_image_url,
     :featured,
-    :reading_time_minutes
+    :reading_time_minutes,
+    :number
   ]
 
   # More than a site has languages; a group is one row per language.
@@ -194,13 +198,19 @@ defmodule MishkaBlog.PageSource do
 
   @doc """
   The rows of the blog page `request` asks for, read as its `current_user`; `nil` for a page that is
-  not one of the blog's, or that names no row.
+  not one of the blog's, or that names no row; `MishkaCmsCore.Runtime.PageSource.missing/0` for an
+  address that names a post, a category, a tag, a blogger or a team the site does not have.
+
+  A record the visitor's read leaves out but the site has — a post locked to permissions they do
+  not hold, a draft is not one — is a source with no `record`: its page answers them with its lock
+  (`MishkaBlog.Plugins.PageSeo`), not with a 404. Telling the two apart is one read, as the system,
+  of the row's id, made only when the visitor's read found nothing.
   """
-  @spec read(map()) :: t() | nil
+  @spec read(map()) :: t() | :missing | nil
   def read(%{site_id: site_id} = request) when is_binary(site_id) do
     case kind(request) do
       nil -> nil
-      {kind, slug} -> request |> blank(kind, slug) |> rows(request)
+      {kind, asked} -> request |> blank(kind, asked) |> rows(request) |> found()
     end
   end
 
@@ -231,14 +241,17 @@ defmodule MishkaBlog.PageSource do
   def for_page?(%__MODULE__{} = source, request) do
     source.site_id == Map.get(request, :site_id) and
       source.language == Map.get(request, :language) and
-      kind(request) == {source.kind, source.slug}
+      kind(request) == {source.kind, source.asked}
   end
 
-  # THE PAGE'S KIND: the record its `extra` names, with the slug its `:slug` capture holds; or the
-  # blog's front page, the page of the Posts place.
-  defp kind(%{record: record, params: %{"slug" => slug}})
-       when record in @records and is_binary(slug) and slug != "",
-       do: {record, slug}
+  # THE PAGE'S KIND: the record its `extra` names, with the captures its path names that record by;
+  # or the blog's front page, the page of the Posts place.
+  defp kind(%{record: record, params: %{} = params}) when record in @records do
+    case asked(record, params) do
+      %{} = asked -> {record, asked}
+      nil -> nil
+    end
+  end
 
   defp kind(%{record: record}) when record in @records, do: nil
 
@@ -248,15 +261,75 @@ defmodule MishkaBlog.PageSource do
 
   defp kind(_not_the_blogs), do: nil
 
-  defp blank(request, kind, slug) do
+  # WHAT THE ADDRESS NAMES THE RECORD BY: a post by its `slug` or its `post_id` (`number`), with the
+  # date and the category its address may also hold (`MishkaBlog.Address`); every other kind by its
+  # `slug`. `nil` when it names none.
+  defp asked("blog:post", params) do
+    asked = given(params, ["slug" | Address.post_captures()])
+    if Map.has_key?(asked, "slug") or Map.has_key?(asked, "post_id"), do: asked
+  end
+
+  defp asked(_kind, params) do
+    case given(params, ["slug"]) do
+      %{"slug" => _slug} = asked -> asked
+      _none -> nil
+    end
+  end
+
+  defp given(params, keys) do
+    for {key, value} <- Map.take(params, keys), is_binary(value) and value != "", into: %{} do
+      {key, value}
+    end
+  end
+
+  defp blank(request, kind, asked) do
     %__MODULE__{
       site_id: request.site_id,
       visitor: CorePageSource.visitor_id(Map.get(request, :current_user)),
       language: Map.get(request, :language),
       kind: kind,
-      slug: slug
+      slug: Map.get(asked || %{}, "slug"),
+      asked: asked
     }
   end
+
+  # A RECORD THE ADDRESS NAMED AND NOBODY HAS IS MISSING, so `MishkaCmsWeb.RuntimeLive` tries the next
+  # page that matches the address and, with none left, answers 404. One the site has and the visitor
+  # may not open keeps its page, which refuses them with its lock.
+  defp found(%{kind: "blog:home"} = source), do: source
+
+  defp found(%{record: nil} = source) do
+    if kept_from_visitor?(source), do: source, else: CorePageSource.missing()
+  end
+
+  defp found(source), do: source
+
+  defp kept_from_visitor?(%{kind: kind} = source)
+       when kind in ["blog:post", "blog:category", "blog:tag"] do
+    {resource, loads} =
+      case kind do
+        "blog:post" -> {BlogPost, [collections: Ash.Query.select(Collection, [:slug])]}
+        "blog:category" -> {Collection, []}
+        "blog:tag" -> {Tag, []}
+      end
+
+    resource
+    |> Ash.Query.for_read(:public_list, %{}, tenant: source.site_id, authorize?: false)
+    |> named(source)
+    |> in_language(source.language)
+    |> Ash.Query.select([:id, :slug, :published_at, :number] -- absent(resource))
+    |> Ash.Query.load(loads)
+    |> Ash.read(tenant: source.site_id, authorize?: false, page: [limit: 1])
+    |> case do
+      {:ok, %{results: [row | _rest]}} -> Address.agrees?(row, source.asked)
+      _none -> false
+    end
+  end
+
+  defp kept_from_visitor?(_blogger_or_team), do: false
+
+  defp absent(BlogPost), do: []
+  defp absent(_category_or_tag), do: [:published_at, :number]
 
   # The source the address before read, when it is for this site, this visitor, this language and
   # this page.
@@ -264,7 +337,7 @@ defmodule MishkaBlog.PageSource do
     same? =
       held.site_id == source.site_id and held.visitor == source.visitor and
         held.language == source.language and held.kind == source.kind and
-        held.slug == source.slug
+        held.asked == source.asked
 
     if same?, do: held
   end
@@ -289,10 +362,15 @@ defmodule MishkaBlog.PageSource do
   defp rows(source, request) do
     case held(request, source) do
       %__MODULE__{record: record} = held when record != nil ->
-        listed(%{source | record: record}, request, held, &list_query(&1, request, []))
+        listed(
+          %{source | record: record, slug: record.slug},
+          request,
+          held,
+          &list_query(&1, request, [])
+        )
 
       _not_held ->
-        source = %{source | record: record(source, request)}
+        source = with_record(source, record(source, request))
         listed(source, request, nil, &list_query(&1, request, []))
     end
   end
@@ -304,17 +382,24 @@ defmodule MishkaBlog.PageSource do
   # A record
   # ---------------------------------------------------------------------------
 
+  # THE SLUG THE BLOCKS ASK THE SOURCE FOR IS THE RECORD'S OWN, whatever the address named it by: a
+  # post found at `/archives/:post_id` is the post its blocks read by its slug.
+  defp with_record(source, %{slug: slug} = record), do: %{source | record: record, slug: slug}
+  defp with_record(source, nil), do: source
+
+  # A post the address names by a date or a category it does not have is not this address's post.
   defp record(%{kind: "blog:post"} = source, request) do
     BlogPost
-    |> by_slug(source, request)
+    |> by_address(source, request)
     |> Ash.Query.select(@post_fields)
     |> Ash.Query.load(post_loads(source))
     |> first(source, request)
+    |> agreeing(source)
   end
 
   defp record(%{kind: "blog:category"} = source, request) do
     Collection
-    |> by_slug(source, request)
+    |> by_address(source, request)
     |> Ash.Query.select(@collection_fields)
     |> Ash.Query.load(
       [:effective_permissions, :listed_post_count] ++
@@ -325,7 +410,7 @@ defmodule MishkaBlog.PageSource do
 
   defp record(%{kind: "blog:tag"} = source, request) do
     Tag
-    |> by_slug(source, request)
+    |> by_address(source, request)
     |> Ash.Query.select(@tag_fields)
     |> Ash.Query.load([:listed_post_count] ++ editions(source, Tag, :name))
     |> first(source, request)
@@ -362,11 +447,25 @@ defmodule MishkaBlog.PageSource do
     |> one(source, request)
   end
 
-  defp by_slug(resource, source, request) do
+  defp agreeing(nil, _source), do: nil
+  defp agreeing(post, source), do: if(Address.agrees?(post, source.asked), do: post)
+
+  defp by_address(resource, source, request) do
     resource
     |> Ash.Query.for_read(:public_list, %{}, as(source, request))
-    |> Ash.Query.filter(slug == ^source.slug)
+    |> named(source)
     |> in_language(source.language)
+  end
+
+  # The row the address names: by its slug, else by its number. A number that is not one names
+  # nothing.
+  defp named(query, %{asked: %{"slug" => slug}}), do: Ash.Query.filter(query, slug == ^slug)
+
+  defp named(query, %{asked: %{"post_id" => post_id}}) do
+    case Integer.parse(post_id) do
+      {number, ""} when number > 0 -> Ash.Query.filter(query, number == ^number)
+      _not_a_number -> Ash.Query.filter(query, false)
+    end
   end
 
   defp in_language(query, language) when is_binary(language) and language != "",
@@ -443,7 +542,8 @@ defmodule MishkaBlog.PageSource do
         [
           editions:
             resource
-            |> Ash.Query.select([:id, :slug, :language, title])
+            |> Ash.Query.select([:id, :slug, :language, title] ++ addressed_by(resource))
+            |> Ash.Query.load(addressed_loads(resource))
             |> Ash.Query.sort(language: :asc)
             |> Ash.Query.page(limit: @editions)
         ]
@@ -452,6 +552,14 @@ defmodule MishkaBlog.PageSource do
         []
     end
   end
+
+  # What a post's address may be filled with besides its slug and language (`MishkaBlog.Address`),
+  # read in the same statement.
+  defp addressed_by(BlogPost), do: [:published_at, :number]
+  defp addressed_by(_category_or_tag), do: []
+
+  defp addressed_loads(BlogPost), do: [:first_category_slug]
+  defp addressed_loads(_category_or_tag), do: []
 
   # ---------------------------------------------------------------------------
   # The page of a list
@@ -688,6 +796,7 @@ defmodule MishkaBlog.PageSource do
     [
       :effective_permissions,
       :first_category_name,
+      :first_category_slug,
       bloggers:
         Blogger
         |> Ash.Query.select([:id, :display_name, :slug, :avatar_url])
