@@ -757,7 +757,7 @@ defmodule MishkaBlog.ListPagesTest do
 
       html = render_page(site, "/:lang/blog/tag/:slug", %{"slug" => unused.slug}, sourced: true)
 
-      assert is_binary(html)
+      assert byte_size(html) > 0
       assert titles(html) == []
 
       assert text(html, ~s([data-role="blog-list-empty"])) ==
@@ -771,7 +771,7 @@ defmodule MishkaBlog.ListPagesTest do
       html =
         render_page(site, "/:lang/blog/category/:slug", %{"slug" => empty.slug}, sourced: true)
 
-      assert is_binary(html)
+      assert byte_size(html) > 0
       assert titles(html) == []
     end
   end
@@ -911,7 +911,9 @@ defmodule MishkaBlog.ListPagesTest do
       |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
       |> Ash.Query.filter(site_id == ^site.id and path == "/:lang/blog")
       |> Ash.read_one!(authorize?: false)
-      |> Ash.Changeset.for_update(:update, %{path: path, language: "en", extra: %{}},
+      |> Ash.Changeset.for_update(
+        :update,
+        %{path: path, language: "en", extra: %{"record" => "blog:home"}},
         authorize?: false,
         tenant: site.id
       )
@@ -938,6 +940,21 @@ defmodule MishkaBlog.ListPagesTest do
 
         assert attrs(html, ~s([data-role="blog-search-form"]), "action") == [unquote(path)]
       end
+    end
+  end
+
+  describe "a site whose post list is at /news" do
+    test "leads every way back to it, and the source reads it as the blog's home", %{site: site} do
+      move_list_page!(site, "/news")
+      empty = category!(site, "Empty")
+
+      html = render_page(site, "/:lang/blog/category/:slug", %{"slug" => empty.slug})
+      assert attrs(html, ~s([data-role="blog-list-empty"] a), "href") == ["/news"]
+
+      row = page(site, "/news")
+      assert row.extra["record"] == "blog:home"
+
+      assert %{kind: "blog:home"} = source(site, row, %{}, "en", nil)
     end
   end
 end
