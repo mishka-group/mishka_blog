@@ -87,7 +87,7 @@
           "type": "string",
           "opts": {
             "default": "",
-            "doc": "A category's slug. Set it and the list holds that category's published posts only."
+            "doc": "A category's slug. Set it and the list holds that category's published posts only. One the page's address names that this site has not, in the page's language, answers the site's 404."
           }
         },
         {
@@ -95,7 +95,7 @@
           "type": "string",
           "opts": {
             "default": "",
-            "doc": "A tag's slug. Set it and the list holds the posts carrying that tag only."
+            "doc": "A tag's slug. Set it and the list holds the posts carrying that tag only. One the page's address names that this site has not, in the page's language, answers the site's 404."
           }
         },
         {
@@ -618,6 +618,11 @@
           "code": "# THE CATEGORY OR THE TAG THE PAGE IS OF, as the page read it once for its head and its blocks, when\n# it handed it down for this reader and it is the one this list is narrowed by; `nil` where it is\n# not, and the row is read here. A category or a tag the reader may not open is no row either way.\nslug =\n  case kind do\n    \"blog:category\" -> asked.collection\n    \"blog:tag\" -> asked.tag\n  end\n\ncase shared(source, {:record, kind, slug, asked.language}) do\n  {:ok, %{} = row} -> row\n  _not_shared -> nil\nend\n"
         },
         {
+          "name": "missing_subject?",
+          "args": "asked, source",
+          "code": "# THE CATEGORY OR THE TAG THE PAGE'S OWN ADDRESS NAMED, AND THE PAGE'S READ FOUND NONE: no such row\n# on this site in the page's language, or one this reader may not open. The page read it once for\n# its head, its frame and its blocks (`page_source`), so this reads nothing; a list an author\n# narrowed to a category of their choosing is not the page's subject, has no such read, and is an\n# empty list rather than a 404 — as a real category or tag with no posts is.\nEnum.any?(\n  [{\"blog:category\", asked.collection}, {\"blog:tag\", asked.tag}],\n  fn {kind, slug} ->\n    slug != \"\" and shared(source, {:record, kind, slug, asked.language}) == {:ok, nil}\n  end\n)\n"
+        },
+        {
           "name": "posts_page",
           "args": "asked, page, per_page, source",
           "code": "# HOW MANY POSTS THE LIST PAGES THROUGH is the page's own count where the page read it once for its\n# search box too (`shared_total/2`), and only the page of posts is read; else Ash counts them beside\n# the page.\n#\n# THE PAGE OF POSTS ITSELF is the page's own where the page read exactly this one, as cards, for this\n# reader (`shared_page/4`): on the front page it read them with the strip's, so what their cards\n# are drawn from was loaded once for both.\ntotal = shared_total(asked, source)\n\ncase {shared_page(asked, page, per_page, source), total} do\n  {{:ok, rows}, {:ok, counted}} -> {:ok, %{rows: rows, total: counted}}\n  _read_here -> read_page(asked, page, per_page, source, total)\nend\n"
@@ -645,7 +650,7 @@
         {
           "name": "fetch",
           "args": "asked, source",
-          "code": "# RUN IN THE TASK, so nothing here may touch the socket. A page nobody has is a missing page when the\n# address named it, and is clamped to the last one there is when the pager's buttons asked for it. The answer carries the term it was read for — `arrived/2` stores that rather than\n# what was asked, so a clamp settles instead of asking again on the next render.\nwith {:ok, %{rows: posts, total: total}} <- posts_page(asked, asked.page, asked.per_page, source) do\n  pages = max(ceil(total / asked.per_page), 1)\n\n  cond do\n    asked.page <= pages ->\n      {:ok,\n       %{\n         asked: asked,\n         page: asked.page,\n         posts: posts,\n         total: total,\n         pages: pages,\n         filter_row: filter_row(asked, source),\n         chips: chip_rows(asked)\n       }}\n\n    asked.page_in_url ->\n      {:missing, asked}\n\n    true ->\n      with {:ok, %{rows: clamped}} <- posts_page(asked, pages, asked.per_page, source) do\n        {:ok,\n         %{\n           asked: %{asked | page: pages},\n           page: pages,\n           posts: clamped,\n           total: total,\n           pages: pages,\n           filter_row: filter_row(asked, source),\n           chips: chip_rows(asked)\n         }}\n      end\n  end\nend"
+          "code": "# RUN IN THE TASK, so nothing here may touch the socket. A category or a tag the address named and\n# nothing answers is a missing page, before any post is read for it. So is a page nobody has when the\n# address named it; one the pager's buttons asked for is clamped to the last one there is. The answer\n# carries the term it was read for — `arrived/2` stores that rather than what was asked, so a clamp\n# settles instead of asking again on the next render.\ncase missing_subject?(asked, source) do\n  true ->\n    {:missing, asked}\n\n  false ->\n    with {:ok, %{rows: posts, total: total}} <- posts_page(asked, asked.page, asked.per_page, source) do\n      pages = max(ceil(total / asked.per_page), 1)\n\n      cond do\n        asked.page <= pages ->\n          {:ok,\n           %{\n             asked: asked,\n             page: asked.page,\n             posts: posts,\n             total: total,\n             pages: pages,\n             filter_row: filter_row(asked, source),\n             chips: chip_rows(asked)\n           }}\n\n        asked.page_in_url ->\n          {:missing, asked}\n\n        true ->\n          with {:ok, %{rows: clamped}} <- posts_page(asked, pages, asked.per_page, source) do\n            {:ok,\n             %{\n               asked: %{asked | page: pages},\n               page: pages,\n               posts: clamped,\n               total: total,\n               pages: pages,\n               filter_row: filter_row(asked, source),\n               chips: chip_rows(asked)\n             }}\n          end\n      end\n    end\nend"
         },
         {
           "name": "arrived",
