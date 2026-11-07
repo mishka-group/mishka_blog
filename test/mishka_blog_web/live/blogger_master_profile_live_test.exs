@@ -131,8 +131,8 @@ defmodule MishkaBlogWeb.Test.BloggerMasterProfileLiveTest do
 
   defp search_accounts(view, term) do
     view
-    |> element("#{@user_field} input[name='_search_user_id']")
-    |> render_keyup(%{"_search_user_id" => term, "value" => term})
+    |> element("#blogger_form-form")
+    |> render_change(%{"_search_user_id" => term, "_target" => ["_search_user_id"]})
 
     view
   end

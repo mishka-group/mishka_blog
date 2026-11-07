@@ -112,7 +112,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Collection.Index do
     {:noreply,
      socket
      |> close_open_form()
-     |> put_flash(:info, gettext("Collection created successfully"))}
+     |> put_flash(:success, gettext("Collection created successfully"))}
   end
 
   @impl true
@@ -120,7 +120,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Collection.Index do
     {:noreply,
      socket
      |> close_open_form()
-     |> put_flash(:info, gettext("Collection updated successfully"))}
+     |> put_flash(:success, gettext("Collection updated successfully"))}
   end
 
   @impl true

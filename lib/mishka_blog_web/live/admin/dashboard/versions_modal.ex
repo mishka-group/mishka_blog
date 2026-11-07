@@ -183,7 +183,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.VersionsModal do
         socket
         |> close_modal(config[:modal])
         |> reset()
-        |> put_flash(:info, gettext("Version restored successfully"))
+        |> put_flash(:success, gettext("Version restored successfully"))
 
       {:error, error} ->
         put_flash(

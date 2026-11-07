@@ -120,14 +120,14 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Comment.Index do
      socket
      |> close_modal(@form_modal)
      |> assign(:reply_defaults, nil)
-     |> put_flash(:info, gettext("Comment created successfully"))}
+     |> put_flash(:success, gettext("Comment created successfully"))}
   end
 
   def handle_info({:form_saved, :update, _result}, socket) do
     {:noreply,
      socket
      |> close_modal(@form_modal)
-     |> put_flash(:info, gettext("Comment updated successfully"))}
+     |> put_flash(:success, gettext("Comment updated successfully"))}
   end
 
   def handle_info({:form_cancelled, _resource}, socket) do

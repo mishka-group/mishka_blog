@@ -91,14 +91,14 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Tag.Index do
     {:noreply,
      socket
      |> close_modal(@form_modal)
-     |> put_flash(:info, gettext("Tag created successfully"))}
+     |> put_flash(:success, gettext("Tag created successfully"))}
   end
 
   def handle_info({:form_saved, :update, _result}, socket) do
     {:noreply,
      socket
      |> close_modal(@form_modal)
-     |> put_flash(:info, gettext("Tag updated successfully"))}
+     |> put_flash(:success, gettext("Tag updated successfully"))}
   end
 
   def handle_info({:form_cancelled, _resource}, socket) do
