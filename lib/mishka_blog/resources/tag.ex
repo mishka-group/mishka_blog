@@ -27,7 +27,6 @@ defmodule MishkaBlog.Tag do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshPaperTrail.Resource,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
@@ -43,6 +42,7 @@ defmodule MishkaBlog.Tag do
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
+  alias MishkaBlog.Resources.Changes.PublicSlug
   require Ash.Query
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -971,7 +971,7 @@ defmodule MishkaBlog.Tag do
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
       change MishkaCmsCore.Runtime.Resources.Changes.SetLanguageGroupId
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options(:language)}
 
       description "Creates tag for tenant users - requires tenant context, auto-assigns site_id and language_group_id for master tags"
     end
@@ -990,7 +990,7 @@ defmodule MishkaBlog.Tag do
       end
 
       change MishkaCmsCore.Runtime.Resources.Changes.SetLanguageGroupId
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options(:language)}
 
       description "Creates tag for master users - bypasses multi-tenancy, requires explicit site_id, auto-assigns language_group_id for master tags"
     end
@@ -1028,7 +1028,7 @@ defmodule MishkaBlog.Tag do
                 field: :parent_tag_id,
                 message: dgettext_noop("errors", "Tag cannot be its own parent.")}
 
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options(:language)}
 
       description "Updates tag for tenant users - requires tenant context, prevents site_id changes"
     end
@@ -1050,7 +1050,7 @@ defmodule MishkaBlog.Tag do
                 field: :parent_tag_id,
                 message: dgettext_noop("errors", "Tag cannot be its own parent.")}
 
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options(:language)}
     end
 
     read :master_read do

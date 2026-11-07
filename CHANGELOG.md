@@ -1,5 +1,6 @@
 # Changelog for MishkaBlog 0.0.3
 
+- Blog post, tag, collection, blogger and team slugs are made by `mishka_slug` instead of `ash_slug`: a slug keeps the scripts of the site's languages (a Persian title stays Persian on a site that publishes in Persian) instead of being transliterated, accents are removed from Latin text, `_` is kept, and `.`, `!` and `?` are no longer kept
 - The tag grid sizes only the trigger of a tag's actions menu (`[aria-haspopup]`), not every button in the wrapper, so the item buttons of the menu gervaz draws as a popover keep their size
 - An extension adds buttons to the header of the Blog dashboard on the `blog:dashboard:actions` event. A plugin is handed `%{actions: [], current_user: user}` and answers `%{actions: [...]}` with an `id`, `label`, `icon`, `priority` and a `path:` or a `js:` command
 - A comment an admin creates keeps the author it names, a user of the same site, where it was always stored as the admin's own. A comment that names no author (or a `nil` one) is still the admin's own, and an author from another site is refused

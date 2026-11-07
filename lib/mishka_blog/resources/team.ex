@@ -37,7 +37,6 @@ defmodule MishkaBlog.Team do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshPaperTrail.Resource,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
@@ -54,6 +53,7 @@ defmodule MishkaBlog.Team do
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
   alias Ash.Error.Query.NotFound
+  alias MishkaBlog.Resources.Changes.PublicSlug
   require Ash.Query
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -954,7 +954,7 @@ defmodule MishkaBlog.Team do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options()}
 
       change manage_relationship(:permission_ids, :permissions,
                type: :append_and_remove,
@@ -989,7 +989,7 @@ defmodule MishkaBlog.Team do
         Ash.Changeset.set_tenant(changeset, site_id)
       end
 
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options()}
 
       change manage_relationship(:permission_ids, :permissions,
                type: :append_and_remove,
@@ -1026,7 +1026,7 @@ defmodule MishkaBlog.Team do
         message dgettext_noop("errors", "Cannot edit archived team. Please unarchive it first.")
       end
 
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options()}
 
       change manage_relationship(:permission_ids, :permissions,
                type: :append_and_remove,
@@ -1064,7 +1064,7 @@ defmodule MishkaBlog.Team do
         message dgettext_noop("errors", "Cannot edit archived team. Please unarchive it first.")
       end
 
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options()}
 
       change manage_relationship(:permission_ids, :permissions,
                type: :append_and_remove,

@@ -27,7 +27,6 @@ defmodule MishkaBlog.BlogPost do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshPaperTrail.Resource,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
@@ -43,6 +42,7 @@ defmodule MishkaBlog.BlogPost do
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
   alias Ash.Error.Query.NotFound
+  alias MishkaBlog.Resources.Changes.PublicSlug
   require Ash.Query
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -1531,7 +1531,7 @@ defmodule MishkaBlog.BlogPost do
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
       change MishkaCmsCore.Runtime.Resources.Changes.SetLanguageGroupId
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options(:language)}
 
       # Manage relationships if provided
       change manage_relationship(:collection_ids, :tenant_collections,
@@ -1591,7 +1591,7 @@ defmodule MishkaBlog.BlogPost do
       end
 
       change MishkaCmsCore.Runtime.Resources.Changes.SetLanguageGroupId
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options(:language)}
 
       # Manage relationships within the post's own site
       change manage_relationship(:collection_ids, :tenant_collections,
@@ -1660,7 +1660,7 @@ defmodule MishkaBlog.BlogPost do
                 )
       end
 
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options(:language)}
 
       # Manage relationships if provided
       change manage_relationship(:collection_ids, :tenant_collections,
@@ -1725,7 +1725,7 @@ defmodule MishkaBlog.BlogPost do
                 )
       end
 
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options(:language)}
 
       # Manage relationships within the post's own site
       change manage_relationship(:collection_ids, :tenant_collections,

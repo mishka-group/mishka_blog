@@ -27,7 +27,6 @@ defmodule MishkaBlog.Blogger do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshPaperTrail.Resource,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
@@ -43,6 +42,7 @@ defmodule MishkaBlog.Blogger do
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
+  alias MishkaBlog.Resources.Changes.PublicSlug
   require Ash.Query
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -1042,7 +1042,7 @@ defmodule MishkaBlog.Blogger do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options()}
 
       change manage_relationship(:team_ids, :tenant_teams,
                type: :append_and_remove,
@@ -1067,7 +1067,7 @@ defmodule MishkaBlog.Blogger do
         Ash.Changeset.set_tenant(changeset, site_id)
       end
 
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options()}
 
       change manage_relationship(:team_ids, :tenant_teams,
                type: :append_and_remove,
@@ -1097,7 +1097,7 @@ defmodule MishkaBlog.Blogger do
                 )
       end
 
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options()}
 
       change manage_relationship(:team_ids, :tenant_teams,
                type: :append_and_remove,
@@ -1133,7 +1133,7 @@ defmodule MishkaBlog.Blogger do
                 )
       end
 
-      change slugify(:slug, into: :slug, ignore: [".", "!", "?"])
+      change {MishkaSlug.Change, PublicSlug.options()}
 
       change manage_relationship(:team_ids, :tenant_teams,
                type: :append_and_remove,

@@ -173,19 +173,20 @@ defmodule MishkaBlogWeb.Test.AdminFormFieldsTest do
 
   describe "a post's slug" do
     test "follows the title while the post is added, and is saved as shown", ctx do
+      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["fa", "en"], site_id: ctx.site.id)
       view = open(ctx, @posts)
 
       type(view, @form, :title, "Hello. World!")
-      assert shown(view, @form, :slug) == "hello.-world!"
+      assert shown(view, @form, :slug) == "hello-world"
 
       type(view, @form, :title, "Persian قیمت‌گذاری")
-      assert shown(view, @form, :slug) == "persian-qymtgdhry"
+      assert shown(view, @form, :slug) == "persian-قیمتگذاری"
 
       view
       |> form(@form, %{"form" => %{"status" => "draft"}})
       |> render_submit(%{"form" => %{"content" => "<p>Body</p>"}})
 
-      assert saved_post(ctx.site, "Persian قیمت‌گذاری").slug == "persian-qymtgdhry"
+      assert saved_post(ctx.site, "Persian قیمت‌گذاری").slug == "persian-قیمتگذاری"
     end
 
     test "stays as the author typed it once they type one", ctx do
