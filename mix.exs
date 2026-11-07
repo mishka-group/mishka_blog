@@ -5,7 +5,7 @@
 defmodule MishkaBlog.MixProject do
   use Mix.Project
 
-  @version "0.0.3-alpha.2"
+  @version "0.0.3-alpha.3"
   @source_url "https://github.com/mishka-group/mishka_blog"
 
   def project do
@@ -72,7 +72,6 @@ defmodule MishkaBlog.MixProject do
       {:ash_json_api, "~> 1.7"},
       {:ash_phoenix, "~> 2.3"},
       {:ash, "~> 3.37"},
-      {:ash_slug, "~> 0.2"},
       {:html_sanitize_ex, "~> 1.5"},
       {:makeup, "~> 1.2"},
       {:makeup_elixir, "~> 1.0"},
@@ -87,8 +86,9 @@ defmodule MishkaBlog.MixProject do
       {:oban, "~> 2.24"},
       mishka_dep(:mishka_installer, "~> 0.1.16"),
       {:guarded_struct, "~> 0.1.6"},
-      mishka_dep(:mishka_cms_core, "~> 0.0.5-alpha.5"),
-      mishka_dep(:mishka_gervaz, "~> 0.0.6"),
+      mishka_dep(:mishka_cms_core, "~> 0.0.5-alpha.6"),
+      mishka_dep(:mishka_gervaz, "~> 0.0.7"),
+      mishka_dep(:mishka_slug, "~> 0.0.1"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},

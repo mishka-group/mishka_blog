@@ -116,7 +116,7 @@ defmodule MishkaBlog.PostPageTest do
   defp category!(site, name, overrides \\ []) do
     create_collection!(
       Keyword.merge(
-        [site_id: site.id, name: name, slug: Slug.slugify(name), language: "en", status: :active],
+        [site_id: site.id, name: name, slug: name, language: "en", status: :active],
         overrides
       )
     )
