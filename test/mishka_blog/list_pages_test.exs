@@ -20,10 +20,12 @@ defmodule MishkaBlog.ListPagesTest do
 
   import MishkaBlog.Test.Factory
 
+  alias MishkaBlog.Plugins.PageSource, as: SourcePlugin
   alias MishkaBlog.Provision
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.LiveViewHelpers
   alias MishkaCmsCore.Runtime.Page
+  alias MishkaCmsCore.Runtime.PageSource, as: CorePageSource
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Translations
 
@@ -67,11 +69,15 @@ defmodule MishkaBlog.ListPagesTest do
   # THE ASSIGNS THE PREVIEW AND THE PUBLIC RENDER BOTH GIVE: the page, the query string, the
   # languages. A visitor is given only where one is asked for, which is the one assign the admin's
   # Preview leaves out.
+  #
+  # `sourced: true` hands the page the rows `MishkaCmsWeb.RuntimeLive` reads for its address in
+  # `handle_params/3` (`page_source`), as a reader's request has them and the Preview does not.
   defp render_page(site, path, query \\ %{}, opts \\ []) do
     row = page(site, path)
+    language = Keyword.get(opts, :language, "en")
 
     assigns = %{
-      page: %{language: "en", path: String.replace(path, ":lang", "en")},
+      page: %{language: language, path: String.replace(path, ":lang", language)},
       site: site.name,
       query_params: query,
       page_languages: []
@@ -83,9 +89,29 @@ defmodule MishkaBlog.ListPagesTest do
         :error -> assigns
       end
 
+    assigns =
+      case Keyword.get(opts, :sourced, false) do
+        true -> Map.put(assigns, :page_source, source(site, row, query, language, opts[:user]))
+        false -> assigns
+      end
+
     LiveViewHelpers.rendering_for(site.name, fn ->
       LiveViewCompiler.render_template(row.template, assigns)
     end)
+  end
+
+  defp source(site, row, query, language, visitor) do
+    given =
+      CorePageSource.given(
+        %{path: row.path, section: row.section, language: language, title: row.title},
+        site_id: site.id,
+        current_user: visitor,
+        extra: row.extra,
+        params: Map.put(query, "lang", language)
+      )
+
+    {:reply, :halt, %{source: source}} = SourcePlugin.call(given)
+    source
   end
 
   defp parsed(html), do: LazyHTML.from_fragment(html)
@@ -669,6 +695,67 @@ defmodule MishkaBlog.ListPagesTest do
       html = render_page(site, "/:lang/blog/tag/:slug", %{"slug" => "no-such-tag"})
 
       assert counted(html) == []
+      assert titles(html) == []
+    end
+  end
+
+  # WHAT WORDPRESS ANSWERS FOR A TERM ARCHIVE NOBODY HAS, and what a reader and a crawler need: the
+  # address named a category or a tag, there is none, and the page is a 404 rather than an empty
+  # list. A real one with nothing published under it is still its page.
+  describe "an address that names no category or tag" do
+    test "is a 404 for a tag that is not there", %{site: site} do
+      the_design!(site)
+
+      assert {:error, message} =
+               render_page(site, "/:lang/blog/tag/:slug", %{"slug" => "no-such-tag"},
+                 sourced: true
+               )
+
+      assert message =~ "NotFoundError"
+    end
+
+    test "is a 404 for a category that is not there, in every language", %{site: site} do
+      the_design!(site)
+
+      for language <- ["en", "fa"] do
+        assert {:error, message} =
+                 render_page(site, "/:lang/blog/category/:slug", %{"slug" => "nope"},
+                   sourced: true,
+                   language: language
+                 ),
+               "no 404 in #{language}"
+
+        assert message =~ "NotFoundError"
+      end
+    end
+
+    test "draws a real tag's posts, and a real tag with none as its own empty page",
+         %{site: site} do
+      %{phoenix: phoenix} = the_design!(site)
+      unused = tag!(site, "unused")
+
+      html = render_page(site, "/:lang/blog/tag/:slug", %{"slug" => phoenix.slug}, sourced: true)
+
+      assert Enum.sort(titles(html)) ==
+               ["GraphQL with Absinthe — Part 1", "Phoenix LiveView Deep Dive — Part 2"]
+
+      html = render_page(site, "/:lang/blog/tag/:slug", %{"slug" => unused.slug}, sourced: true)
+
+      assert is_binary(html)
+      assert titles(html) == []
+
+      assert text(html, ~s([data-role="blog-list-empty"])) ==
+               ["Nothing is published under this tag yet. Clear filters"]
+    end
+
+    test "draws a real category with nothing in it as its own empty page", %{site: site} do
+      the_design!(site)
+      empty = category!(site, "Empty")
+
+      html =
+        render_page(site, "/:lang/blog/category/:slug", %{"slug" => empty.slug}, sourced: true)
+
+      assert is_binary(html)
       assert titles(html) == []
     end
   end
