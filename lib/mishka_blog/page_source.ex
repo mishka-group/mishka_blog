@@ -245,7 +245,7 @@ defmodule MishkaBlog.PageSource do
   end
 
   # THE PAGE'S KIND: the record its `extra` names, with the captures its path names that record by;
-  # or the blog's front page, the page of the Posts place.
+  # or the blog's front page, whichever path the site gave the page whose record is `"blog:home"`.
   defp kind(%{record: record, params: %{} = params}) when record in @records do
     case asked(record, params) do
       %{} = asked -> {record, asked}
@@ -255,9 +255,7 @@ defmodule MishkaBlog.PageSource do
 
   defp kind(%{record: record}) when record in @records, do: nil
 
-  defp kind(%{section: "blog", page: %{path: path}}) do
-    if path == Keyword.fetch!(Provision.places(), :posts), do: {"blog:home", nil}
-  end
+  defp kind(%{record: "blog:home"}), do: {"blog:home", nil}
 
   defp kind(_not_the_blogs), do: nil
 

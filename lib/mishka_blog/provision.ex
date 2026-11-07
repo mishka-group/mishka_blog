@@ -357,6 +357,7 @@ defmodule MishkaBlog.Provision do
         name: "Blog",
         title: "Blog",
         path: @blog,
+        record: "blog:home",
         description:
           "The blog's home: the search, the featured posts and the paged list under the categories",
         template: &blog_home/1
@@ -419,6 +420,7 @@ defmodule MishkaBlog.Provision do
         name: "Blog people",
         title: "Blog people",
         path: @people,
+        record: "blog:people",
         description: "Every team of the blog with its members, and the bloggers in none",
         template: &blog_people/1
       }
@@ -462,7 +464,7 @@ defmodule MishkaBlog.Provision do
         params={@query_params}
         post_param="slug"
         language={@page.language}
-        back_href={#{live_url(@blog)}}
+        back_href={#{kind_url("blog:home", @blog)}}
       />
 
       <div class="mt-[46px] w-full max-w-[680px]">
@@ -562,7 +564,7 @@ defmodule MishkaBlog.Provision do
         current_user={assigns[:current_user]}
         page_source={assigns[:page_source]}
         slug={@query_params["slug"]}
-        back_href={#{live_url(@people)}}
+        back_href={#{kind_url("blog:people", @people)}}
         back_text={t("People")}
         team_text={t("Team")}
         teams_text={t("Teams")}
@@ -590,7 +592,7 @@ defmodule MishkaBlog.Provision do
         current_user={assigns[:current_user]}
         page_source={assigns[:page_source]}
         slug={@query_params["slug"]}
-        back_href={#{live_url(@people)}}
+        back_href={#{kind_url("blog:people", @people)}}
         back_text={t("People")}
         team_text={t("Team")}
         members_heading={t("Members")}
@@ -711,6 +713,12 @@ defmodule MishkaBlog.Provision do
   # template calls: the `lang` capture filled in with the language this page is being read in, at the
   # address the site's URL mode gives it, which is what a link to a page is written with.
   defp live_url(address), do: ~s|site_path("#{address}", @page.language)|
+
+  # THE ADDRESS OF THE SITE'S PAGE FOR A KIND without a row, `"blog:home"` or `"blog:people"`
+  # (`MishkaBlog.Address.page_url/2`), else of the default `address` the page is provisioned at, for a
+  # site that gave none of its pages that kind.
+  defp kind_url(kind, address),
+    do: ~s{(MishkaBlog.Address.page_url("#{kind}", @page.language) || #{live_url(address)})}
 
   # THE ADDRESS OF THE PAGE THE TEMPLATE IS ON, for what it writes to itself: a pager's links and a
   # search box's form. It is the page's own stored path, `@page.path`, filled from the request's
@@ -840,7 +848,7 @@ defmodule MishkaBlog.Provision do
   # page is that list at its own address, wherever the site put it, while a category's or a tag's page
   # goes back to the blog's default one.
   defp all_href(:everything), do: own_url()
-  defp all_href(_narrowed), do: live_url(@blog)
+  defp all_href(_narrowed), do: kind_url("blog:home", @blog)
 
   # `slug` IS A CAPTURE, NOT SOMETHING A READER ASKED FOR, so it is not carried through the pager's
   # links: `site_path/2` writes it into the path they are built on.
@@ -888,7 +896,7 @@ defmodule MishkaBlog.Provision do
     """
       heading={t("Category")}
       collection={@query_params["slug"] || ""}
-      clear_href={#{live_url(@blog)}}
+      clear_href={#{kind_url("blog:home", @blog)}}
       empty_text={t("Nothing is published in this category yet.")}\
     """
   end
@@ -898,7 +906,7 @@ defmodule MishkaBlog.Provision do
       heading={t("Tag")}
       tag={@query_params["slug"] || ""}
       show_filter_title={false}
-      clear_href={#{live_url(@blog)}}
+      clear_href={#{kind_url("blog:home", @blog)}}
       empty_text={t("Nothing is published under this tag yet.")}\
     """
   end

@@ -38,6 +38,7 @@ defmodule MishkaBlog.Address do
 
   alias MishkaBlog.{Blogger, BlogPost, Collection, Tag, Team}
   alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.Translations
   alias MishkaCmsCore.Runtime.States.{SiteState, WebRunTimeMetaDataState}
 
   @kinds %{
@@ -82,6 +83,23 @@ defmodule MishkaBlog.Address do
   end
 
   def path(_site_id, _kind, _language), do: :error
+
+  @doc """
+  The address of the site's page for a kind that shows no row, `"blog:home"` (the list of posts)
+  or `"blog:people"`, in `language`, at the address the site's URL mode gives it; `nil` when the
+  site has no such page. The site is the one the calling process renders for, which is what a
+  template calls this from.
+  """
+  @spec page_url(String.t(), String.t() | nil) :: String.t() | nil
+  def page_url(kind, language) do
+    site_id = Translations.site()
+
+    with {:ok, path} <- path(site_id, kind, language) do
+      Languages.url(path, %{Languages.capture() => language}, site_id)
+    else
+      :error -> nil
+    end
+  end
 
   @doc """
   `path` filled from `row`, in its own language or in `language`, at the address the site's URL

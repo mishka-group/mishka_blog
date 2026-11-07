@@ -79,8 +79,13 @@ defmodule MishkaBlog.Plugins.PageFrame do
     "blog:category" => :posts,
     "blog:tag" => :posts,
     "blog:author" => :people,
-    "blog:team" => :people
+    "blog:team" => :people,
+    "blog:home" => :posts,
+    "blog:people" => :people
   }
+
+  # The kinds that name where a place is, for a site that moved its page.
+  @place_kinds %{posts: "blog:home", people: "blog:people"}
 
   # What the bar calls the blog and each of its places: keys of the site's translations.
   @title "Blog"
@@ -114,12 +119,12 @@ defmodule MishkaBlog.Plugins.PageFrame do
 
     %{
       title: word(frame, @title),
-      title_path: url.(Keyword.fetch!(Provision.places(), :posts)),
+      title_path: url.(place_path(frame, :posts, Keyword.fetch!(Provision.places(), :posts))),
       links:
         for {id, path} <- Provision.places() do
           %{
             label: word(frame, Keyword.fetch!(@labels, id)),
-            path: url.(path),
+            path: url.(place_path(frame, id, path)),
             current: id == place
           }
         end
@@ -131,6 +136,16 @@ defmodule MishkaBlog.Plugins.PageFrame do
   defp place(%{record: record, page: page}) do
     Map.get(@record_places, record) ||
       Enum.find_value(Provision.places(), fn {id, path} -> page[:path] == path && id end)
+  end
+
+  # Where a place is: the site's page of the kind that names it, else the path it is provisioned at.
+  defp place_path(%{site_id: site_id, language: language}, id, default) do
+    with kind when is_binary(kind) <- Map.get(@place_kinds, id),
+         {:ok, path} <- Address.path(site_id, kind, language) do
+      path
+    else
+      _provisioned -> default
+    end
   end
 
   defp address(%{language: language, site_id: site_id}, path),

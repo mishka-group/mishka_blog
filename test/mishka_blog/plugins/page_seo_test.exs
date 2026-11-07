@@ -854,7 +854,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   end
 
   describe "the kinds it names" do
-    test "are a post, a collection, a tag, a blogger and a team, named as the blog's admin names them, each with the site's own to preview with",
+    test "are a post, a collection, a tag, a blogger and a team, then the blog home and its people, named as the blog's admin names them, each with the site's own to preview with",
          %{site: site} do
       post = published!(site, title: "Ash in production")
       create_blogger!(site_id: site.id, display_name: "Mona", slug: "mona")
@@ -876,7 +876,9 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
                  captures: ["slug"],
                  samples: [%{label: "Mona", params: %{"slug" => "mona"}}]
                },
-               %{id: "blog:team", group: "Blog", label: "Team", captures: ["slug"]}
+               %{id: "blog:team", group: "Blog", label: "Team", captures: ["slug"]},
+               %{id: "blog:home", group: "Blog", captures: [], samples: []},
+               %{id: "blog:people", group: "Blog", captures: [], samples: []}
              ] = MishkaBlog.Plugins.PageRecords.types(site.id)
 
       assert %{label: "Ash in production · en", params: %{"slug" => slug, "lang" => "en"}} =
@@ -906,6 +908,19 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   defp blog_crumb(answered) do
     %{"itemListElement" => [_home, blog | _]} = schema_of(answered, "BreadcrumbList")
     blog
+  end
+
+  describe "the blog's home and its people" do
+    test "are a collection page open to whoever may open the page, wherever they are", %{
+      site: site
+    } do
+      for {path, record} <- [{"/news", "blog:home"}, {"/", "blog:people"}] do
+        answered = answer(given_at(site, path, record, %{}))
+
+        assert answered.permissions == []
+        assert %{"name" => "Blog"} = schema_of(answered, "CollectionPage")
+      end
+    end
   end
 
   describe "a blog at the site's root" do

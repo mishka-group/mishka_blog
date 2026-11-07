@@ -92,6 +92,13 @@ defmodule MishkaBlog.Plugins.PageSeo do
   Home → Blog → the team. `vars` — `team.name`, `team.description`, `team.url`. Its share card
   says "Team" above the name, with the members' photos and how many they are.
 
+  ## The blog's front page, `"blog:home"`, and its people, `"blog:people"`
+
+  Pages that show no record of their own, only a list: a `CollectionPage` with the page's own title
+  and description, and no lock but the page's. They carry the kind so the site's page for the posts
+  and for the people is found by it (`MishkaBlog.Address.page_url/2`), at whichever path the site
+  gave it.
+
   ## Where "Blog" points
 
   The breadcrumb's middle item is the blog's home, read off the page's own path: the post page's
@@ -160,7 +167,27 @@ defmodule MishkaBlog.Plugins.PageSeo do
   def call(%{record: "blog:tag"} = seo), do: {:reply, :halt, tag(seo)}
   def call(%{record: "blog:author"} = seo), do: {:reply, :halt, author(seo)}
   def call(%{record: "blog:team"} = seo), do: {:reply, :halt, team(seo)}
+
+  def call(%{record: record} = seo) when record in ["blog:home", "blog:people"],
+    do: {:reply, :halt, list_seo(seo)}
+
   def call(seo), do: {:reply, seo}
+
+  # The blog's front page and the page of its people show no record of their own: a
+  # `CollectionPage`, open to whoever may open the page.
+  defp list_seo(seo) do
+    page =
+      compact(%{
+        "@context" => "https://schema.org",
+        "@type" => "CollectionPage",
+        "name" => seo.title,
+        "description" => seo.description,
+        "url" => seo.url,
+        "inLanguage" => seo.language
+      })
+
+    %{seo | schema: [page]}
+  end
 
   # The photos, names and teams a share card shows of a post's authors, their X accounts, and the
   # slugs and links their `Person` is written from.

@@ -507,6 +507,18 @@ defmodule MishkaBlog.Plugins.PageFrameTest do
                %{component: nil, assigns: %{}, crumbs: []}
     end
 
+    test "marks Posts on the page whose kind is the blog's home, wherever it was put", %{
+      site: site
+    } do
+      given = %{given(site, @blog_path, %{}, []) | page: %{path: "/news"}}
+
+      assert [{"Posts", true}] =
+               for(
+                 %{label: "Posts"} = link <- frame(given).section_bar.links,
+                 do: {link.label, link.current}
+               )
+    end
+
     test "is drawn in the language of the response, at the addresses the URL mode gives",
          %{site: site} do
       {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
