@@ -125,7 +125,9 @@ defmodule MishkaBlog.Provision do
   unprefixed, `/fa/blog/<slug>` in Persian.
 
   `base`, where a page has one, is the pager's and stays a real URL — nothing appends a slug to it,
-  and its `?page=2` has to be somewhere a reader could have typed.
+  and its `?page=2` has to be somewhere a reader could have typed. It, and the search box's
+  `action`, are the page's own path (`@page.path`) filled from the request, so a list the site
+  moved to `/` or `/news` pages and searches where it is.
 
   ## What `:slug` means depends on the page, and only the page knows
 
@@ -154,7 +156,7 @@ defmodule MishkaBlog.Provision do
 
   # THE BLOG'S PAGES, WRITTEN ONCE: the paths its sample pages are created at, and the URLs the bar and
   # the list pages' pagers and search boxes write to reach them, with the `lang` capture filled in by
-  # `live_url/2`. A row is linked at the page of its kind, wherever the site has moved it, never at
+  # `live_url/1`. A row is linked at the page of its kind, wherever the site has moved it, never at
   # one of these.
   @blog "/:lang/blog"
   @category "#{@blog}/category"
@@ -426,8 +428,8 @@ defmodule MishkaBlog.Provision do
   # THE HOME PAGE, THE CATEGORY PAGE AND THE TAG PAGE ARE ONE SCREEN, as the design draws them: the
   # title with its search box, the featured strip and the latest posts under a row of categories —
   # and a category or a tag is that same screen with the list narrowed to it and the strip left out.
-  # What differs is which of the list's attributes names the filter, the address the pager and the
-  # search box write to, and the words a list that matched nothing says.
+  # What differs is which of the list's attributes names the filter, and the words a list that
+  # matched nothing says.
   defp blog_home(site), do: index_screen(site, :everything)
 
   defp blog_category(site), do: index_screen(site, :category)
@@ -569,7 +571,7 @@ defmodule MishkaBlog.Provision do
         posts_heading={t("Posts by %{name}")}
         per_page={9}
         language={@page.language}
-        base={#{live_url(@author, "slug")}}
+        base={#{own_url()}}
         params={Map.drop(@query_params, ["lang", "slug"])}
         missing_text={t("That blogger is not here, or no longer writes for this site.")}
         empty_text={t("Nothing published yet.")}
@@ -601,7 +603,7 @@ defmodule MishkaBlog.Provision do
         posts_heading={t("Posts by %{name}")}
         per_page={9}
         language={@page.language}
-        base={#{live_url(@team, "slug")}}
+        base={#{own_url()}}
         params={Map.drop(@query_params, ["lang", "slug"])}
         missing_text={t("That team is not here, or is not active any more.")}
         members_empty_text={t("Nobody is in this team yet.")}
@@ -707,18 +709,16 @@ defmodule MishkaBlog.Provision do
 
   # ONE OF THE ADDRESSES ABOVE AS A URL A READER COULD HAVE TYPED, written as the `site_path/2` the
   # template calls: the `lang` capture filled in with the language this page is being read in, at the
-  # address the site's URL mode gives it, which is what a pager writes to the address bar and what
-  # a link to a page is written with. `captured` names the page's OTHER capture, where it has one and the
-  # pager's URL has to end in it; the admin's Preview assigns no captures at all, and gets no URL.
-  defp live_url(address, captured \\ nil)
+  # address the site's URL mode gives it, which is what a link to a page is written with.
+  defp live_url(address), do: ~s|site_path("#{address}", @page.language)|
 
-  defp live_url(address, nil), do: ~s|site_path("#{address}", @page.language)|
-
-  defp live_url(address, name) do
-    captures =
-      ~s|%{"#{Languages.capture()}" => @page.language, "#{name}" => @query_params["#{name}"]}|
-
-    ~s|site_path("#{address}/:#{name}", #{captures})|
+  # THE ADDRESS OF THE PAGE THE TEMPLATE IS ON, for what it writes to itself: a pager's links and a
+  # search box's form. It is the page's own stored path, `@page.path`, filled from the request's
+  # `lang` and `slug` captures, so a list the site moved to `/`, `/news` or a category under another
+  # path pages and searches where it is, with no query to find it. The admin's Preview assigns no
+  # captures, and a page that needs one gets no URL.
+  defp own_url do
+    ~s|site_path(@page.path, %{"#{Languages.capture()}" => @page.language, "slug" => @query_params["slug"]})|
   end
 
   # ---------------------------------------------------------------------------
@@ -763,8 +763,6 @@ defmodule MishkaBlog.Provision do
   #     makes the list head itself with the category's name and description and mark its chip.
   #   * `:tag` — the `:slug` capture is a tag, shown as the chip the design draws for one.
   defp index_screen(site, filter) do
-    %{address: address, captured: captured} = index_address(filter)
-
     """
     <section class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] items-end gap-8 pt-16 pb-10">
       <div class="flex flex-col gap-3.5">
@@ -791,7 +789,7 @@ defmodule MishkaBlog.Provision do
         posts_text={t("posts")}
         language={@page.language}
     #{counted(filter)}
-        action={#{live_url(address, captured)}}
+        action={#{own_url()}}
         params={Map.drop(@query_params, ["lang", "slug"])}
       />
     </section>
@@ -807,10 +805,10 @@ defmodule MishkaBlog.Provision do
       per_page={#{@list_page}}
       show_sort={true}
       language={@page.language}
-      base={#{live_url(address, captured)}}
+      base={#{own_url()}}
       params={Map.drop(@query_params, #{dropped(filter)})}
       show_chips={true}
-      all_href={#{live_url(@blog)}}
+      all_href={#{all_href(filter)}}
       all_text={t("All")}
       tagged_text={t("Tagged")}
       clear_text={t("Clear filters")}
@@ -838,10 +836,11 @@ defmodule MishkaBlog.Provision do
   defp counted(:category), do: ~S'    collection={@query_params["slug"] || ""}'
   defp counted(:tag), do: ~S'    tag={@query_params["slug"] || ""}'
 
-  # WHERE EACH VERSION OF THE SCREEN LIVES, and the capture its address ends in.
-  defp index_address(:everything), do: %{address: @blog, captured: nil}
-  defp index_address(:category), do: %{address: @category, captured: "slug"}
-  defp index_address(:tag), do: %{address: @tag, captured: "slug"}
+  # THE CHIP THAT CLEARS THE NARROWING goes to the list as the page draws it everywhere: the front
+  # page is that list at its own address, wherever the site put it, while a category's or a tag's page
+  # goes back to the blog's default one.
+  defp all_href(:everything), do: own_url()
+  defp all_href(_narrowed), do: live_url(@blog)
 
   # `slug` IS A CAPTURE, NOT SOMETHING A READER ASKED FOR, so it is not carried through the pager's
   # links: `site_path/2` writes it into the path they are built on.
@@ -880,7 +879,7 @@ defmodule MishkaBlog.Provision do
       heading={t("Latest posts")}
       tag={@query_params["tag"] || ""}
       exclude_featured={if(#{unfiltered()}, do: #{@featured_strip}, else: 0)}
-      clear_href={if(#{unfiltered()}, do: "", else: #{live_url(@blog)})}
+      clear_href={if(#{unfiltered()}, do: "", else: #{own_url()})}
       empty_text={t("Nothing published yet.")}\
     """
   end

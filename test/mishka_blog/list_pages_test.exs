@@ -902,4 +902,42 @@ defmodule MishkaBlog.ListPagesTest do
              )
     end
   end
+
+  # A SITE THAT MOVED THE POST LIST keeps its pager and its search box on the page they are on: both
+  # write to the page's own path, never to `/blog`.
+  describe "a site whose post list is on another page" do
+    defp move_list_page!(site, path) do
+      Page
+      |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+      |> Ash.Query.filter(site_id == ^site.id and path == "/:lang/blog")
+      |> Ash.read_one!(authorize?: false)
+      |> Ash.Changeset.for_update(:update, %{path: path, language: "en", extra: %{}},
+        authorize?: false,
+        tenant: site.id
+      )
+      |> Ash.update!(authorize?: false)
+
+      route_pages!(site)
+    end
+
+    for path <- ["/", "/news"] do
+      test "pages and searches at #{path}", %{site: site} do
+        for index <- 1..12 do
+          publish!(site, "Post #{String.pad_leading("#{index}", 2, "0")}",
+            published_at: DateTime.add(~U[2026-01-01 00:00:00Z], index * 86_400, :second)
+          )
+        end
+
+        move_list_page!(site, unquote(path))
+        html = render_page(site, unquote(path), %{"q" => "Post"})
+
+        [next] = attrs(html, ~s(a[data-role="blog-list-next"]), "href")
+        assert next |> URI.parse() |> Map.get(:path) == unquote(path)
+        assert next =~ "page=2"
+        assert next =~ "q=Post"
+
+        assert attrs(html, ~s([data-role="blog-search-form"]), "action") == [unquote(path)]
+      end
+    end
+  end
 end
