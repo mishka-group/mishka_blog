@@ -303,11 +303,11 @@ defmodule MishkaBlog.Plugins.PageSeo do
   # visitor by when the visitor's own read left the record out: read as a visitor who may not open
   # it, a locked record is no record at all, and the gate is handed no permissions to refuse them
   # with.
-  defp read(resource, %{params: %{"slug" => slug}, site_id: site_id} = seo, fields, loads)
-       when is_binary(slug) and slug != "" and is_binary(site_id) do
+  defp read(resource, %{params: %{} = params, site_id: site_id} = seo, fields, loads)
+       when is_binary(site_id) do
     resource
     |> Ash.Query.for_read(:public_list, %{}, tenant: site_id, authorize?: false)
-    |> Ash.Query.filter(slug == ^slug)
+    |> named(resource, params)
     |> in_language(seo.language)
     |> Ash.Query.select(fields)
     |> Ash.Query.load(loads)
@@ -319,6 +319,21 @@ defmodule MishkaBlog.Plugins.PageSeo do
   end
 
   defp read(_resource, _seo, _fields, _loads), do: nil
+
+  # The row the address names: by its `slug`, and a post by its `post_id` (its number) where the
+  # page's address holds that instead, as `MishkaBlog.PageSource` reads it. An address that names
+  # neither reads nothing.
+  defp named(query, _resource, %{"slug" => slug}) when is_binary(slug) and slug != "",
+    do: Ash.Query.filter(query, slug == ^slug)
+
+  defp named(query, BlogPost, %{"post_id" => post_id}) when is_binary(post_id) do
+    case Integer.parse(post_id) do
+      {number, ""} when number > 0 -> Ash.Query.filter(query, number == ^number)
+      _not_a_number -> Ash.Query.filter(query, false)
+    end
+  end
+
+  defp named(query, _resource, _unnamed), do: Ash.Query.filter(query, false)
 
   # A blogger or a team is one row in every language: the slug alone names it. Read as a guest
   # reads it, through the public action, for a caller handed no rows.

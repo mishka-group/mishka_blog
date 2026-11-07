@@ -494,6 +494,20 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       end
     end
 
+    test "a preview at an address that names the post by its number reads the same post", %{
+      site: site
+    } do
+      post = published!(site)
+      by_slug = answer(given(site, :post, %{"lang" => "en", "slug" => post.slug}))
+      by_number = answer(given(site, :post, %{"lang" => "en", "post_id" => "#{post.number}"}))
+
+      assert by_number.title == by_slug.title
+      assert by_number.title =~ post.title
+
+      unnamed = given(site, :post, %{"lang" => "en", "post_id" => "0"})
+      assert answer(unnamed) == %{unnamed | var_docs: answer(unnamed).var_docs}
+    end
+
     test "with no params returns its variables and reads nothing", %{site: site} do
       published!(site)
       given = given(site, :post, %{})
