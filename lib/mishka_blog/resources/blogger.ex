@@ -42,6 +42,8 @@ defmodule MishkaBlog.Blogger do
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
+  alias MishkaCmsCore.Runtime.Languages
+  alias MishkaSlug.Change
   require Ash.Query
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -1041,7 +1043,7 @@ defmodule MishkaBlog.Blogger do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
-      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug()}
+      change {Change, Languages.public_slug()}
 
       change manage_relationship(:team_ids, :tenant_teams,
                type: :append_and_remove,
@@ -1066,7 +1068,7 @@ defmodule MishkaBlog.Blogger do
         Ash.Changeset.set_tenant(changeset, site_id)
       end
 
-      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug()}
+      change {Change, Languages.public_slug()}
 
       change manage_relationship(:team_ids, :tenant_teams,
                type: :append_and_remove,
@@ -1096,7 +1098,7 @@ defmodule MishkaBlog.Blogger do
                 )
       end
 
-      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug()}
+      change {Change, Languages.public_slug()}
 
       change manage_relationship(:team_ids, :tenant_teams,
                type: :append_and_remove,
@@ -1132,7 +1134,7 @@ defmodule MishkaBlog.Blogger do
                 )
       end
 
-      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug()}
+      change {Change, Languages.public_slug()}
 
       change manage_relationship(:team_ids, :tenant_teams,
                type: :append_and_remove,

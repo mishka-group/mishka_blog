@@ -53,6 +53,8 @@ defmodule MishkaBlog.Team do
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
   alias Ash.Error.Query.NotFound
+  alias MishkaCmsCore.Runtime.Languages
+  alias MishkaSlug.Change
   require Ash.Query
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -953,7 +955,7 @@ defmodule MishkaBlog.Team do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
-      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug()}
+      change {Change, Languages.public_slug()}
 
       change manage_relationship(:permission_ids, :permissions,
                type: :append_and_remove,
@@ -988,7 +990,7 @@ defmodule MishkaBlog.Team do
         Ash.Changeset.set_tenant(changeset, site_id)
       end
 
-      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug()}
+      change {Change, Languages.public_slug()}
 
       change manage_relationship(:permission_ids, :permissions,
                type: :append_and_remove,
@@ -1025,7 +1027,7 @@ defmodule MishkaBlog.Team do
         message dgettext_noop("errors", "Cannot edit archived team. Please unarchive it first.")
       end
 
-      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug()}
+      change {Change, Languages.public_slug()}
 
       change manage_relationship(:permission_ids, :permissions,
                type: :append_and_remove,
@@ -1063,7 +1065,7 @@ defmodule MishkaBlog.Team do
         message dgettext_noop("errors", "Cannot edit archived team. Please unarchive it first.")
       end
 
-      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug()}
+      change {Change, Languages.public_slug()}
 
       change manage_relationship(:permission_ids, :permissions,
                type: :append_and_remove,
