@@ -38,8 +38,8 @@ defmodule MishkaBlog.Address do
 
   alias MishkaBlog.{Blogger, BlogPost, Collection, Tag, Team}
   alias MishkaCmsCore.Runtime.Languages
-  alias MishkaCmsCore.Runtime.Translations
   alias MishkaCmsCore.Runtime.States.{SiteState, WebRunTimeMetaDataState}
+  alias MishkaCmsCore.Runtime.Translations
 
   @kinds %{
     BlogPost => "blog:post",
@@ -94,9 +94,8 @@ defmodule MishkaBlog.Address do
   def page_url(kind, language) do
     site_id = Translations.site()
 
-    with {:ok, path} <- path(site_id, kind, language) do
-      Languages.url(path, %{Languages.capture() => language}, site_id)
-    else
+    case path(site_id, kind, language) do
+      {:ok, path} -> Languages.url(path, %{Languages.capture() => language}, site_id)
       :error -> nil
     end
   end
