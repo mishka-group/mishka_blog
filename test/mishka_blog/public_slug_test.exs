@@ -5,11 +5,10 @@
 defmodule MishkaBlog.Test.PublicSlugTest do
   @moduledoc """
   Public slugs are made by `MishkaSlug.Change` with the options of
-  `MishkaBlog.Resources.Changes.PublicSlug`: they keep the scripts of the site's languages.
+  `MishkaCmsCore.Runtime.Languages.public_slug/1`: they keep the scripts of the site's languages.
   """
   use MishkaBlog.DataCase, async: false
 
-  alias MishkaBlog.Resources.Changes.PublicSlug
   alias MishkaCmsCore.Settings
 
   defp site_in(languages) do
@@ -61,7 +60,11 @@ defmodule MishkaBlog.Test.PublicSlugTest do
         authorize?: false
       )
 
-    options = MishkaSlug.Change.slug_options(PublicSlug.options(:language), changeset)
+    options =
+      MishkaSlug.Change.slug_options(
+        MishkaCmsCore.Runtime.Languages.public_slug(language: :language),
+        changeset
+      )
 
     assert {:ok, "كتاب"} != MishkaSlug.slugify("كتاب", options)
     assert {:ok, "کتاب"} = MishkaSlug.slugify("كتاب", options)

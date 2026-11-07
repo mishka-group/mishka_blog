@@ -42,7 +42,6 @@ defmodule MishkaBlog.Collection do
   import Phoenix.Component, only: [sigil_H: 2, link: 1]
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
-  alias MishkaBlog.Resources.Changes.PublicSlug
   require Ash.Query
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -1203,7 +1202,7 @@ defmodule MishkaBlog.Collection do
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
       change MishkaCmsCore.Runtime.Resources.Changes.SetLanguageGroupId
-      change {MishkaSlug.Change, PublicSlug.options(:language)}
+      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug(language: :language)}
 
       description "Creates collection for tenant users - requires tenant context, auto-assigns site_id and language_group_id for master collections"
     end
@@ -1223,7 +1222,7 @@ defmodule MishkaBlog.Collection do
       end
 
       change MishkaCmsCore.Runtime.Resources.Changes.SetLanguageGroupId
-      change {MishkaSlug.Change, PublicSlug.options(:language)}
+      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug(language: :language)}
 
       description "Creates collection for master users - bypasses multi-tenancy, requires explicit site_id, auto-assigns language_group_id for master collections"
     end
@@ -1267,7 +1266,7 @@ defmodule MishkaBlog.Collection do
                 field: :parent_collection_id,
                 message: dgettext_noop("errors", "Collection cannot be its own parent.")}
 
-      change {MishkaSlug.Change, PublicSlug.options(:language)}
+      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug(language: :language)}
 
       description "Updates collection for tenant users - requires tenant context, prevents site_id changes"
     end
@@ -1292,7 +1291,7 @@ defmodule MishkaBlog.Collection do
                 field: :parent_collection_id,
                 message: dgettext_noop("errors", "Collection cannot be its own parent.")}
 
-      change {MishkaSlug.Change, PublicSlug.options(:language)}
+      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug(language: :language)}
     end
 
     read :master_read do
