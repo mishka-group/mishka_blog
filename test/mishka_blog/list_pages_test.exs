@@ -19,6 +19,7 @@ defmodule MishkaBlog.ListPagesTest do
   use MishkaBlog.ConnCase, async: false
 
   import MishkaBlog.Test.Factory
+  import MishkaBlog.DataCase, only: [route_pages!: 1]
 
   alias MishkaBlog.Plugins.PageSource, as: SourcePlugin
   alias MishkaBlog.Provision
@@ -26,8 +27,9 @@ defmodule MishkaBlog.ListPagesTest do
   alias MishkaCmsCore.Runtime.LiveViewHelpers
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.PageSource, as: CorePageSource
-  alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Runtime.Translations
+  alias MishkaCmsCore.Settings
 
   require Ash.Query
 
@@ -51,6 +53,7 @@ defmodule MishkaBlog.ListPagesTest do
 
     :ok = Translations.put_site(site.id)
     Provision.ensure!(site)
+    route_pages!(site)
 
     {:ok, site: site}
   end
@@ -112,6 +115,12 @@ defmodule MishkaBlog.ListPagesTest do
 
     {:reply, :halt, %{source: source}} = SourcePlugin.call(given)
     source
+  end
+
+  defp missing?(site, path, slug, language) do
+    site
+    |> source(page(site, path), %{"slug" => slug}, language, nil)
+    |> CorePageSource.missing?()
   end
 
   defp parsed(html), do: LazyHTML.from_fragment(html)
@@ -703,30 +712,37 @@ defmodule MishkaBlog.ListPagesTest do
   # address named a category or a tag, there is none, and the page is a 404 rather than an empty
   # list. A real one with nothing published under it is still its page.
   describe "an address that names no category or tag" do
-    test "is a 404 for a tag that is not there", %{site: site} do
+    # THE PAGE'S OWN READ ANSWERS IT MISSING, so `MishkaCmsWeb.RuntimeLive` tries the next page that
+    # matches the address and, with none left, answers the site's 404 before any block is drawn.
+    test "is missing for a tag that is not there", %{site: site} do
       the_design!(site)
 
-      assert {:error, message} =
-               render_page(site, "/:lang/blog/tag/:slug", %{"slug" => "no-such-tag"},
-                 sourced: true
-               )
-
-      assert message =~ "NotFoundError"
+      assert missing?(site, "/:lang/blog/tag/:slug", "no-such-tag", "en")
     end
 
-    test "is a 404 for a category that is not there, in every language", %{site: site} do
+    test "is missing for a category that is not there, in every language", %{site: site} do
       the_design!(site)
 
       for language <- ["en", "fa"] do
-        assert {:error, message} =
-                 render_page(site, "/:lang/blog/category/:slug", %{"slug" => "nope"},
-                   sourced: true,
-                   language: language
-                 ),
-               "no 404 in #{language}"
-
-        assert message =~ "NotFoundError"
+        assert missing?(site, "/:lang/blog/category/:slug", "nope", language),
+               "not missing in #{language}"
       end
+    end
+
+    test "is missing for a post, a blogger and a team that are not there", %{site: site} do
+      for path <- ~w(/:lang/blog/:slug /:lang/blog/author/:slug /:lang/blog/team/:slug) do
+        assert missing?(site, path, "nobody-has-this", "en"), path
+      end
+    end
+
+    test "is a source, not missing, for a real tag and a real category with nothing in them",
+         %{site: site} do
+      the_design!(site)
+      unused = tag!(site, "unused")
+      empty = category!(site, "Empty")
+
+      refute missing?(site, "/:lang/blog/tag/:slug", unused.slug, "en")
+      refute missing?(site, "/:lang/blog/category/:slug", empty.slug, "en")
     end
 
     test "draws a real tag's posts, and a real tag with none as its own empty page",
@@ -834,6 +850,56 @@ defmodule MishkaBlog.ListPagesTest do
       end
 
       refute main.id == other_main.id
+    end
+  end
+
+  # A SITE MOVED FROM WORDPRESS KEEPS ITS ADDRESSES: its post page is given the path the site had,
+  # and every card links there, filled from the post, with no base written into any template.
+  describe "a site whose post page has a WordPress address" do
+    defp move_post_page!(site, path) do
+      Page
+      |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+      |> Ash.Query.filter(site_id == ^site.id and extra["record"] == "blog:post")
+      |> Ash.read_one!(authorize?: false)
+      |> Ash.Changeset.for_update(:update, %{path: path}, authorize?: false, tenant: site.id)
+      |> Ash.update!(authorize?: false)
+
+      route_pages!(site)
+    end
+
+    test "links every card at that address", %{site: site} do
+      post = publish!(site, "Hello there", published_at: ~U[2026-05-07 09:00:00Z])
+
+      for {path, address} <- [
+            {"/:lang/:slug", "/#{post.slug}"},
+            {"/:lang/:year/:monthnum/:slug", "/2026/05/#{post.slug}"},
+            {"/:lang/:year/:monthnum/:day/:slug", "/2026/05/07/#{post.slug}"},
+            {"/:lang/archives/:post_id", "/archives/#{post.number}"},
+            {"/index.php/:lang/archives/:post_id", "/index.php/en/archives/#{post.number}"}
+          ] do
+        move_post_page!(site, path)
+        html = render_page(site, "/:lang/blog")
+
+        assert address in attrs(html, ~s([data-role="blog-list-title"]), "href"), path
+      end
+    end
+
+    test "links a Persian slug percent-encoded, under its category", %{site: site} do
+      {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+      on_exit(fn -> SettingsState.delete(site.id, "site.languages") end)
+
+      news = category!(site, "اخبار", slug: "اخبار", language: "fa")
+      post = publish!(site, "سلام دنیا", slug: "سلام-دنیا", language: "fa")
+      file!(post, news)
+
+      move_post_page!(site, "/:lang/:category/:slug")
+      html = render_page(site, "/:lang/blog", %{}, language: "fa")
+
+      assert ("/fa/" <> URI.encode("اخبار") <> "/" <> URI.encode(post.slug)) in attrs(
+               html,
+               ~s([data-role="blog-list-title"]),
+               "href"
+             )
     end
   end
 end

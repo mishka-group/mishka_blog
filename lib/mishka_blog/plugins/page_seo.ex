@@ -12,9 +12,9 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   A page is matched by the kind of record it says it shows (`record`, its `extra`'s `"record"`):
   `"blog:post"`, `"blog:category"`, `"blog:tag"`, `"blog:author"` or `"blog:team"`, the kinds
-  `MishkaBlog.Plugins.PageRecords`
-  names. Its path may be anything that captures the `slug`. Every other page is handed back
-  untouched before anything is read. A kind has one owner, so the answer for one of these halts the
+  `MishkaBlog.Plugins.PageRecords` names. Its path may be anything that captures the `slug`, or for a
+  post its `post_id` (`MishkaBlog.Address`). Every other page is handed back untouched before
+  anything is read. A kind has one owner, so the answer for one of these halts the
   chain: no later plugin is asked.
 
   Everything returned is a default: what the page sets in its own SEO — a title, a description, a
@@ -117,10 +117,10 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   require Ash.Query
 
-  alias MishkaBlog.{Blogger, BlogPost, Collection, PageSource, Tag, Team}
+  alias MishkaBlog.{Address, Blogger, BlogPost, Collection, PageSource, Tag, Team}
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.PlainText
-  alias MishkaCmsCore.Runtime.{Languages, Page, Seo}
+  alias MishkaCmsCore.Runtime.{Languages, Seo}
 
   @post_fields [
     :id,
@@ -133,6 +133,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
     :updated_at,
     :language,
     :language_group_id,
+    :number,
     :seo_tags,
     :schema,
     :permissions
@@ -350,7 +351,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
       bloggers: people_query(),
       collections:
         Collection
-        |> Ash.Query.select([:name])
+        |> Ash.Query.select([:name, :slug])
         |> Ash.Query.sort(display_order: :asc, name: :asc),
       tags:
         Tag
@@ -359,7 +360,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
         |> Ash.Query.page(limit: 50),
       editions:
         BlogPost
-        |> Ash.Query.select([:id, :slug, :language, :title])
+        |> Ash.Query.select([:id, :slug, :language, :title, :published_at, :number])
+        |> Ash.Query.load(:first_category_slug)
         |> Ash.Query.sort(language: :asc)
     ]
   end
@@ -737,8 +739,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
             |> Enum.uniq_by(& &1.language)
             |> Enum.sort_by(& &1.language),
           edition.language in served,
-          captures = %{Languages.capture() => edition.language, "slug" => edition.slug},
-          address = Languages.url(path, captures, site_id),
+          address = Address.fill(path, edition, site_id),
           is_binary(address),
           do: %{language: edition.language, path: address}
 
@@ -832,39 +833,15 @@ defmodule MishkaBlog.Plugins.PageSeo do
   defp authors(%{bloggers: []}, _site_id, _base), do: []
 
   defp authors(post, site_id, base) do
-    profiles = profiles_path(site_id)
-
     Enum.map(post.bloggers, fn blogger ->
       compact(%{
         "@type" => "Person",
         "name" => blogger.display_name,
-        "url" => profile_url(profiles, blogger.slug, post.language, site_id, base),
+        "url" => blogger |> Address.of(site_id, post.language) |> Seo.absolute(base),
         "sameAs" => links(blogger.social_links)
       })
     end)
   end
-
-  # The path of the site's page that shows a blogger (`"blog:author"`), active and open to every
-  # visitor, the first by path; `nil` for none. Read as the system, as `read/4` reads.
-  defp profiles_path(site_id) do
-    Page
-    |> Ash.Query.filter(active == true and extra["record"] == "blog:author")
-    |> Ash.Query.select([:path, :permissions])
-    |> Ash.Query.sort(path: :asc)
-    |> Ash.read(tenant: site_id, authorize?: false, page: false)
-    |> case do
-      {:ok, pages} -> Enum.find_value(pages, &(&1.permissions in [nil, []] && &1.path))
-      _unreadable -> nil
-    end
-  end
-
-  defp profile_url(nil, _slug, _language, _site_id, _base), do: nil
-
-  defp profile_url(path, slug, language, site_id, base),
-    do:
-      path
-      |> Languages.url(%{Languages.capture() => language, "slug" => slug}, site_id)
-      |> Seo.absolute(base)
 
   # `robots` "noindex, follow" for a public tag; nothing for one that names a permission, which the
   # head keeps out of an index already.

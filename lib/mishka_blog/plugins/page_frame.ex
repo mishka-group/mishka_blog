@@ -63,7 +63,7 @@ defmodule MishkaBlog.Plugins.PageFrame do
 
   use MishkaInstaller.Event.Hook, event: "runtime:page:frame", initial: %{priority: 50}
 
-  alias MishkaBlog.{PageSource, Provision}
+  alias MishkaBlog.{Address, PageSource, Provision}
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.States.TranslationsState
 
@@ -172,10 +172,10 @@ defmodule MishkaBlog.Plugins.PageFrame do
   # same slug, for a visitor whose read found them.
   defp person(%{site_id: site_id} = frame, name) do
     case PageSource.of(frame) do
-      %PageSource{record: %{slug: slug} = person} ->
+      %PageSource{record: %{} = person} ->
         Enum.flat_map(
           Languages.site(site_id),
-          &translation(frame, &1, slug, Map.fetch!(person, name))
+          &translation(frame, person, &1, Map.fetch!(person, name))
         )
 
       _not_readable ->
@@ -186,16 +186,17 @@ defmodule MishkaBlog.Plugins.PageFrame do
   defp loaded(rows) when is_list(rows), do: rows
   defp loaded(_not_loaded), do: []
 
-  defp translation(frame, %{language: language, slug: slug}, title),
-    do: translation(frame, language, slug, title)
+  defp translation(frame, %{language: language} = edition, title),
+    do: translation(frame, edition, language, title)
 
-  defp translation(%{page: %{path: path}, site_id: site_id}, language, slug, title)
+  # The row at the page's own path, filled from it in `language` (`MishkaBlog.Address`).
+  defp translation(%{page: %{path: path}, site_id: site_id}, row, language, title)
        when is_binary(path) do
-    case Languages.url(path, %{Languages.capture() => language, "slug" => slug}, site_id) do
+    case Address.fill(path, row, site_id, language) do
       address when is_binary(address) -> [%{language: language, path: address, title: title}]
       nil -> []
     end
   end
 
-  defp translation(_frame, _language, _slug, _title), do: []
+  defp translation(_frame, _row, _language, _title), do: []
 end

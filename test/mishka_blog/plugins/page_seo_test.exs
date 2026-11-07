@@ -291,6 +291,8 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
           permissions: []
         )
 
+        route_pages!(site)
+
         post = published!(site)
 
         ada =
@@ -333,16 +335,18 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       end
     end
 
-    test "names no profile address while no open page shows a blogger", %{site: site} do
-      for {active, permissions} <- [{false, []}, {true, ["members:read"]}] do
-        create_page!(
-          site_id: site.id,
-          path: "/:lang/writers/#{active}/:slug",
-          extra: %{"record" => "blog:author"},
-          active: active,
-          permissions: permissions
-        )
-      end
+    # The address is the routing table's, which holds the active pages and not what they are locked
+    # to: a blogger page locked to members is still where a blogger lives.
+    test "names no profile address while no active page shows a blogger", %{site: site} do
+      create_page!(
+        site_id: site.id,
+        path: "/:lang/writers/:slug",
+        extra: %{"record" => "blog:author"},
+        active: false,
+        permissions: []
+      )
+
+      route_pages!(site)
 
       post = published!(site)
       blogger = create_blogger!(site_id: site.id, display_name: "Ada", slug: "ada")

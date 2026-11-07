@@ -734,10 +734,12 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     # THE LIST'S OWN TITLES PATCH, they do not navigate: clicking one opens `blog-post-detail`
     # beside the list on the same page, through `?post=<slug>`. `blog-post-search` still writes a
     # real href, and that is the one that has to resolve — see the test below it.
-    test "a post title patches to the same page carrying the post's slug", %{site: site} do
+    test "a post title opened beside the list patches to the same page carrying the post's slug",
+         %{site: site} do
       publish!(site, ["A"])
 
-      {:ok, view, _html} = mount_page(site, "blog-post-list", %{base: "/here"})
+      {:ok, view, _html} =
+        mount_page(site, "blog-post-list", %{base: "/here", open_beside: true})
 
       [href] =
         view
@@ -1083,7 +1085,8 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
     test "and keep opening beside the list when none is", %{site: site} do
       publish!(site, ["A"])
 
-      {:ok, view, _html} = mount_page(site, "blog-post-list", %{base: "/here"})
+      {:ok, view, _html} =
+        mount_page(site, "blog-post-list", %{base: "/here", open_beside: true})
 
       [href] =
         view

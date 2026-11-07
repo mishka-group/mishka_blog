@@ -399,8 +399,8 @@ defmodule MishkaBlog.ProvisionTest do
           &(elem(&1, 0) == "blog-people")
         )
 
-      assert {"author_base", {:literal, "/:lang/blog/author"}} in given
-      assert {"team_base", {:literal, "/:lang/blog/team"}} in given
+      # A blogger and a team are linked at the site's own page for one, wherever it is.
+      refute Enum.any?(given, fn {name, _value} -> String.ends_with?(name, "_base") end)
 
       assert page(site, paths.author).template =~
                ~s|site_path("/:lang/blog/people", @page.language)|

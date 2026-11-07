@@ -112,15 +112,17 @@ defmodule MishkaBlog.Provision do
   nothing and says so rather than serving the English article inside a Persian, right-to-left page —
   or publishing that article's conversation underneath the message saying it is not here.
 
-  That is also why the bases the components build links from are written with the capture still in
-  them — `post_base="/:lang/blog"`, not `"/" <> @page.language <> "/blog"`. The component fills the
-  `:lang` segment with the language of the ROW it is linking to, which is the language the reader
-  will be reading in when they arrive, and builds the address the site's URL mode gives it
-  (`site_path/2`, `MishkaCmsCore.Runtime.LiveViewHelpers`): `/blog/<slug>` in a first language the
-  site leaves unprefixed, `/fa/blog/<slug>` in Persian. A base with the page's own language baked in
-  would offer every other language's row under the language the reader is leaving. The languages of
-  a post itself are not a link of the page's: the layout's header lists them, from
-  `MishkaBlog.Plugins.PageFrame`, which gives each edition its own slug.
+  ## The page of a kind of record is where its rows are linked
+
+  No template here names where a post, a category, a tag, a blogger or a team lives. A block links
+  each row at the site's own page for its kind — the page whose `extra` names it, `"blog:post"`
+  and the rest — filled with what the row holds (`slug_href/4` in the bundle,
+  `MishkaBlog.Address` for the head, the frame and the sitemap). The paths below are the defaults
+  those pages are written with; a site moved from WordPress gives its post page
+  `/:year/:monthnum/:slug`, `/archives/:post_id` or `/:slug`, and every link follows. The language
+  of a link is the ROW's, which is the language the reader will be reading in when they arrive, at
+  the address the site's URL mode gives it: `/blog/<slug>` in a first language the site leaves
+  unprefixed, `/fa/blog/<slug>` in Persian.
 
   `base`, where a page has one, is the pager's and stays a real URL — nothing appends a slug to it,
   and its `?page=2` has to be somewhere a reader could have typed.
@@ -150,23 +152,10 @@ defmodule MishkaBlog.Provision do
 
   @snippet_name "Blog sidebar"
 
-  # THE BLOG'S ADDRESSES, WRITTEN ONCE. A page's path, the base a component builds links to it from
-  # and the URL the bar writes to reach it are all the same string — `/:lang/blog/:slug` is where
-  # a post is read, `/:lang/blog` is what a block appends that post's slug to, and
-  # `/:lang/blog/categories` is both a page and what the bar's links call it — and they were twenty-seven
-  # separate literals, six paths, fifteen bases and six URLs, each one its own chance to write a path
-  # this site does not answer.
-  #
-  # THE `lang` CAPTURE STAYS IN A BASE, rather than the reader's language baked in. A component
-  # fills that segment with the language of the ROW it is linking to — see `slug_href/4` in the
-  # bundle — which is the only way a link can lead to another language's edition; a base with the
-  # reader's current language baked in would offer every translation under the language they are
-  # leaving. It also means the bases are the same on a page whose path captures no language at all,
-  # which is where the snippet below ends up.
-  #
-  # A URL IS THE SAME ADDRESS WITH THAT CAPTURE ALREADY FILLED IN — `live_url/2` — because nothing
-  # fills it later: a pager writes its `?page=2` to the address bar, and a link to a page rather than to a
-  # row is written whole.
+  # THE BLOG'S PAGES, WRITTEN ONCE: the paths its sample pages are created at, and the URLs the bar and
+  # the list pages' pagers and search boxes write to reach them, with the `lang` capture filled in by
+  # `live_url/2`. A row is linked at the page of its kind, wherever the site has moved it, never at
+  # one of these.
   @blog "/:lang/blog"
   @category "#{@blog}/category"
   @tag "#{@blog}/tag"
@@ -471,10 +460,7 @@ defmodule MishkaBlog.Provision do
         params={@query_params}
         post_param="slug"
         language={@page.language}
-        post_base="#{@blog}"
-        category_base="#{@category}"
-        tag_base="#{@tag}"
-        author_base="#{@author}"
+        back_href={#{live_url(@blog)}}
       />
 
       <div class="mt-[46px] w-full max-w-[680px]">
@@ -502,7 +488,6 @@ defmodule MishkaBlog.Provision do
           post_param="slug"
           heading={t("Keep reading")}
           language={@page.language}
-          post_base="#{@blog}"
         />
       </div>
     </div>
@@ -533,8 +518,6 @@ defmodule MishkaBlog.Provision do
       posts_text={t("posts")}
       view_all_text={t("View all in")}
       language={@page.language}
-      category_base="#{@category}"
-      post_base="#{@blog}"
     />
     """
   end
@@ -554,7 +537,6 @@ defmodule MishkaBlog.Provision do
       limit={100}
       show_count={true}
       language={@page.language}
-      tag_base="#{@tag}"
     />
     """
   end
@@ -589,8 +571,6 @@ defmodule MishkaBlog.Provision do
         language={@page.language}
         base={#{live_url(@author, "slug")}}
         params={Map.drop(@query_params, ["lang", "slug"])}
-        post_base="#{@blog}"
-        team_base="#{@team}"
         missing_text={t("That blogger is not here, or no longer writes for this site.")}
         empty_text={t("Nothing published yet.")}
       />
@@ -623,8 +603,6 @@ defmodule MishkaBlog.Provision do
         language={@page.language}
         base={#{live_url(@team, "slug")}}
         params={Map.drop(@query_params, ["lang", "slug"])}
-        post_base="#{@blog}"
-        author_base="#{@author}"
         missing_text={t("That team is not here, or is not active any more.")}
         members_empty_text={t("Nobody is in this team yet.")}
         empty_text={t("Nothing published yet.")}
@@ -657,8 +635,6 @@ defmodule MishkaBlog.Provision do
       post_text={t("%{count} post")}
       posts_text={t("%{count} posts")}
       language={@page.language}
-      author_base="#{@author}"
-      team_base="#{@team}"
       members_empty_text={t("Nobody is in this team yet.")}
       empty_text={t("Nobody writes here yet.")}
     />
@@ -686,7 +662,6 @@ defmodule MishkaBlog.Provision do
           current_user={assigns[:current_user]}
           heading={t("Search")}
           language={@page.language}
-          post_base="#{@blog}"
         />
       </div>
 
@@ -699,8 +674,6 @@ defmodule MishkaBlog.Provision do
         posts_per_category={3}
         show_count={true}
         language={@page.language}
-        category_base="#{@category}"
-        post_base="#{@blog}"
       />
 
       <div class="rounded-[18px] border border-edge bg-surface p-5 dark:border-edge-dark dark:bg-surface-dark">
@@ -713,7 +686,6 @@ defmodule MishkaBlog.Provision do
           limit={24}
           show_count={true}
           language={@page.language}
-          tag_base="#{@tag}"
         />
       </div>
 
@@ -728,7 +700,6 @@ defmodule MishkaBlog.Provision do
         show_pager={false}
         show_excerpt={false}
         language={@page.language}
-        post_base="#{@blog}"
       />
     </aside>
     """
@@ -838,8 +809,7 @@ defmodule MishkaBlog.Provision do
       language={@page.language}
       base={#{live_url(address, captured)}}
       params={Map.drop(@query_params, #{dropped(filter)})}
-      post_base="#{@blog}"
-      chips_base="#{@category}"
+      show_chips={true}
       all_href={#{live_url(@blog)}}
       all_text={t("All")}
       tagged_text={t("Tagged")}
@@ -895,7 +865,6 @@ defmodule MishkaBlog.Provision do
       spaced={true}
       empty_text={""}
       language={@page.language}
-      post_base="#{@blog}"
       featured_text={t("Featured")}
       locked_text={t("Members")}
       minutes_text={t("min")}
