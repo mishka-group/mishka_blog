@@ -249,6 +249,34 @@ defmodule MishkaBlog.Provision do
     report
   end
 
+  @doc """
+  Gives `site` the sample pages `paths` names, each at the path it maps to, and the rest of what
+  `ensure!/3` gives a site that is missing it: the permission names, the components and the snippet.
+  Returns `ensure!/3`'s report.
+
+  `paths` maps a page's default path (`page_paths/0`) to the path it is written at. A page it does
+  not name is not written, so a caller that knows which of the blog's pages a site already has,
+  wherever it moved them, asks for the others only, and none of them is written twice under another
+  name:
+
+      Provision.ensure_pages!(site, %{"/:lang/blog/:slug" => "/:lang/:year/:monthnum/:slug"},
+        actor: admin
+      )
+
+  A page whose path something already holds is skipped, and one whose name is taken is written
+  under a name of its own, as `ensure!/3` does. `opts` and what it raises are `ensure!/3`'s.
+  """
+  @spec ensure_pages!(map() | String.t(), %{String.t() => String.t()}, keyword()) :: report()
+  def ensure_pages!(site, paths, opts \\ []) when is_map(paths) do
+    asked = fn site -> site |> page_attrs_for() |> Enum.filter(&is_map_key(paths, &1.path)) end
+
+    report =
+      ExtensionProvision.ensure!(%{manifest() | pages: asked}, site, %{"paths" => paths}, opts)
+
+    :ok = Translations.register(site_id(site), PageFrame.words())
+    report
+  end
+
   defp site_id(%{id: site_id}), do: site_id
   defp site_id(site_id) when is_binary(site_id), do: site_id
 

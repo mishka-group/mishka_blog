@@ -821,6 +821,29 @@ defmodule MishkaBlog.ProvisionTest do
     :ok
   end
 
+  describe "some of the pages, at paths of the caller's" do
+    @post "/:lang/blog/:slug"
+    @kept "/:lang/:year/:monthnum/:slug"
+
+    test "writes only the pages named, each at its own path, with the components", %{site: site} do
+      report =
+        Provision.ensure_pages!(site, %{@post => @kept, "/:lang/blog/tags" => "/:lang/blog/tags"})
+
+      assert Enum.sort(report.pages) == Enum.sort([@kept, "/:lang/blog/tags"])
+      assert %{extra: %{"record" => "blog:post"}, section: "blog"} = page(site, @kept)
+      assert length(pages(site)) == 2
+      assert length(components(site)) == length(Provision.component_names())
+    end
+
+    test "writes nothing again when asked again", %{site: site} do
+      Provision.ensure_pages!(site, %{@post => @kept})
+      again = Provision.ensure_pages!(site, %{@post => @kept})
+
+      assert %{pages: [], components: []} = again
+      assert [%{path: @kept}] = pages(site)
+    end
+  end
+
   describe "installing on request" do
     setup do
       listening!()
