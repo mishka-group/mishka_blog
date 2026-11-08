@@ -51,7 +51,7 @@ defmodule MishkaBlog.Resources.Validations.FreeAddress do
          {:ok, %{section: "Page"} = page, captured} <-
            WebRunTimeMetaDataState.resolve(address, site),
          true <- literal?(page, captured) do
-      {:error, field: :slug, message: opts[:message], vars: [address: address]}
+      {:error, field: :slug, message: opts[:message], address: address}
     else
       _free -> :ok
     end

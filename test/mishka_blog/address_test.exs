@@ -185,6 +185,19 @@ defmodule MishkaBlog.AddressTest do
       end
     end
 
+    test "shows the real address in the error the form reads", %{site: site} do
+      error =
+        assert_raise Ash.Error.Invalid, fn ->
+          create_blog_post!(site_id: site.id, slug: "about", language: "en")
+        end
+
+      [%{message: message, vars: vars}] = error.errors
+      shown = MishkaGervaz.Errors.translate_error(message, vars)
+
+      assert shown =~ "/about"
+      refute shown =~ "%{address}"
+    end
+
     test "is let through when the address is free, in a Persian slug too", %{site: site} do
       assert %BlogPost{} = create_blog_post!(site_id: site.id, slug: "about-us", language: "en")
       assert %BlogPost{} = create_blog_post!(site_id: site.id, slug: "درباره", language: "fa")
