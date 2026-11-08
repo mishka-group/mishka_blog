@@ -23,6 +23,11 @@ defmodule MishkaBlog.DataCase do
 
   use ExUnit.CaseTemplate
 
+  require Ash.Query
+
+  alias MishkaCmsCore.Runtime.Handlers.BootHandler
+  alias MishkaCmsCore.Runtime.States.{SiteState, WebRunTimeMetaDataState}
+
   using do
     quote do
       alias MishkaBlog.Repo
@@ -100,5 +105,39 @@ defmodule MishkaBlog.DataCase do
     after
       0 -> gathered
     end
+  end
+
+  @doc """
+  Puts the pages of `site`, and the site itself, into the routing tables as the compile jobs put
+  them in a running site — what a link to a row's page is found in (`MishkaBlog.Address`) — and
+  takes them out when the test ends. A test that writes pages with no job running calls it once they are written.
+
+      Provision.ensure!(site)
+      route_pages!(site)
+  """
+  def route_pages!(site) do
+    with {:error, :not_found} <- SiteState.get(site.id) do
+      :ok =
+        SiteState.save(%{
+          id: site.id,
+          name: site.name,
+          host: site.host,
+          priority: site.priority,
+          active: site.active,
+          master: site.master
+        })
+
+      ExUnit.Callbacks.on_exit(fn -> SiteState.delete(site.id) end)
+    end
+
+    MishkaCmsCore.Runtime.Page
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(site_id == ^site.id and active == true)
+    |> Ash.Query.load(:site)
+    |> Ash.read!(authorize?: false)
+    |> Enum.each(&(:ok = WebRunTimeMetaDataState.save(BootHandler.web_metadata_row(&1, "Page"))))
+
+    ExUnit.Callbacks.on_exit(fn -> WebRunTimeMetaDataState.delete_by_site(site.name) end)
+    site
   end
 end

@@ -183,6 +183,29 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
   end
 
   describe "posts" do
+    # A SITE MOVED FROM WORDPRESS lists each post at the address its post page's path makes of it.
+    test "are listed at a WordPress address their page names", %{mode: mode} do
+      for {path, address} <- [
+            {"/:lang/:year/:monthnum/:slug", "/2026/05/:slug"},
+            {"/:lang/archives/:post_id", "/archives/:post_id"},
+            {"/:lang/:category/:slug", "/news/:slug"}
+          ] do
+        site = create_site!(active: true)
+        in_mode!(site, mode)
+        post = post!(site, :published, published_at: ~U[2026-05-07 09:00:00Z])
+        news = create_collection!(site_id: site.id, slug: "news", status: :active, language: "en")
+        create_post_collection!(post_id: post.id, collection_id: news.id)
+        item_page!(site, :post, path: path)
+
+        address =
+          address
+          |> String.replace(":slug", post.slug)
+          |> String.replace(":post_id", Integer.to_string(post.number))
+
+        assert paths(site) == [english(mode, address)], path
+      end
+    end
+
     test "a published post is listed in its own language, after what the payload held", %{
       site: site,
       mode: mode
@@ -335,7 +358,7 @@ defmodule MishkaBlog.Plugins.SitemapUrlsTest do
       assert [first, second] =
                asked
                |> Enum.reverse()
-               |> Enum.filter(&(&1 =~ ~s("mishka_blog_posts") and &1 =~ ~s(ORDER BY m0."id")))
+               |> Enum.filter(&(&1 =~ ~s("mishka_blog_posts") and &1 =~ ~r/ORDER BY \w+0\."id"/))
 
       refute first =~ ~s("id"::uuid >)
       assert second =~ ~s("id"::uuid >)

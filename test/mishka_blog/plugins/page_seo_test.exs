@@ -23,6 +23,8 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   alias MishkaInstaller.Event.EventHandler
   alias MishkaInstaller.Event.Hook
 
+  require Ash.Query
+
   @host "blog.example.com"
 
   setup do
@@ -37,7 +39,22 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
     {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
     {:ok, _} = Settings.put("site.title", "The Studio", site_id: site.id)
 
+    # The breadcrumb's Blog is the site's page for the list of posts, as the blog provisions it.
+    home!(site, "/:lang/blog")
+
     {:ok, site: site}
+  end
+
+  defp home!(site, path) do
+    create_page!(
+      site_id: site.id,
+      path: path,
+      extra: %{"record" => "blog:home"},
+      active: true,
+      permissions: []
+    )
+
+    route_pages!(site)
   end
 
   # The map core hands the plugins for a request to the `kind` page, storing `schema`, with `params`.
@@ -291,6 +308,8 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
           permissions: []
         )
 
+        route_pages!(site)
+
         post = published!(site)
 
         ada =
@@ -333,16 +352,18 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       end
     end
 
-    test "names no profile address while no open page shows a blogger", %{site: site} do
-      for {active, permissions} <- [{false, []}, {true, ["members:read"]}] do
-        create_page!(
-          site_id: site.id,
-          path: "/:lang/writers/#{active}/:slug",
-          extra: %{"record" => "blog:author"},
-          active: active,
-          permissions: permissions
-        )
-      end
+    # The address is the routing table's, which holds the active pages and not what they are locked
+    # to: a blogger page locked to members is still where a blogger lives.
+    test "names no profile address while no active page shows a blogger", %{site: site} do
+      create_page!(
+        site_id: site.id,
+        path: "/:lang/writers/:slug",
+        extra: %{"record" => "blog:author"},
+        active: false,
+        permissions: []
+      )
+
+      route_pages!(site)
 
       post = published!(site)
       blogger = create_blogger!(site_id: site.id, display_name: "Ada", slug: "ada")
@@ -490,6 +511,20 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       end
     end
 
+    test "a preview at an address that names the post by its number reads the same post", %{
+      site: site
+    } do
+      post = published!(site)
+      by_slug = answer(given(site, :post, %{"lang" => "en", "slug" => post.slug}))
+      by_number = answer(given(site, :post, %{"lang" => "en", "post_id" => "#{post.number}"}))
+
+      assert by_number.title == by_slug.title
+      assert by_number.title =~ post.title
+
+      unnamed = given(site, :post, %{"lang" => "en", "post_id" => "0"})
+      assert answer(unnamed) == %{unnamed | var_docs: answer(unnamed).var_docs}
+    end
+
     test "with no params returns its variables and reads nothing", %{site: site} do
       published!(site)
       given = given(site, :post, %{})
@@ -617,6 +652,40 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
                  "collection.description",
                  "collection.url"
                ]
+      end
+    end
+
+    # A CATEGORY UNDER ANOTHER is at its whole chain on a page ending in `*slug`, and its leaf alone
+    # still answers there, with the chain as the canonical address.
+    test "under another, at a page ending in *slug, is canonical at its whole chain", %{
+      site: site
+    } do
+      design = create_collection!(site_id: site.id, status: :active, name: "Design")
+
+      accessibility =
+        create_collection!(
+          site_id: site.id,
+          status: :active,
+          name: "Accessibility",
+          parent_collection_id: design.id
+        )
+
+      chain = "#{design.slug}/#{accessibility.slug}"
+      url = base() <> "/category/" <> chain
+
+      for asked <- [chain, accessibility.slug] do
+        answered =
+          answer(
+            given_at(site, "/:lang/category/*slug", "blog:category", %{
+              "lang" => "en",
+              "slug" => asked
+            })
+          )
+
+        assert answered.title == "Accessibility"
+        assert answered.url == url, asked
+        assert answered.vars["collection.url"] == url
+        assert %{"url" => ^url} = schema_of(answered, "CollectionPage")
       end
     end
 
@@ -836,7 +905,7 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   end
 
   describe "the kinds it names" do
-    test "are a post, a collection, a tag, a blogger and a team, named as the blog's admin names them, each with the site's own to preview with",
+    test "are a post, a collection, a tag, a blogger and a team, then the blog home and its people, named as the blog's admin names them, each with the site's own to preview with",
          %{site: site} do
       post = published!(site, title: "Ash in production")
       create_blogger!(site_id: site.id, display_name: "Mona", slug: "mona")
@@ -858,7 +927,9 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
                  captures: ["slug"],
                  samples: [%{label: "Mona", params: %{"slug" => "mona"}}]
                },
-               %{id: "blog:team", group: "Blog", label: "Team", captures: ["slug"]}
+               %{id: "blog:team", group: "Blog", label: "Team", captures: ["slug"]},
+               %{id: "blog:home", group: "Blog", captures: [], samples: []},
+               %{id: "blog:people", group: "Blog", captures: [], samples: []}
              ] = MishkaBlog.Plugins.PageRecords.types(site.id)
 
       assert %{label: "Ash in production · en", params: %{"slug" => slug, "lang" => "en"}} =
@@ -890,19 +961,55 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
     blog
   end
 
-  describe "a blog at the site's root" do
-    test "leads its breadcrumb's Blog to /blog, from every kind of page", %{site: site} do
+  describe "the blog's home and its people" do
+    test "are a collection page open to whoever may open the page, wherever they are", %{
+      site: site
+    } do
+      for {path, record} <- [{"/news", "blog:home"}, {"/", "blog:people"}] do
+        answered = answer(given_at(site, path, record, %{}))
+
+        assert answered.permissions == []
+        assert %{"name" => "Blog"} = schema_of(answered, "CollectionPage")
+      end
+    end
+  end
+
+  describe "the breadcrumb's Blog" do
+    test "is the site's page for the list of posts, wherever the site put it, from every kind of page",
+         %{site: site} do
+      MishkaCmsCore.Runtime.Page
+      |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+      |> Ash.Query.filter(site_id == ^site.id and path == "/:lang/blog")
+      |> Ash.read_one!(authorize?: false)
+      |> Ash.Changeset.for_update(:update, %{path: "/news", language: "en"},
+        authorize?: false,
+        tenant: site.id
+      )
+      |> Ash.update!(authorize?: false)
+
+      route_pages!(site)
+
       post = published!(site, title: "Ash in production")
       tag = create_blog_tag!(site_id: site.id, name: "elixir")
       create_post_tag!(post_id: post.id, tag_id: tag.id)
+      design = create_collection!(site_id: site.id, status: :active, name: "Design")
+
+      accessibility =
+        create_collection!(
+          site_id: site.id,
+          status: :active,
+          name: "Accessibility",
+          parent_collection_id: design.id
+        )
 
       for {path, record, slug} <- [
             {"/blog/:slug", "blog:post", post.slug},
-            {"/blog/tag/:slug", "blog:tag", tag.slug}
+            {"/blog/tag/:slug", "blog:tag", tag.slug},
+            {"/:lang/category/*slug", "blog:category", "#{design.slug}/#{accessibility.slug}"}
           ] do
-        answered = answer(given_at(site, path, record, %{"slug" => slug}))
+        answered = answer(given_at(site, path, record, %{"lang" => "en", "slug" => slug}))
 
-        assert blog_crumb(answered)["item"] == base() <> "/blog",
+        assert blog_crumb(answered)["item"] == base() <> "/news",
                "#{record} led Blog elsewhere"
       end
     end

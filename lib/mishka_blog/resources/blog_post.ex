@@ -102,6 +102,7 @@ defmodule MishkaBlog.BlogPost do
     :featured,
     :language,
     :language_group_id,
+    :number,
     :site_id
   ]
 
@@ -1471,6 +1472,7 @@ defmodule MishkaBlog.BlogPost do
       derives: "sanitize(trim, downcase) validate(optional=[string, max_len=20, language_code])"
 
     field :language_group_id, :uuid, derives: "validate(optional=[uuid])"
+    field :number, :integer, derives: "validate(optional=[integer, min_len=1])"
   end
 
   # Field-level authorization policies
@@ -1554,6 +1556,14 @@ defmodule MishkaBlog.BlogPost do
              )
 
       change MishkaBlog.Resources.Changes.PublishLifecycle
+      change MishkaBlog.Resources.Changes.NextNumber
+
+      validate {MishkaBlog.Resources.Validations.FreeAddress,
+                message:
+                  dgettext_noop(
+                    "errors",
+                    "This post's address, %{address}, is already a page of this site."
+                  )}
 
       # Highlights the code blocks of the sanitized content, before the row is written, and stores
       # what the content says: its reading time and the components it names.
@@ -1614,6 +1624,14 @@ defmodule MishkaBlog.BlogPost do
              )
 
       change MishkaBlog.Resources.Changes.PublishLifecycle
+      change MishkaBlog.Resources.Changes.NextNumber
+
+      validate {MishkaBlog.Resources.Validations.FreeAddress,
+                message:
+                  dgettext_noop(
+                    "errors",
+                    "This post's address, %{address}, is already a page of this site."
+                  )}
 
       # Highlights the code blocks of the sanitized content, before the row is written, and stores
       # what the content says: its reading time and the components it names.
@@ -1684,6 +1702,13 @@ defmodule MishkaBlog.BlogPost do
 
       change MishkaBlog.Resources.Changes.PublishLifecycle
 
+      validate {MishkaBlog.Resources.Validations.FreeAddress,
+                message:
+                  dgettext_noop(
+                    "errors",
+                    "This post's address, %{address}, is already a page of this site."
+                  )}
+
       # Highlights the code blocks of the sanitized content, before the row is written, and stores
       # what the content says: its reading time and the components it names.
       change MishkaBlog.Resources.Changes.HighlightCode
@@ -1748,6 +1773,13 @@ defmodule MishkaBlog.BlogPost do
              )
 
       change MishkaBlog.Resources.Changes.PublishLifecycle
+
+      validate {MishkaBlog.Resources.Validations.FreeAddress,
+                message:
+                  dgettext_noop(
+                    "errors",
+                    "This post's address, %{address}, is already a page of this site."
+                  )}
 
       # Highlights the code blocks of the sanitized content, before the row is written, and stores
       # what the content says: its reading time and the components it names.
@@ -2741,6 +2773,14 @@ defmodule MishkaBlog.BlogPost do
       description "Timestamp when the post was published"
     end
 
+    attribute :number, :integer do
+      allow_nil? true
+      public? true
+      constraints min: 1
+
+      description "The post's number on its site, its `/archives/:post_id` address: the next free one unless the write names it"
+    end
+
     attribute :scheduled_publish_at, :utc_datetime do
       allow_nil? true
       public? true
@@ -3150,9 +3190,22 @@ defmodule MishkaBlog.BlogPost do
 
       description "The name of the first category the post is filed under, as the reader may open it"
     end
+
+    first :first_category_slug, :collections, :slug do
+      public? true
+      sort display_order: :asc, name: :asc
+
+      description "The slug of the first category the post is filed under, its address's `:category`"
+    end
   end
 
   identities do
+    identity :unique_number_per_site, [:number, :site_id] do
+      description "One post per number on a site, so `/archives/:post_id` names one post"
+      message dgettext_noop("errors", "Another post of this site already has this number.")
+      all_tenants? true
+    end
+
     identity :unique_slug_per_site, [:slug, :site_id] do
       description "Ensures blog post slugs are unique within each site for clear identification"
       message dgettext_noop("errors", "Blog post slug must be unique within a site.")

@@ -306,8 +306,8 @@ defmodule MishkaBlog.ProvisionTest do
       assert page(site, paths.tag).extra["record"] == "blog:tag"
       assert page(site, paths.author).extra["record"] == "blog:author"
       assert page(site, paths.team).extra["record"] == "blog:team"
-      refute Map.has_key?(page(site, "/:lang/blog").extra || %{}, "record")
-      refute Map.has_key?(page(site, "/:lang/blog/people").extra || %{}, "record")
+      assert page(site, "/:lang/blog").extra["record"] == "blog:home"
+      assert page(site, "/:lang/blog/people").extra["record"] == "blog:people"
 
       # EVERY KIND THE BLOG NAMES HAS A PAGE OF ITS OWN HERE, so none of them is offered to an
       # editor with nowhere to be shown.
@@ -320,7 +320,15 @@ defmodule MishkaBlog.ProvisionTest do
             do: record
 
       assert Enum.sort(kinds) ==
-               ["blog:author", "blog:category", "blog:post", "blog:tag", "blog:team"]
+               [
+                 "blog:author",
+                 "blog:category",
+                 "blog:home",
+                 "blog:people",
+                 "blog:post",
+                 "blog:tag",
+                 "blog:team"
+               ]
 
       assert Enum.sort(shown) == Enum.sort(kinds)
     end
@@ -399,8 +407,8 @@ defmodule MishkaBlog.ProvisionTest do
           &(elem(&1, 0) == "blog-people")
         )
 
-      assert {"author_base", {:literal, "/:lang/blog/author"}} in given
-      assert {"team_base", {:literal, "/:lang/blog/team"}} in given
+      # A blogger and a team are linked at the site's own page for one, wherever it is.
+      refute Enum.any?(given, fn {name, _value} -> String.ends_with?(name, "_base") end)
 
       assert page(site, paths.author).template =~
                ~s|site_path("/:lang/blog/people", @page.language)|

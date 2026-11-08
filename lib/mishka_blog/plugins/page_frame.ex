@@ -63,7 +63,7 @@ defmodule MishkaBlog.Plugins.PageFrame do
 
   use MishkaInstaller.Event.Hook, event: "runtime:page:frame", initial: %{priority: 50}
 
-  alias MishkaBlog.{PageSource, Provision}
+  alias MishkaBlog.{Address, PageSource, Provision}
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.States.TranslationsState
 
@@ -79,8 +79,13 @@ defmodule MishkaBlog.Plugins.PageFrame do
     "blog:category" => :posts,
     "blog:tag" => :posts,
     "blog:author" => :people,
-    "blog:team" => :people
+    "blog:team" => :people,
+    "blog:home" => :posts,
+    "blog:people" => :people
   }
+
+  # The kinds that name where a place is, for a site that moved its page.
+  @place_kinds %{posts: "blog:home", people: "blog:people"}
 
   # What the bar calls the blog and each of its places: keys of the site's translations.
   @title "Blog"
@@ -114,12 +119,12 @@ defmodule MishkaBlog.Plugins.PageFrame do
 
     %{
       title: word(frame, @title),
-      title_path: url.(Keyword.fetch!(Provision.places(), :posts)),
+      title_path: url.(place_path(frame, :posts, Keyword.fetch!(Provision.places(), :posts))),
       links:
         for {id, path} <- Provision.places() do
           %{
             label: word(frame, Keyword.fetch!(@labels, id)),
-            path: url.(path),
+            path: url.(place_path(frame, id, path)),
             current: id == place
           }
         end
@@ -131,6 +136,16 @@ defmodule MishkaBlog.Plugins.PageFrame do
   defp place(%{record: record, page: page}) do
     Map.get(@record_places, record) ||
       Enum.find_value(Provision.places(), fn {id, path} -> page[:path] == path && id end)
+  end
+
+  # Where a place is: the site's page of the kind that names it, else the path it is provisioned at.
+  defp place_path(%{site_id: site_id, language: language}, id, default) do
+    with kind when is_binary(kind) <- Map.get(@place_kinds, id),
+         {:ok, path} <- Address.path(site_id, kind, language) do
+      path
+    else
+      _provisioned -> default
+    end
   end
 
   defp address(%{language: language, site_id: site_id}, path),
@@ -172,10 +187,10 @@ defmodule MishkaBlog.Plugins.PageFrame do
   # same slug, for a visitor whose read found them.
   defp person(%{site_id: site_id} = frame, name) do
     case PageSource.of(frame) do
-      %PageSource{record: %{slug: slug} = person} ->
+      %PageSource{record: %{} = person} ->
         Enum.flat_map(
           Languages.site(site_id),
-          &translation(frame, &1, slug, Map.fetch!(person, name))
+          &translation(frame, person, &1, Map.fetch!(person, name))
         )
 
       _not_readable ->
@@ -186,16 +201,17 @@ defmodule MishkaBlog.Plugins.PageFrame do
   defp loaded(rows) when is_list(rows), do: rows
   defp loaded(_not_loaded), do: []
 
-  defp translation(frame, %{language: language, slug: slug}, title),
-    do: translation(frame, language, slug, title)
+  defp translation(frame, %{language: language} = edition, title),
+    do: translation(frame, edition, language, title)
 
-  defp translation(%{page: %{path: path}, site_id: site_id}, language, slug, title)
+  # The row at the page's own path, filled from it in `language` (`MishkaBlog.Address`).
+  defp translation(%{page: %{path: path}, site_id: site_id}, row, language, title)
        when is_binary(path) do
-    case Languages.url(path, %{Languages.capture() => language, "slug" => slug}, site_id) do
+    case Address.fill(path, row, site_id, language) do
       address when is_binary(address) -> [%{language: language, path: address, title: title}]
       nil -> []
     end
   end
 
-  defp translation(_frame, _language, _slug, _title), do: []
+  defp translation(_frame, _row, _language, _title), do: []
 end

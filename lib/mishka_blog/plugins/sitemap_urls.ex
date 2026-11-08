@@ -24,8 +24,10 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
     * a tag only when its own `seo_tags` hold a robots meta that says `index`: a public tag's page
       says `noindex` (`MishkaBlog.Plugins.PageSeo`) unless its own robots meta replaces that.
 
-  Each row at its own language and slug, at the address the site's URL mode gives it
-  (`MishkaCmsCore.Runtime.Languages.url/3`). A kind is listed only while `pages` holds its page —
+  Each row at the address its page's path makes of it — its language and slug, and for a post its
+  date, number and first category where the path names them (`MishkaBlog.Address`) — in the site's
+  URL mode. A row its page's path cannot be filled from, a post filed under nothing on a
+  `/:category/:slug` page, is not listed. A kind is listed only while `pages` holds its page —
   the page whose `extra` says it shows that kind (`"blog:post"`, `"blog:category"`, `"blog:tag"`,
   `"blog:author"`, `"blog:team"`), which every page `MishkaBlog.Provision` writes says — so a page
   switched off, closed to visitors or marked noindex lists nothing — and a row only in a
@@ -51,16 +53,24 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
   require Ash.Query
 
-  alias MishkaBlog.{Blogger, BlogPost, Collection, Tag, Team}
+  alias MishkaBlog.{Address, Blogger, BlogPost, Collection, Tag, Team}
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
-  alias MishkaCmsCore.Runtime.{Languages, PageEditions, Seo}
+  alias MishkaCmsCore.Runtime.{PageEditions, Seo}
 
   # Each kind of row: the record its page says it shows, the fields its address and whether it is
   # listed are read from, and what it loads to know the permissions it opens with.
   @kinds [
     {"blog:post", BlogPost,
-     [:slug, :language, :updated_at, :featured_image_url, :permissions, :seo_tags],
-     [:effective_permissions]},
+     [
+       :slug,
+       :language,
+       :updated_at,
+       :featured_image_url,
+       :permissions,
+       :seo_tags,
+       :published_at,
+       :number
+     ], [:effective_permissions]},
     {"blog:category", Collection, [:slug, :language, :updated_at, :permissions, :seo_tags],
      [:effective_permissions]},
     {"blog:tag", Tag, [:slug, :language, :updated_at, :permissions, :seo_tags], []}
@@ -89,9 +99,15 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
           page ->
             resource
-            |> rows(fields, loads, PageEditions.served_languages(page, site_id), site_id)
+            |> rows(
+              fields,
+              loads ++ Address.loads(resource, page.path),
+              PageEditions.served_languages(page, site_id),
+              site_id
+            )
             |> Stream.filter(&indexed?/1)
             |> Stream.map(&entry(page, &1, site_id))
+            |> Stream.reject(&is_nil(&1.path))
         end
       end)
 
@@ -118,7 +134,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
     |> SitemapCompiler.stream_rows(actor: nil, tenant: site_id)
     |> Stream.flat_map(fn row ->
       languages
-      |> Enum.map(&address(page, &1, row.slug, site_id))
+      |> Enum.map(&Address.fill(page.path, row, site_id, &1))
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
       |> Enum.map(&%{path: &1, lastmod: row.updated_at})
@@ -159,15 +175,12 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
   defp entry(page, %BlogPost{} = post, site_id) do
     %{
-      path: address(page, post.language, post.slug, site_id),
+      path: Address.fill(page.path, post, site_id),
       lastmod: post.updated_at,
       images: List.wrap(post.featured_image_url)
     }
   end
 
   defp entry(page, row, site_id),
-    do: %{path: address(page, row.language, row.slug, site_id), lastmod: row.updated_at}
-
-  defp address(page, language, slug, site_id),
-    do: Languages.url(page.path, %{Languages.capture() => language, "slug" => slug}, site_id)
+    do: %{path: Address.fill(page.path, row, site_id), lastmod: row.updated_at}
 end

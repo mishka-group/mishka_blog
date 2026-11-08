@@ -16,6 +16,10 @@ defmodule MishkaBlog.Plugins.PageSource do
   page, the page of its Posts place. Every other page is handed back untouched, before anything is
   read. What is read, and as whom, is `MishkaBlog.PageSource`'s.
 
+  A page whose address names a record the site does not have is answered
+  `MishkaCmsCore.Runtime.PageSource.missing/0`, so `MishkaCmsWeb.RuntimeLive` tries the next page
+  that matches the address and, with none left, answers the site's 404.
+
   Registered in `MishkaBlog.Application`.
   """
 

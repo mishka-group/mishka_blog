@@ -39,9 +39,15 @@ defmodule MishkaBlog.Plugins.PageRecords do
       ),
       type("blog:tag", gettext("Tag"), samples(Tag, :name, :updated_at, site_id)),
       type("blog:author", gettext("Blogger"), people(Blogger, :display_name, site_id)),
-      type("blog:team", gettext("Team"), people(Team, :name, site_id))
+      type("blog:team", gettext("Team"), people(Team, :name, site_id)),
+      list_type("blog:home", gettext("Blog home")),
+      list_type("blog:people", gettext("People"))
     ]
   end
+
+  # A page of a list, with no row to name: it takes no captures and has nothing to preview.
+  defp list_type(id, label),
+    do: %{id: id, group: gettext("Blog"), label: label, captures: [], samples: []}
 
   defp type(id, label, samples),
     do: %{id: id, group: gettext("Blog"), label: label, captures: ["slug"], samples: samples}

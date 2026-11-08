@@ -172,6 +172,7 @@ defmodule MishkaBlog.Dev.Generator do
         featured: false,
         language: "en",
         language_group_id: nil,
+        number: nil,
         site_id: nil
       ],
       overrides: opts,

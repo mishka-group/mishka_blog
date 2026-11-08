@@ -2100,6 +2100,19 @@ defmodule MishkaBlog.Collection do
               {:array, :string},
               {MishkaBlog.Resources.Calculations.EffectivePermissions, kind: :collection}
 
+    calculate :slug_path,
+              :string,
+              expr(
+                fragment(
+                  "(WITH RECURSIVE chain(id, parent_id, slug, depth) AS (SELECT c.id, c.parent_collection_id, c.slug, 0 FROM mishka_blog_collections c WHERE c.id = ? UNION ALL SELECT p.id, p.parent_collection_id, p.slug, chain.depth + 1 FROM mishka_blog_collections p JOIN chain ON p.id = chain.parent_id WHERE p.archived_at IS NULL AND chain.depth < 32) SELECT string_agg(slug, '/' ORDER BY depth DESC) FROM chain)",
+                  id
+                )
+              ) do
+      public? true
+
+      description "The slugs of the category's parents and its own, outermost first and joined by `/` (`travel/city-guides/berlin`), the address a `*slug` category page names it by"
+    end
+
     calculate :version_count, :integer do
       description "Total number of versions for this collection"
       public? true

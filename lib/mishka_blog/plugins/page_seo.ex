@@ -12,9 +12,9 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   A page is matched by the kind of record it says it shows (`record`, its `extra`'s `"record"`):
   `"blog:post"`, `"blog:category"`, `"blog:tag"`, `"blog:author"` or `"blog:team"`, the kinds
-  `MishkaBlog.Plugins.PageRecords`
-  names. Its path may be anything that captures the `slug`. Every other page is handed back
-  untouched before anything is read. A kind has one owner, so the answer for one of these halts the
+  `MishkaBlog.Plugins.PageRecords` names. Its path may be anything that captures the `slug`, or for a
+  post its `post_id` (`MishkaBlog.Address`). Every other page is handed back untouched before
+  anything is read. A kind has one owner, so the answer for one of these halts the
   chain: no later plugin is asked.
 
   Everything returned is a default: what the page sets in its own SEO — a title, a description, a
@@ -92,11 +92,18 @@ defmodule MishkaBlog.Plugins.PageSeo do
   Home → Blog → the team. `vars` — `team.name`, `team.description`, `team.url`. Its share card
   says "Team" above the name, with the members' photos and how many they are.
 
+  ## The blog's front page, `"blog:home"`, and its people, `"blog:people"`
+
+  Pages that show no record of their own, only a list: a `CollectionPage` with the page's own title
+  and description, and no lock but the page's. They carry the kind so the site's page for the posts
+  and for the people is found by it (`MishkaBlog.Address.page_url/2`), at whichever path the site
+  gave it.
+
   ## Where "Blog" points
 
-  The breadcrumb's middle item is the blog's home, read off the page's own path: the post page's
-  parent, the parent of every other kind's parent — `/blog/:slug` and `/blog/tag/:slug` both lead
-  to `/blog`, `/:lang/blog/:slug` to `/:lang/blog` in the page's language.
+  The breadcrumb's middle item is the site's page for the list of posts, `"blog:home"`, in the
+  page's language (`MishkaBlog.Address.page_url/3`), wherever the site put it: `/blog`, `/news` or
+  `/`. A site with no such page has no middle item.
 
   ## What every matched page returns
 
@@ -117,10 +124,10 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   require Ash.Query
 
-  alias MishkaBlog.{Blogger, BlogPost, Collection, PageSource, Tag, Team}
+  alias MishkaBlog.{Address, Blogger, BlogPost, Collection, PageSource, Tag, Team}
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.PlainText
-  alias MishkaCmsCore.Runtime.{Languages, Page, Seo}
+  alias MishkaCmsCore.Runtime.{Languages, Seo}
 
   @post_fields [
     :id,
@@ -133,6 +140,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
     :updated_at,
     :language,
     :language_group_id,
+    :number,
     :seo_tags,
     :schema,
     :permissions
@@ -159,7 +167,27 @@ defmodule MishkaBlog.Plugins.PageSeo do
   def call(%{record: "blog:tag"} = seo), do: {:reply, :halt, tag(seo)}
   def call(%{record: "blog:author"} = seo), do: {:reply, :halt, author(seo)}
   def call(%{record: "blog:team"} = seo), do: {:reply, :halt, team(seo)}
+
+  def call(%{record: record} = seo) when record in ["blog:home", "blog:people"],
+    do: {:reply, :halt, list_seo(seo)}
+
   def call(seo), do: {:reply, seo}
+
+  # The blog's front page and the page of its people show no record of their own: a
+  # `CollectionPage`, open to whoever may open the page.
+  defp list_seo(seo) do
+    page =
+      compact(%{
+        "@context" => "https://schema.org",
+        "@type" => "CollectionPage",
+        "name" => seo.title,
+        "description" => seo.description,
+        "url" => seo.url,
+        "inLanguage" => seo.language
+      })
+
+    %{seo | schema: [page]}
+  end
 
   # The photos, names and teams a share card shows of a post's authors, their X accounts, and the
   # slugs and links their `Person` is written from.
@@ -202,7 +230,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
       :none ->
         system(
           seo,
-          read(Collection, seo, @collection_fields, [:effective_permissions]),
+          read(Collection, seo, @collection_fields, [:effective_permissions | chain_loads(seo)]),
           &collection_seo/2
         )
     end
@@ -302,11 +330,11 @@ defmodule MishkaBlog.Plugins.PageSeo do
   # visitor by when the visitor's own read left the record out: read as a visitor who may not open
   # it, a locked record is no record at all, and the gate is handed no permissions to refuse them
   # with.
-  defp read(resource, %{params: %{"slug" => slug}, site_id: site_id} = seo, fields, loads)
-       when is_binary(slug) and slug != "" and is_binary(site_id) do
+  defp read(resource, %{params: %{} = params, site_id: site_id} = seo, fields, loads)
+       when is_binary(site_id) do
     resource
     |> Ash.Query.for_read(:public_list, %{}, tenant: site_id, authorize?: false)
-    |> Ash.Query.filter(slug == ^slug)
+    |> named(resource, params)
     |> in_language(seo.language)
     |> Ash.Query.select(fields)
     |> Ash.Query.load(loads)
@@ -318,6 +346,21 @@ defmodule MishkaBlog.Plugins.PageSeo do
   end
 
   defp read(_resource, _seo, _fields, _loads), do: nil
+
+  # The row the address names: by its `slug` (a category's chain by its last segment), and a post by
+  # its `post_id` (its number) where the page's address holds that instead, as `MishkaBlog.PageSource`
+  # reads it. An address that names neither reads nothing.
+  defp named(query, _resource, %{"slug" => slug}) when is_binary(slug) and slug != "",
+    do: Ash.Query.filter(query, slug == ^(slug |> String.split("/") |> List.last()))
+
+  defp named(query, BlogPost, %{"post_id" => post_id}) when is_binary(post_id) do
+    case Integer.parse(post_id) do
+      {number, ""} when number > 0 -> Ash.Query.filter(query, number == ^number)
+      _not_a_number -> Ash.Query.filter(query, false)
+    end
+  end
+
+  defp named(query, _resource, _unnamed), do: Ash.Query.filter(query, false)
 
   # A blogger or a team is one row in every language: the slug alone names it. Read as a guest
   # reads it, through the public action, for a caller handed no rows.
@@ -350,7 +393,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
       bloggers: people_query(),
       collections:
         Collection
-        |> Ash.Query.select([:name])
+        |> Ash.Query.select([:name, :slug])
         |> Ash.Query.sort(display_order: :asc, name: :asc),
       tags:
         Tag
@@ -359,7 +402,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
         |> Ash.Query.page(limit: 50),
       editions:
         BlogPost
-        |> Ash.Query.select([:id, :slug, :language, :title])
+        |> Ash.Query.select([:id, :slug, :language, :title, :published_at, :number])
+        |> Ash.Query.load(:first_category_slug)
         |> Ash.Query.sort(language: :asc)
     ]
   end
@@ -416,7 +460,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         tags: with_own(generated, post.seo_tags),
         schema:
           own_schema(post.schema, posting) ++
-            breadcrumb(seo, base, 1, post.title),
+            breadcrumb(seo, base, post.title),
         permissions: post.effective_permissions,
         card: %{
           eyebrow: section,
@@ -446,6 +490,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
   end
 
   defp collection_seo(seo, collection) do
+    seo = %{seo | url: own_address(seo, collection)}
     base = base(seo)
 
     page =
@@ -466,7 +511,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         tags: List.wrap(collection.seo_tags),
         schema:
           own_schema(collection.schema, page) ++
-            breadcrumb(seo, base, 2, collection.name),
+            breadcrumb(seo, base, collection.name),
         permissions: collection.effective_permissions,
         card: %{eyebrow: gettext("Category")},
         vars:
@@ -500,7 +545,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         description: tag.description,
         language: tag.language,
         tags: with_own(tag_robots(tag.permissions), tag.seo_tags),
-        schema: [page | breadcrumb(seo, base, 2, tag.name)],
+        schema: [page | breadcrumb(seo, base, tag.name)],
         permissions: List.wrap(tag.permissions),
         card: %{eyebrow: gettext("Tag")},
         vars:
@@ -547,7 +592,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         image: blogger.avatar_url || seo.image,
         type: "profile",
         tags: meta("name", "twitter:creator", x_account(blogger.social_links)),
-        schema: [profile | breadcrumb(seo, base, 2, blogger.display_name)],
+        schema: [profile | breadcrumb(seo, base, blogger.display_name)],
         permissions: [],
         card: %{
           eyebrow: gettext("Author"),
@@ -595,7 +640,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
       | title: team.name,
         description: team.description,
         image: team.avatar_url || seo.image,
-        schema: [profile | breadcrumb(seo, base, 2, team.name)],
+        schema: [profile | breadcrumb(seo, base, team.name)],
         permissions: [],
         card: %{
           eyebrow: gettext("Team"),
@@ -737,8 +782,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
             |> Enum.uniq_by(& &1.language)
             |> Enum.sort_by(& &1.language),
           edition.language in served,
-          captures = %{Languages.capture() => edition.language, "slug" => edition.slug},
-          address = Languages.url(path, captures, site_id),
+          address = Address.fill(path, edition, site_id),
           is_binary(address),
           do: %{language: edition.language, path: address}
 
@@ -784,21 +828,10 @@ defmodule MishkaBlog.Plugins.PageSeo do
   defp own_schema([_ | _] = own, _built), do: own
   defp own_schema(_none, built), do: [built]
 
-  defp breadcrumb(_seo, nil, _depth, _name), do: []
+  defp breadcrumb(_seo, nil, _name), do: []
 
-  # `depth` is how many segments of the page's path come after the blog's home: one for a post,
-  # two for a category, a tag, a blogger or a team.
-  defp breadcrumb(
-         %{language: language, url: url, page: %{path: path}, site_id: site_id},
-         base,
-         depth,
-         name
-       ) do
-    blog_url =
-      path
-      |> drop_segments(depth)
-      |> Languages.url(%{Languages.capture() => language}, site_id)
-      |> Seo.absolute(base)
+  defp breadcrumb(%{language: language, url: url, site_id: site_id}, base, name) do
+    blog_url = "blog:home" |> Address.page_url(language, site_id) |> Seo.absolute(base)
 
     items =
       Enum.reject(
@@ -820,8 +853,21 @@ defmodule MishkaBlog.Plugins.PageSeo do
     ]
   end
 
-  defp drop_segments(path, 0), do: path
-  defp drop_segments(path, depth), do: path |> Path.dirname() |> drop_segments(depth - 1)
+  # A category's canonical address is its own, at the page's path filled from it: its whole chain at
+  # a page ending in `*slug`, whether the request named it by the chain or by its slug alone, with
+  # the page number the request asked for.
+  defp own_address(%{url: url, page: %{path: path}, site_id: site_id}, collection)
+       when is_binary(url) and is_binary(path) do
+    case Address.fill(path, collection, site_id) do
+      nil -> url
+      address -> url |> URI.parse() |> Map.put(:path, address) |> URI.to_string()
+    end
+  end
+
+  defp own_address(%{url: url}, _collection), do: url
+
+  defp chain_loads(%{page: %{path: path}}), do: Address.loads(Collection, path)
+  defp chain_loads(_no_page), do: []
 
   # The site's own Organization, by the `@id` core gives it.
   defp publisher(base) when is_binary(base), do: %{"@id" => base <> "/#organization"}
@@ -832,39 +878,15 @@ defmodule MishkaBlog.Plugins.PageSeo do
   defp authors(%{bloggers: []}, _site_id, _base), do: []
 
   defp authors(post, site_id, base) do
-    profiles = profiles_path(site_id)
-
     Enum.map(post.bloggers, fn blogger ->
       compact(%{
         "@type" => "Person",
         "name" => blogger.display_name,
-        "url" => profile_url(profiles, blogger.slug, post.language, site_id, base),
+        "url" => blogger |> Address.of(site_id, post.language) |> Seo.absolute(base),
         "sameAs" => links(blogger.social_links)
       })
     end)
   end
-
-  # The path of the site's page that shows a blogger (`"blog:author"`), active and open to every
-  # visitor, the first by path; `nil` for none. Read as the system, as `read/4` reads.
-  defp profiles_path(site_id) do
-    Page
-    |> Ash.Query.filter(active == true and extra["record"] == "blog:author")
-    |> Ash.Query.select([:path, :permissions])
-    |> Ash.Query.sort(path: :asc)
-    |> Ash.read(tenant: site_id, authorize?: false, page: false)
-    |> case do
-      {:ok, pages} -> Enum.find_value(pages, &(&1.permissions in [nil, []] && &1.path))
-      _unreadable -> nil
-    end
-  end
-
-  defp profile_url(nil, _slug, _language, _site_id, _base), do: nil
-
-  defp profile_url(path, slug, language, site_id, base),
-    do:
-      path
-      |> Languages.url(%{Languages.capture() => language, "slug" => slug}, site_id)
-      |> Seo.absolute(base)
 
   # `robots` "noindex, follow" for a public tag; nothing for one that names a permission, which the
   # head keeps out of an index already.

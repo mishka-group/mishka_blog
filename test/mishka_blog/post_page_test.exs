@@ -51,6 +51,7 @@ defmodule MishkaBlog.PostPageTest do
     on_exit(fn -> SiteState.clear() end)
 
     Provision.ensure!(site)
+    route_pages!(site)
     :ok = Translations.put_site(site.id)
 
     {:ok, site: site}
