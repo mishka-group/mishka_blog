@@ -33,7 +33,13 @@ defmodule MishkaBlog.Address do
 
   A `:category` is one segment, the category's own slug. WordPress writes the whole chain,
   `/tutorials/wordpress/slug`, and a page path can capture several segments only at its end
-  (`*name`), so a chain is not an address here.
+  (`*name`), so a post's chain is not an address here.
+
+  A category page whose path ends in `*slug` (`/:lang/category/*slug`) names the category by its
+  whole chain, as WordPress does (`/category/travel/city-guides/berlin`): `slug` is then filled with
+  the category's `slug_path`, which the caller loads with the row in the same read (`loads/2`
+  says which), else with its own slug. A request names the category by the last segment, and the
+  chain it holds must be the category's (`agrees?/2`).
   """
 
   alias MishkaBlog.{Blogger, BlogPost, Collection, Tag, Team}
@@ -106,7 +112,33 @@ defmodule MishkaBlog.Address do
   """
   @spec fill(String.t(), struct(), String.t() | nil, String.t() | nil) :: String.t() | nil
   def fill(path, row, site_id, language \\ nil),
-    do: Languages.url(path, captures(row, language), site_id)
+    do: Languages.url(path, row |> captures(language) |> chained(path, row), site_id)
+
+  @doc """
+  What a read of `resource`'s rows loads for `fill/4` to fill `path`, in the same statement: a
+  post's `first_category_slug` where the path names a `:category`, a category's `slug_path` where it
+  ends in `*slug`; `[]` otherwise.
+  """
+  @spec loads(module(), String.t()) :: [atom()]
+  def loads(BlogPost, path) when is_binary(path),
+    do: needed(path, ":category", :first_category_slug)
+
+  def loads(Collection, path) when is_binary(path), do: needed(path, "*slug", :slug_path)
+  def loads(_resource, _path), do: []
+
+  defp needed(path, capture, load),
+    do: path |> String.split("/") |> Enum.member?(capture) |> load_if(load)
+
+  defp load_if(true, load), do: [load]
+  defp load_if(false, _load), do: []
+
+  defp chained(captures, path, %Collection{slug_path: chain}) when is_binary(chain),
+    do: captures |> chain_into(loads(Collection, path), chain)
+
+  defp chained(captures, _path, _row), do: captures
+
+  defp chain_into(captures, [:slug_path], chain), do: Map.put(captures, "slug", chain)
+  defp chain_into(captures, [], _chain), do: captures
 
   @doc "The record kind `row` is shown as: `\"blog:post\"` for a post, and so on; `nil` for another row."
   @spec kind(term()) :: String.t() | nil
@@ -131,6 +163,9 @@ defmodule MishkaBlog.Address do
   Whether the captures of a request agree with the post it found: every one of `year`, `monthnum`,
   `day`, `post_id` and `category` the request holds names the post — the date it was published on,
   its number, and one of the categories it is filed under. A request that names none of them agrees.
+
+  For a category, the `chain` a request named it by (`travel/city-guides/berlin`) must be its
+  `slug_path`; a request that named it by its own slug alone agrees.
   """
   @spec agrees?(struct(), map()) :: boolean()
   def agrees?(%BlogPost{} = post, params) when is_map(params) do
@@ -143,6 +178,8 @@ defmodule MishkaBlog.Address do
       {key, asked} -> same_number?(asked, Map.get(own, key))
     end)
   end
+
+  def agrees?(%Collection{slug_path: chain}, %{"chain" => asked}), do: asked == chain
 
   def agrees?(_row, _params), do: true
 

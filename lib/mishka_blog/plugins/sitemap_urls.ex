@@ -101,7 +101,7 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
             resource
             |> rows(
               fields,
-              loads ++ category_of(resource, page),
+              loads ++ Address.loads(resource, page.path),
               PageEditions.served_languages(page, site_id),
               site_id
             )
@@ -121,16 +121,6 @@ defmodule MishkaBlog.Plugins.SitemapUrls do
 
     Stream.concat(records, people)
   end
-
-  # A post's first category, in the statement that reads the posts, only for a post page whose path
-  # names it.
-  defp category_of(BlogPost, %{path: path}) do
-    if path |> String.split("/") |> Enum.member?(":category"),
-      do: [:first_category_slug],
-      else: []
-  end
-
-  defp category_of(_resource, _page), do: []
 
   # The page that says it shows `record`.
   defp page_for(pages, record), do: Enum.find(pages, &(Seo.record_of(&1.extra) == record))

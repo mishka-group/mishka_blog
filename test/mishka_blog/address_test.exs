@@ -116,6 +116,36 @@ defmodule MishkaBlog.AddressTest do
     end
   end
 
+  describe "a category's address" do
+    test "is its whole chain at a page ending in *slug, and its own slug at a :slug one", %{
+      site: site
+    } do
+      category = %MishkaBlog.Collection{
+        slug: "berlin",
+        language: "en",
+        slug_path: "travel/berlin"
+      }
+
+      page!(site, "/:lang/category/*slug", "blog:category")
+      assert Address.of(category, site.id) == "/category/travel/berlin"
+      assert Address.of(%{category | slug_path: nil}, site.id) == "/category/berlin"
+      assert Address.loads(MishkaBlog.Collection, "/:lang/category/*slug") == [:slug_path]
+
+      WebRunTimeMetaDataState.delete_by_site(site.name)
+      page!(site, "/:lang/category/:slug", "blog:category")
+      assert Address.of(category, site.id) == "/category/berlin"
+      assert Address.loads(MishkaBlog.Collection, "/:lang/category/:slug") == []
+    end
+
+    test "agrees with a request whose chain is its own, or that names it by its slug" do
+      category = %MishkaBlog.Collection{slug: "berlin", slug_path: "travel/berlin"}
+
+      assert Address.agrees?(category, %{"slug" => "berlin", "chain" => "travel/berlin"})
+      assert Address.agrees?(category, %{"slug" => "berlin"})
+      refute Address.agrees?(category, %{"slug" => "berlin", "chain" => "food/berlin"})
+    end
+  end
+
   describe "a post's number" do
     test "is the next free one of its site, unless the write names it", %{site: site} do
       other = create_site!()

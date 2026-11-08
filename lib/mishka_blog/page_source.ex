@@ -267,12 +267,25 @@ defmodule MishkaBlog.PageSource do
     if Map.has_key?(asked, "slug") or Map.has_key?(asked, "post_id"), do: asked
   end
 
+  defp asked("blog:category", params) do
+    case given(params, ["slug"]) do
+      %{"slug" => slug} -> slug |> String.split("/", trim: true) |> chain()
+      _none -> nil
+    end
+  end
+
   defp asked(_kind, params) do
     case given(params, ["slug"]) do
       %{"slug" => _slug} = asked -> asked
       _none -> nil
     end
   end
+
+  # A CATEGORY NAMED BY ITS CHAIN, at a page whose path ends in `*slug`, is read by its own slug, the
+  # last segment, and the chain must be its own (`MishkaBlog.Address.agrees?/2`).
+  defp chain([]), do: nil
+  defp chain([slug]), do: %{"slug" => slug}
+  defp chain(segments), do: %{"slug" => List.last(segments), "chain" => Enum.join(segments, "/")}
 
   defp given(params, keys) do
     for {key, value} <- Map.take(params, keys), is_binary(value) and value != "", into: %{} do
@@ -307,7 +320,7 @@ defmodule MishkaBlog.PageSource do
     {resource, loads} =
       case kind do
         "blog:post" -> {BlogPost, [collections: Ash.Query.select(Collection, [:slug])]}
-        "blog:category" -> {Collection, []}
+        "blog:category" -> {Collection, [:slug_path]}
         "blog:tag" -> {Tag, []}
       end
 
@@ -385,7 +398,8 @@ defmodule MishkaBlog.PageSource do
   defp with_record(source, %{slug: slug} = record), do: %{source | record: record, slug: slug}
   defp with_record(source, nil), do: source
 
-  # A post the address names by a date or a category it does not have is not this address's post.
+  # A post the address names by a date or a category it does not have is not this address's post, and
+  # a category it names by a chain that is not its own is not this address's category.
   defp record(%{kind: "blog:post"} = source, request) do
     BlogPost
     |> by_address(source, request)
@@ -400,10 +414,11 @@ defmodule MishkaBlog.PageSource do
     |> by_address(source, request)
     |> Ash.Query.select(@collection_fields)
     |> Ash.Query.load(
-      [:effective_permissions, :listed_post_count] ++
+      [:effective_permissions, :listed_post_count, :slug_path] ++
         editions(source, Collection, :name)
     )
     |> first(source, request)
+    |> agreeing(source)
   end
 
   defp record(%{kind: "blog:tag"} = source, request) do
@@ -557,7 +572,8 @@ defmodule MishkaBlog.PageSource do
   defp addressed_by(_category_or_tag), do: []
 
   defp addressed_loads(BlogPost), do: [:first_category_slug]
-  defp addressed_loads(_category_or_tag), do: []
+  defp addressed_loads(Collection), do: [:slug_path]
+  defp addressed_loads(_tag), do: []
 
   # ---------------------------------------------------------------------------
   # The page of a list

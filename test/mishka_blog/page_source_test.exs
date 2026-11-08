@@ -360,6 +360,37 @@ defmodule MishkaBlog.PageSourceTest do
     end
   end
 
+  describe "a category under a parent, named by its chain" do
+    setup %{site: site} do
+      travel = category!(site, "travel", [])
+
+      berlin =
+        create_collection!(
+          site_id: site.id,
+          slug: "berlin",
+          name: "Berlin",
+          status: :active,
+          language: "en",
+          parent_collection_id: travel.id
+        )
+
+      {:ok, berlin: berlin}
+    end
+
+    test "is found by its whole chain or its own slug, and missing under another parent", %{
+      site: site,
+      berlin: berlin
+    } do
+      assert %PageSource{record: %{id: id, slug_path: "travel/berlin"}, slug: "berlin"} =
+               source(site, :category, "travel/berlin", nil)
+
+      assert id == berlin.id
+      assert %PageSource{record: %{id: ^id}} = source(site, :category, "berlin", nil)
+      assert CorePageSource.missing?(source(site, :category, "food/berlin", nil))
+      assert CorePageSource.missing?(source(site, :category, "travel/paris", nil))
+    end
+  end
+
   describe "a draft" do
     test "is missing and has no lock, for a guest and for a reader holding every lock", %{
       site: site,

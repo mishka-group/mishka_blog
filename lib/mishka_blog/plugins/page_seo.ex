@@ -347,11 +347,11 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   defp read(_resource, _seo, _fields, _loads), do: nil
 
-  # The row the address names: by its `slug`, and a post by its `post_id` (its number) where the
-  # page's address holds that instead, as `MishkaBlog.PageSource` reads it. An address that names
-  # neither reads nothing.
+  # The row the address names: by its `slug` (a category's chain by its last segment), and a post by
+  # its `post_id` (its number) where the page's address holds that instead, as `MishkaBlog.PageSource`
+  # reads it. An address that names neither reads nothing.
   defp named(query, _resource, %{"slug" => slug}) when is_binary(slug) and slug != "",
-    do: Ash.Query.filter(query, slug == ^slug)
+    do: Ash.Query.filter(query, slug == ^(slug |> String.split("/") |> List.last()))
 
   defp named(query, BlogPost, %{"post_id" => post_id}) when is_binary(post_id) do
     case Integer.parse(post_id) do
