@@ -12,6 +12,7 @@
 - A category under another is listed, counted and paged at its whole chain, `/category/design/accessibility`, on a category page whose path ends in `*slug`: `blog-post-list`, `blog-featured-posts` and `blog-post-search` read a `collection` given as a chain by its last segment, and `blog-category-list`, `blog-post-detail` and every other block link a category at its chain there. The leaf alone, `/category/accessibility`, still answers, with the chain as its canonical address. The breadcrumb's Blog is the site's page for the list of posts (`MishkaBlog.Address.page_url/3`) instead of the parent of the page's path. A site takes the blocks by upgrading the blog components from the "Blog components" card (kit 3.13.0)
 - A post has a `number`, unique on its site, its `/archives/:post_id` address: a new post gets the next free one, and a create or an update may name its own, which is how an import keeps a WordPress post's id
 - A post whose address would be a page the site already serves, `/about` on a site whose post page is `/:slug`, is refused with "This post's address, /about, is already a page of this site."
+- `MishkaBlog.Provision.ensure_pages!/3` gives a site only the sample pages a caller names, each at a path of the caller's, with the components and the rest `ensure!/3` gives, so a site that moved some of its Blog pages gets the missing ones without a second copy of the others
 - The lock is on the newest Hex releases, including `guarded_struct` 0.1.5, `lazy_html` 0.1.14 and `localize` 1.6.1
 
 # Changelog for MishkaBlog 0.0.2
