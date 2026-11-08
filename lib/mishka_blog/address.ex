@@ -93,13 +93,11 @@ defmodule MishkaBlog.Address do
   @doc """
   The address of the site's page for a kind that shows no row, `"blog:home"` (the list of posts)
   or `"blog:people"`, in `language`, at the address the site's URL mode gives it; `nil` when the
-  site has no such page. The site is the one the calling process renders for, which is what a
-  template calls this from.
+  site has no such page. The site is `site_id`, by default the one the calling process renders for,
+  which is what a template calls this from.
   """
-  @spec page_url(String.t(), String.t() | nil) :: String.t() | nil
-  def page_url(kind, language) do
-    site_id = Translations.site()
-
+  @spec page_url(String.t(), String.t() | nil, String.t() | nil) :: String.t() | nil
+  def page_url(kind, language, site_id \\ Translations.site()) do
     case path(site_id, kind, language) do
       {:ok, path} -> Languages.url(path, %{Languages.capture() => language}, site_id)
       :error -> nil
@@ -125,6 +123,19 @@ defmodule MishkaBlog.Address do
 
   def loads(Collection, path) when is_binary(path), do: needed(path, "*slug", :slug_path)
   def loads(_resource, _path), do: []
+
+  @doc """
+  `loads/2` for the path of the page of `site_id` that shows `resource`'s rows in `language`, found
+  in memory (`path/3`); `[]` when the site has no such page. For a caller that reads rows to link
+  them at the site's page for their kind.
+  """
+  @spec loads(module(), String.t() | nil, String.t() | nil) :: [atom()]
+  def loads(resource, site_id, language) do
+    case path(site_id, Map.get(@kinds, resource), language) do
+      {:ok, path} -> loads(resource, path)
+      :error -> []
+    end
+  end
 
   defp needed(path, capture, load),
     do: path |> String.split("/") |> Enum.member?(capture) |> load_if(load)

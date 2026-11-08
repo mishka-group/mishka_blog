@@ -903,6 +903,123 @@ defmodule MishkaBlog.ListPagesTest do
     end
   end
 
+  # A SITE MOVED FROM WORDPRESS NAMES A CATEGORY BY ITS WHOLE CHAIN of parents, `/category/design/
+  # accessibility`, at a category page whose path ends in `*slug`: every block on the page reads the
+  # category by its own slug, and every link to it, or to the page itself, is the chain.
+  describe "a category under another, at a page ending in *slug" do
+    setup %{site: site} do
+      Page
+      |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+      |> Ash.Query.filter(site_id == ^site.id and extra["record"] == "blog:category")
+      |> Ash.read_one!(authorize?: false)
+      |> Ash.Changeset.for_update(:update, %{path: "/:lang/category/*slug"},
+        authorize?: false,
+        tenant: site.id
+      )
+      |> Ash.update!(authorize?: false)
+
+      route_pages!(site)
+      :ok
+    end
+
+    defp nested!(site, parent, child, opts \\ []) do
+      parent = category!(site, parent, opts)
+      {parent, category!(site, child, Keyword.put(opts, :parent_collection_id, parent.id))}
+    end
+
+    defp filed_posts!(site, category, count, opts \\ []) do
+      for index <- 1..count do
+        site
+        |> publish!(
+          "Post #{String.pad_leading("#{index}", 2, "0")}",
+          Keyword.put(
+            opts,
+            :published_at,
+            DateTime.add(~U[2026-01-01 00:00:00Z], index * 86_400, :second)
+          )
+        )
+        |> tap(&file!(&1, category))
+      end
+    end
+
+    @at "/:lang/category/*slug"
+
+    test "lists its posts at its whole chain, read by the page or by the list itself", %{
+      site: site
+    } do
+      {design, accessibility} = nested!(site, "Design", "Accessibility")
+      filed_posts!(site, accessibility, 2)
+      chain = "#{design.slug}/#{accessibility.slug}"
+
+      for sourced <- [true, false] do
+        html = render_page(site, @at, %{"slug" => chain}, sourced: sourced)
+
+        assert titles(html) == ["Post 02", "Post 01"], "sourced: #{sourced}"
+        assert text(html, ~s([data-role="blog-list-filter-title"])) == ["Accessibility"]
+        assert text(html, ~s([data-role="blog-list-empty"])) == []
+        assert counted(html) == ["2 posts"]
+        assert attrs(html, ~s(form[role="search"]), "action") == ["/category/" <> chain]
+      end
+    end
+
+    test "pages at its chain, and every link to it is the chain", %{site: site} do
+      {design, accessibility} = nested!(site, "Design", "Accessibility")
+      [post | _rest] = filed_posts!(site, accessibility, 12)
+      chain = "/category/#{design.slug}/#{accessibility.slug}"
+      asked = %{"slug" => "#{design.slug}/#{accessibility.slug}"}
+
+      html = render_page(site, @at, asked, sourced: true)
+      assert length(titles(html)) == 9
+
+      [next] = attrs(html, ~s(a[data-role="blog-list-next"]), "href")
+      assert next |> URI.parse() |> Map.get(:path) == chain
+      assert next =~ "page=2"
+
+      second = render_page(site, @at, Map.put(asked, "page", "2"), sourced: true)
+      assert length(titles(second)) == 3
+      assert text(second, ~s([data-role="blog-list-showing"])) == ["Showing 10–12 of 12"]
+
+      cards = render_page(site, "/:lang/blog/categories")
+
+      # the parent holds no post of its own, so the page of categories leaves it out
+      assert attrs(cards, ~s([data-role="blog-category-more"]), "href") == [chain]
+
+      for sourced <- [true, false] do
+        article = render_page(site, "/:lang/blog/:slug", %{"slug" => post.slug}, sourced: sourced)
+        assert attrs(article, ~s([data-role="blog-detail-category"]), "href") == [chain]
+      end
+    end
+
+    test "lists a Persian category's posts at its chain, percent-encoded", %{site: site} do
+      {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+      on_exit(fn -> SettingsState.delete(site.id, "site.languages") end)
+
+      design = category!(site, "طراحی", slug: "طراحی", language: "fa")
+
+      accessibility =
+        category!(site, "دسترس‌پذیری",
+          slug: "دسترس‌پذیری",
+          language: "fa",
+          parent_collection_id: design.id
+        )
+
+      filed_posts!(site, accessibility, 2, language: "fa")
+      asked = %{"slug" => "#{design.slug}/#{accessibility.slug}"}
+
+      for sourced <- [true, false] do
+        html = render_page(site, @at, asked, language: "fa", sourced: sourced)
+
+        assert titles(html) == ["Post 02", "Post 01"], "sourced: #{sourced}"
+        assert text(html, ~s([data-role="blog-list-empty"])) == []
+
+        assert attrs(html, ~s(form[role="search"]), "action") == [
+                 "/fa/category/" <>
+                   URI.encode(design.slug) <> "/" <> URI.encode(accessibility.slug)
+               ]
+      end
+    end
+  end
+
   # A SITE THAT MOVED THE POST LIST keeps its pager and its search box on the page they are on: both
   # write to the page's own path, never to `/blog`.
   describe "a site whose post list is on another page" do

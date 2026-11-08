@@ -23,6 +23,8 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   alias MishkaInstaller.Event.EventHandler
   alias MishkaInstaller.Event.Hook
 
+  require Ash.Query
+
   @host "blog.example.com"
 
   setup do
@@ -37,7 +39,22 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
     {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
     {:ok, _} = Settings.put("site.title", "The Studio", site_id: site.id)
 
+    # The breadcrumb's Blog is the site's page for the list of posts, as the blog provisions it.
+    home!(site, "/:lang/blog")
+
     {:ok, site: site}
+  end
+
+  defp home!(site, path) do
+    create_page!(
+      site_id: site.id,
+      path: path,
+      extra: %{"record" => "blog:home"},
+      active: true,
+      permissions: []
+    )
+
+    route_pages!(site)
   end
 
   # The map core hands the plugins for a request to the `kind` page, storing `schema`, with `params`.
@@ -638,6 +655,40 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
       end
     end
 
+    # A CATEGORY UNDER ANOTHER is at its whole chain on a page ending in `*slug`, and its leaf alone
+    # still answers there, with the chain as the canonical address.
+    test "under another, at a page ending in *slug, is canonical at its whole chain", %{
+      site: site
+    } do
+      design = create_collection!(site_id: site.id, status: :active, name: "Design")
+
+      accessibility =
+        create_collection!(
+          site_id: site.id,
+          status: :active,
+          name: "Accessibility",
+          parent_collection_id: design.id
+        )
+
+      chain = "#{design.slug}/#{accessibility.slug}"
+      url = base() <> "/category/" <> chain
+
+      for asked <- [chain, accessibility.slug] do
+        answered =
+          answer(
+            given_at(site, "/:lang/category/*slug", "blog:category", %{
+              "lang" => "en",
+              "slug" => asked
+            })
+          )
+
+        assert answered.title == "Accessibility"
+        assert answered.url == url, asked
+        assert answered.vars["collection.url"] == url
+        assert %{"url" => ^url} = schema_of(answered, "CollectionPage")
+      end
+    end
+
     test "answers the category's own permissions", %{site: site} do
       locked =
         create_collection!(site_id: site.id, status: :active, permissions: ["members:read"])
@@ -923,19 +974,42 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
     end
   end
 
-  describe "a blog at the site's root" do
-    test "leads its breadcrumb's Blog to /blog, from every kind of page", %{site: site} do
+  describe "the breadcrumb's Blog" do
+    test "is the site's page for the list of posts, wherever the site put it, from every kind of page",
+         %{site: site} do
+      MishkaCmsCore.Runtime.Page
+      |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+      |> Ash.Query.filter(site_id == ^site.id and path == "/:lang/blog")
+      |> Ash.read_one!(authorize?: false)
+      |> Ash.Changeset.for_update(:update, %{path: "/news", language: "en"},
+        authorize?: false,
+        tenant: site.id
+      )
+      |> Ash.update!(authorize?: false)
+
+      route_pages!(site)
+
       post = published!(site, title: "Ash in production")
       tag = create_blog_tag!(site_id: site.id, name: "elixir")
       create_post_tag!(post_id: post.id, tag_id: tag.id)
+      design = create_collection!(site_id: site.id, status: :active, name: "Design")
+
+      accessibility =
+        create_collection!(
+          site_id: site.id,
+          status: :active,
+          name: "Accessibility",
+          parent_collection_id: design.id
+        )
 
       for {path, record, slug} <- [
             {"/blog/:slug", "blog:post", post.slug},
-            {"/blog/tag/:slug", "blog:tag", tag.slug}
+            {"/blog/tag/:slug", "blog:tag", tag.slug},
+            {"/:lang/category/*slug", "blog:category", "#{design.slug}/#{accessibility.slug}"}
           ] do
-        answered = answer(given_at(site, path, record, %{"slug" => slug}))
+        answered = answer(given_at(site, path, record, %{"lang" => "en", "slug" => slug}))
 
-        assert blog_crumb(answered)["item"] == base() <> "/blog",
+        assert blog_crumb(answered)["item"] == base() <> "/news",
                "#{record} led Blog elsewhere"
       end
     end

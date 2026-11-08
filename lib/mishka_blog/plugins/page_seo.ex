@@ -101,9 +101,9 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   ## Where "Blog" points
 
-  The breadcrumb's middle item is the blog's home, read off the page's own path: the post page's
-  parent, the parent of every other kind's parent — `/blog/:slug` and `/blog/tag/:slug` both lead
-  to `/blog`, `/:lang/blog/:slug` to `/:lang/blog` in the page's language.
+  The breadcrumb's middle item is the site's page for the list of posts, `"blog:home"`, in the
+  page's language (`MishkaBlog.Address.page_url/3`), wherever the site put it: `/blog`, `/news` or
+  `/`. A site with no such page has no middle item.
 
   ## What every matched page returns
 
@@ -230,7 +230,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
       :none ->
         system(
           seo,
-          read(Collection, seo, @collection_fields, [:effective_permissions]),
+          read(Collection, seo, @collection_fields, [:effective_permissions | chain_loads(seo)]),
           &collection_seo/2
         )
     end
@@ -460,7 +460,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         tags: with_own(generated, post.seo_tags),
         schema:
           own_schema(post.schema, posting) ++
-            breadcrumb(seo, base, 1, post.title),
+            breadcrumb(seo, base, post.title),
         permissions: post.effective_permissions,
         card: %{
           eyebrow: section,
@@ -490,6 +490,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
   end
 
   defp collection_seo(seo, collection) do
+    seo = %{seo | url: own_address(seo, collection)}
     base = base(seo)
 
     page =
@@ -510,7 +511,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         tags: List.wrap(collection.seo_tags),
         schema:
           own_schema(collection.schema, page) ++
-            breadcrumb(seo, base, 2, collection.name),
+            breadcrumb(seo, base, collection.name),
         permissions: collection.effective_permissions,
         card: %{eyebrow: gettext("Category")},
         vars:
@@ -544,7 +545,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         description: tag.description,
         language: tag.language,
         tags: with_own(tag_robots(tag.permissions), tag.seo_tags),
-        schema: [page | breadcrumb(seo, base, 2, tag.name)],
+        schema: [page | breadcrumb(seo, base, tag.name)],
         permissions: List.wrap(tag.permissions),
         card: %{eyebrow: gettext("Tag")},
         vars:
@@ -591,7 +592,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         image: blogger.avatar_url || seo.image,
         type: "profile",
         tags: meta("name", "twitter:creator", x_account(blogger.social_links)),
-        schema: [profile | breadcrumb(seo, base, 2, blogger.display_name)],
+        schema: [profile | breadcrumb(seo, base, blogger.display_name)],
         permissions: [],
         card: %{
           eyebrow: gettext("Author"),
@@ -639,7 +640,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
       | title: team.name,
         description: team.description,
         image: team.avatar_url || seo.image,
-        schema: [profile | breadcrumb(seo, base, 2, team.name)],
+        schema: [profile | breadcrumb(seo, base, team.name)],
         permissions: [],
         card: %{
           eyebrow: gettext("Team"),
@@ -827,21 +828,10 @@ defmodule MishkaBlog.Plugins.PageSeo do
   defp own_schema([_ | _] = own, _built), do: own
   defp own_schema(_none, built), do: [built]
 
-  defp breadcrumb(_seo, nil, _depth, _name), do: []
+  defp breadcrumb(_seo, nil, _name), do: []
 
-  # `depth` is how many segments of the page's path come after the blog's home: one for a post,
-  # two for a category, a tag, a blogger or a team.
-  defp breadcrumb(
-         %{language: language, url: url, page: %{path: path}, site_id: site_id},
-         base,
-         depth,
-         name
-       ) do
-    blog_url =
-      path
-      |> drop_segments(depth)
-      |> Languages.url(%{Languages.capture() => language}, site_id)
-      |> Seo.absolute(base)
+  defp breadcrumb(%{language: language, url: url, site_id: site_id}, base, name) do
+    blog_url = "blog:home" |> Address.page_url(language, site_id) |> Seo.absolute(base)
 
     items =
       Enum.reject(
@@ -863,8 +853,21 @@ defmodule MishkaBlog.Plugins.PageSeo do
     ]
   end
 
-  defp drop_segments(path, 0), do: path
-  defp drop_segments(path, depth), do: path |> Path.dirname() |> drop_segments(depth - 1)
+  # A category's canonical address is its own, at the page's path filled from it: its whole chain at
+  # a page ending in `*slug`, whether the request named it by the chain or by its slug alone, with
+  # the page number the request asked for.
+  defp own_address(%{url: url, page: %{path: path}, site_id: site_id}, collection)
+       when is_binary(url) and is_binary(path) do
+    case Address.fill(path, collection, site_id) do
+      nil -> url
+      address -> url |> URI.parse() |> Map.put(:path, address) |> URI.to_string()
+    end
+  end
+
+  defp own_address(%{url: url}, _collection), do: url
+
+  defp chain_loads(%{page: %{path: path}}), do: Address.loads(Collection, path)
+  defp chain_loads(_no_page), do: []
 
   # The site's own Organization, by the `@id` core gives it.
   defp publisher(base) when is_binary(base), do: %{"@id" => base <> "/#organization"}

@@ -513,8 +513,9 @@ defmodule MishkaBlog.PageSource do
   end
 
   # WHAT THE POST'S READERS DRAW OF IT, loaded with it as the same visitor: the article's text and
-  # its lock, the head's rating and the conversation's count, the categories, tags and authors the
-  # article, the head and the next reads name, and the editions the frame and the head offer.
+  # its lock, the head's rating and the conversation's count, the categories (with the chain their
+  # links are written with, `MishkaBlog.Address.loads/3`), tags and authors the article, the head and
+  # the next reads name, and the editions the frame and the head offer.
   defp post_loads(source) do
     [
       :rendered_content,
@@ -525,6 +526,7 @@ defmodule MishkaBlog.PageSource do
       collections:
         Collection
         |> Ash.Query.select([:id, :name, :slug, :language])
+        |> Ash.Query.load(Address.loads(Collection, source.site_id, source.language))
         |> Ash.Query.sort(display_order: :asc, name: :asc)
         |> Ash.Query.limit(50),
       tags:
