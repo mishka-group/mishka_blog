@@ -14,6 +14,7 @@
 - A post whose address would be a page the site already serves, `/about` on a site whose post page is `/:slug`, is refused with "This post's address, /about, is already a page of this site."
 - `MishkaBlog.Provision.ensure_pages!/3` gives a site only the sample pages a caller names, each at a path of the caller's, with the components and the rest `ensure!/3` gives, so a site that moved some of its Blog pages gets the missing ones without a second copy of the others
 - The lock is on the newest Hex releases, including `guarded_struct` 0.1.5, `lazy_html` 0.1.14 and `localize` 1.6.1
+- The blog's newest published posts, a category's, a tag's or a blogger's are in the site's RSS, Atom and JSON feeds (`MishkaBlog.Plugins.FeedEntries` on `feeds:entries`): the posts a guest may open, in the feed's language, at the address of the site's post page, with their authors, categories and rendered text. `blog-post-list` draws an RSS link beside its sort button to the feed of what it shows (`show_feed`, `feed_text`; none in a compact list) and `blog-post-detail` one in the line under the title, kit 3.14.0
 
 # Changelog for MishkaBlog 0.0.2
 
