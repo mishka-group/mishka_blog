@@ -97,6 +97,16 @@ defmodule MishkaBlog.PostPageTest do
   defp classes(doc, name),
     do: doc |> role(name) |> Enum.flat_map(&LazyHTML.attribute(&1, "class"))
 
+  test "a post links the site's RSS feed in the language of the post", %{site: site} do
+    post = published!(site, "Feed me", [])
+
+    assert site |> page_of(post.slug) |> role("blog-detail-feed") |> LazyHTML.attribute("href") ==
+             ["/feed"]
+
+    assert site |> page_of(post.slug) |> role("blog-detail-feed") |> LazyHTML.attribute("rel") ==
+             ["alternate"]
+  end
+
   defp published!(site, title, overrides) do
     create_blog_post!(
       Keyword.merge(

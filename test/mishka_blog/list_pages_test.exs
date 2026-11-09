@@ -585,6 +585,23 @@ defmodule MishkaBlog.ListPagesTest do
 
       assert text(html, ~s([data-role="blog-list-sort"])) == ["Newest first"]
     end
+
+    test "links the site's RSS feed beside it, as a feed a reader can find", %{site: site} do
+      the_design!(site)
+      html = render_page(site, "/:lang/blog")
+
+      assert attrs(html, ~s(a[data-role="blog-list-feed"]), "href") == ["/feed"]
+      assert attrs(html, ~s(a[data-role="blog-list-feed"]), "rel") == ["alternate"]
+      assert attrs(html, ~s(a[data-role="blog-list-feed"]), "type") == ["application/rss+xml"]
+      assert attrs(html, ~s(a[data-role="blog-list-feed"]), "aria-label") == ["RSS"]
+    end
+
+    test "links no feed while the site's feeds are off", %{site: site} do
+      the_design!(site)
+      {:ok, _} = Settings.put("feeds.enabled", false, site_id: site.id)
+
+      assert count(render_page(site, "/:lang/blog"), ~s([data-role="blog-list-feed"])) == 0
+    end
   end
 
   describe "a category's page" do
@@ -595,6 +612,11 @@ defmodule MishkaBlog.ListPagesTest do
 
       assert titles(html) == ["Issue 103 blocks e2e"]
       assert text(html, ~s([data-role="blog-list-filter-title"])) == ["Ideas in progress"]
+
+      assert attrs(html, ~s(a[data-role="blog-list-feed"]), "href") == [
+               "/feed/category/#{ideas.slug}"
+             ]
+
       assert count(html, ~s([data-role="blog-featured-items"])) == 0
 
       assert attrs(html, ~s([data-role="blog-list-chip"]), "data-selected") == [
@@ -665,6 +687,13 @@ defmodule MishkaBlog.ListPagesTest do
       assert text(html, ~s([data-role="blog-list-heading"])) == ["Tagged posts"]
       assert text(html, ~s([data-role="blog-list-tag-chip"])) == ["Tagged #phoenix ×"]
       assert attrs(html, ~s(form[role="search"]), "action") == ["/blog/tag/phoenix"]
+    end
+
+    test "links the feed of the tag", %{site: site} do
+      %{phoenix: tag} = the_design!(site)
+      html = render_page(site, "/:lang/blog/tag/:slug", %{"slug" => tag.slug})
+
+      assert attrs(html, ~s(a[data-role="blog-list-feed"]), "href") == ["/feed/tag/phoenix"]
     end
   end
 
