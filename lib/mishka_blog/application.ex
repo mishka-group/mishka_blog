@@ -65,6 +65,11 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.PageSeo
   ]
 
+  # Gives the blog's newest posts to each site's RSS, Atom and JSON feeds (a `feeds:entries` plugin).
+  @feed_plugins [
+    MishkaBlog.Plugins.FeedEntries
+  ]
+
   # Each record's share card looked at again after the record is saved, on its own
   # `blog:<resource>:after_save` event, and every card of a site named for a redraw of them all, on
   # `runtime:share_card:targets` (`MishkaCmsCore.Runtime.ShareCard`).
@@ -110,7 +115,8 @@ defmodule MishkaBlog.Application do
         @settings_plugins ++
         @sidebar_menus ++
         @provision_plugins ++
-        @seo_plugins ++ @share_card_plugins ++ @runtime_plugins ++ @frame_plugins
+        @seo_plugins ++
+        @feed_plugins ++ @share_card_plugins ++ @runtime_plugins ++ @frame_plugins
 
   @impl true
   def start(_type, _args) do
