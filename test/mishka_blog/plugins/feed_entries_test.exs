@@ -184,6 +184,28 @@ defmodule MishkaBlog.Plugins.FeedEntriesTest do
       assert Feeds.fetch(site, {"category", "missing"}, "en", :rss) == :error
     end
 
+    test "a category under another is found by its own slug", %{site: site} do
+      parent =
+        create_collection!(site_id: site.id, name: "Business", status: :active, language: "en")
+
+      child =
+        create_collection!(
+          site_id: site.id,
+          name: "Case studies",
+          status: :active,
+          language: "en",
+          parent_collection_id: parent.id
+        )
+
+      filed = post!(site, :published, title: "Nested")
+      create_post_collection!(post_id: filed.id, collection_id: child.id)
+
+      body = feed(site, {"category", child.slug})
+
+      assert titles(body) == ["Nested"]
+      assert xpath(body, ~x"//channel/title/text()"s) =~ "Case studies"
+    end
+
     test "a tag holds the posts filed under it", %{site: site} do
       tag = create_blog_tag!(site_id: site.id, language: "en")
       filed = post!(site, :published, title: "Tagged")
@@ -191,6 +213,15 @@ defmodule MishkaBlog.Plugins.FeedEntriesTest do
       create_post_tag!(post_id: filed.id, tag_id: tag.id)
 
       assert titles(feed(site, {"tag", tag.slug})) == ["Tagged"]
+    end
+
+    test "a term is found in the language of the feed only", %{site: site} do
+      tag = create_blog_tag!(site_id: site.id, language: "fa")
+      filed = post!(site, :published, title: "Persian", language: "fa")
+      create_post_tag!(post_id: filed.id, tag_id: tag.id)
+
+      assert titles(feed(site, {"tag", tag.slug}, :rss, "fa")) == ["Persian"]
+      assert Feeds.fetch(site, {"tag", tag.slug}, "en", :rss) == :error
     end
 
     test "a blogger holds their posts, in any language of the feed", %{site: site} do
