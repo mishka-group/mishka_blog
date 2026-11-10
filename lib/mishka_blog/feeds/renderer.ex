@@ -17,9 +17,10 @@ defmodule MishkaBlog.Feeds.Renderer do
 
   The XML is written by `XmlBuilder`: text and attributes are escaped by it, and an item's HTML goes
   in a CDATA section (RSS `content:encoded`, Atom `<content type="html">`) in which a `]]>` is split
-  across two sections. The characters XML 1.0 forbids (control characters other than tab, line feed
-  and carriage return, and U+FFFE and U+FFFF) are taken out of every text before it is written
-  (`clean/1`), so no content can make a feed a reader refuses to parse. JSON Feed is written with
+  across two sections. Every text keeps only what XML 1.0 allows (`clean/1`): bytes that are not
+  UTF-8 are dropped first, then every character outside the spec's `Char` production (tab, line
+  feed, carriage return, U+0020 to U+D7FF, U+E000 to U+FFFD and U+10000 to U+10FFFF), so no content
+  can make a feed a reader refuses to parse, or the feed fail to build. JSON Feed is written with
   `Jason`.
 
   The RSS `link` and `guid` of an item are its address (`isPermaLink="true"`), an Atom entry with no
@@ -28,7 +29,7 @@ defmodule MishkaBlog.Feeds.Renderer do
   """
 
   @generator "Mishka CMS"
-  @invalid ~r/[\x00-\x08\x0B\x0C\x0E-\x1F\x{FFFE}\x{FFFF}]/u
+  @not_xml_char ~r/[^\x{9}\x{A}\x{D}\x{20}-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u
 
   @typedoc "The feed formats."
   @type format :: :rss | :atom | :json
@@ -44,11 +45,13 @@ defmodule MishkaBlog.Feeds.Renderer do
   def content_type(:json), do: "application/feed+json"
 
   @doc """
-  The characters XML 1.0 forbids taken out of `text`; anything that is not a binary is returned as
-  it is.
+  `text` with only the characters XML 1.0 allows: bytes that are not UTF-8 are dropped, then every
+  character outside the spec's `Char` production. Anything that is not a binary is returned as it is.
   """
   @spec clean(term()) :: term()
-  def clean(text) when is_binary(text), do: String.replace(text, @invalid, "")
+  def clean(text) when is_binary(text),
+    do: text |> String.replace_invalid("") |> String.replace(@not_xml_char, "")
+
   def clean(other), do: other
 
   @doc "`feed` written in `format`, as one binary."
