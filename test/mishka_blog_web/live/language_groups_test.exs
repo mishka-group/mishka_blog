@@ -101,8 +101,7 @@ defmodule MishkaBlogWeb.Test.LanguageGroupsTest do
         %{master: master, fa: fa} = group(ctx, @resource)
         view = open(ctx.conn, @path)
 
-        view |> element(chip(@role, master, fa)) |> render_click()
-        render_async(view, @await)
+        open_edition(view, chip(@role, master, fa))
 
         form = view |> element("form[method=put]") |> render()
 
