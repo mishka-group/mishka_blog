@@ -52,6 +52,21 @@ defmodule MishkaBlog.TestRouter do
     plug :set_actor, :user
   end
 
+  # The CMS's `:extension_api` pipeline, less its host-only install and offline gates: the site from
+  # the host, a session read and never written, no CSRF check and no sign-in. The feeds are here.
+  pipeline :extension_api do
+    plug :route_accepts, ["json"]
+    plug :fetch_session
+    plug :put_secure_browser_headers
+    plug MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
+  end
+
+  scope "/" do
+    pipe_through [:extension_api]
+
+    extension_routes(:api)
+  end
+
   scope "/api/json" do
     pipe_through [:api]
 

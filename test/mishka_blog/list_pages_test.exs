@@ -19,7 +19,7 @@ defmodule MishkaBlog.ListPagesTest do
   use MishkaBlog.ConnCase, async: false
 
   import MishkaBlog.Test.Factory
-  import MishkaBlog.DataCase, only: [route_pages!: 1]
+  import MishkaBlog.DataCase, only: [route_pages!: 1, queries_while: 1]
 
   alias MishkaBlog.Plugins.PageSource, as: SourcePlugin
   alias MishkaBlog.Provision
@@ -585,16 +585,41 @@ defmodule MishkaBlog.ListPagesTest do
 
       assert text(html, ~s([data-role="blog-list-sort"])) == ["Newest first"]
     end
+
+    test "links the site's RSS feed beside it, as a feed a reader can find", %{site: site} do
+      the_design!(site)
+      html = render_page(site, "/:lang/blog")
+
+      assert attrs(html, ~s(a[data-role="blog-list-feed"]), "href") == ["/feed"]
+      assert attrs(html, ~s(a[data-role="blog-list-feed"]), "rel") == ["alternate"]
+      assert attrs(html, ~s(a[data-role="blog-list-feed"]), "type") == ["application/rss+xml"]
+      assert attrs(html, ~s(a[data-role="blog-list-feed"]), "aria-label") == ["RSS"]
+    end
+
+    test "links no feed while the site's feeds are off", %{site: site} do
+      the_design!(site)
+      {:ok, _} = Settings.put("blog.feeds.enabled", false, site_id: site.id)
+
+      assert count(render_page(site, "/:lang/blog"), ~s([data-role="blog-list-feed"])) == 0
+    end
   end
 
   describe "a category's page" do
     test "is the home with the list narrowed to it, headed with its name and its chip marked",
          %{site: site} do
       %{ideas: ideas} = the_design!(site)
-      html = render_page(site, "/:lang/blog/category/:slug", %{"slug" => ideas.slug})
+
+      html =
+        render_page(site, "/:lang/blog/category/:slug", %{"slug" => ideas.slug}, sourced: true)
 
       assert titles(html) == ["Issue 103 blocks e2e"]
-      assert text(html, ~s([data-role="blog-list-filter-title"])) == ["Ideas in progress"]
+      assert text(html, "h1") == ["Ideas in progress"]
+      assert text(html, ~s([data-role="blog-list-filter-title"])) == []
+
+      assert attrs(html, ~s(a[data-role="blog-list-feed"]), "href") == [
+               "/feed/category/#{ideas.slug}"
+             ]
+
       assert count(html, ~s([data-role="blog-featured-items"])) == 0
 
       assert attrs(html, ~s([data-role="blog-list-chip"]), "data-selected") == [
@@ -665,6 +690,13 @@ defmodule MishkaBlog.ListPagesTest do
       assert text(html, ~s([data-role="blog-list-heading"])) == ["Tagged posts"]
       assert text(html, ~s([data-role="blog-list-tag-chip"])) == ["Tagged #phoenix ×"]
       assert attrs(html, ~s(form[role="search"]), "action") == ["/blog/tag/phoenix"]
+    end
+
+    test "links the feed of the tag", %{site: site} do
+      %{phoenix: tag} = the_design!(site)
+      html = render_page(site, "/:lang/blog/tag/:slug", %{"slug" => tag.slug})
+
+      assert attrs(html, ~s(a[data-role="blog-list-feed"]), "href") == ["/feed/tag/phoenix"]
     end
   end
 
@@ -955,7 +987,10 @@ defmodule MishkaBlog.ListPagesTest do
         html = render_page(site, @at, %{"slug" => chain}, sourced: sourced)
 
         assert titles(html) == ["Post 02", "Post 01"], "sourced: #{sourced}"
-        assert text(html, ~s([data-role="blog-list-filter-title"])) == ["Accessibility"]
+
+        assert text(html, "h1") ==
+                 if(sourced, do: ["Accessibility"], else: ["Notes, guides & long reads."])
+
         assert text(html, ~s([data-role="blog-list-empty"])) == []
         assert counted(html) == ["2 posts"]
         assert attrs(html, ~s(form[role="search"]), "action") == ["/category/" <> chain]
@@ -1072,6 +1107,123 @@ defmodule MishkaBlog.ListPagesTest do
       assert row.extra["record"] == "blog:home"
 
       assert %{kind: "blog:home"} = source(site, row, %{}, "en", nil)
+    end
+  end
+
+  # ONE H1 PER PAGE, AND IT NAMES WHAT THE PAGE IS OF. A category's, a tag's and a blogger's page each
+  # head themselves with the row's own name, in the language the page is read in, taken from the rows
+  # the page already read (`page_source`); the blog's front page keeps its own title.
+  describe "the page's one h1" do
+    setup %{site: site} do
+      {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+      on_exit(fn -> SettingsState.delete(site.id, "site.languages") end)
+      :ok
+    end
+
+    test "is the blog's own title on its front page", %{site: site} do
+      the_design!(site)
+
+      assert text(render_page(site, "/:lang/blog", %{}, sourced: true), "h1") ==
+               ["Notes, guides & long reads."]
+    end
+
+    test "names the category, with its description under it", %{site: site} do
+      %{ideas: ideas} = the_design!(site)
+
+      html =
+        render_page(site, "/:lang/blog/category/:slug", %{"slug" => ideas.slug}, sourced: true)
+
+      assert text(html, "h1") == ["Ideas in progress"]
+      assert text(html, ~s([data-role="blog-page-description"])) == [ideas.description]
+      assert titles(html) == ["Issue 103 blocks e2e"]
+    end
+
+    test "names the tag", %{site: site} do
+      %{phoenix: phoenix} = the_design!(site)
+      html = render_page(site, "/:lang/blog/tag/:slug", %{"slug" => phoenix.slug}, sourced: true)
+
+      assert text(html, "h1") == ["phoenix"]
+      assert text(html, ~s([data-role="blog-list-tag-chip"])) == ["Tagged #phoenix ×"]
+    end
+
+    test "names a Persian category and tag in Persian", %{site: site} do
+      news =
+        category!(site, "اخبار", slug: "اخبار", language: "fa", description: "تازه‌ها")
+
+      topic = create_blog_tag!(site_id: site.id, name: "فونیکس", slug: "فونیکس", language: "fa")
+      post = publish!(site, "سلام دنیا", slug: "سلام-دنیا", language: "fa")
+      file!(post, news)
+      tag_post!(post, topic)
+
+      category =
+        render_page(site, "/:lang/blog/category/:slug", %{"slug" => news.slug},
+          sourced: true,
+          language: "fa"
+        )
+
+      assert text(category, "h1") == ["اخبار"]
+      assert attrs(category, "h1", "dir") == ["auto"]
+      assert text(category, ~s([data-role="blog-page-description"])) == ["تازه‌ها"]
+
+      tag =
+        render_page(site, "/:lang/blog/tag/:slug", %{"slug" => topic.slug},
+          sourced: true,
+          language: "fa"
+        )
+
+      assert text(tag, "h1") == ["فونیکس"]
+    end
+
+    test "names the blogger, in Persian too", %{site: site} do
+      dave = blogger!(site, "Dave Brown")
+      html = render_page(site, "/:lang/blog/author/:slug", %{"slug" => dave.slug}, sourced: true)
+      assert text(html, "h1") == ["Dave Brown"]
+
+      sara = create_blogger!(site_id: site.id, display_name: "سارا", slug: "sara")
+
+      html =
+        render_page(site, "/:lang/blog/author/:slug", %{"slug" => sara.slug},
+          sourced: true,
+          language: "fa"
+        )
+
+      assert text(html, "h1") == ["سارا"]
+    end
+
+    # THE NAME COSTS NO READ: it is the row the page read for its address. Drawing a category's or a
+    # tag's page reads no post and no tag, and one statement of categories, the row of chips: the
+    # same statements it read before it was named.
+    test "reads nothing more for a category's or a tag's page", %{site: site} do
+      %{ideas: ideas, phoenix: phoenix} = the_design!(site)
+
+      for {path, slug} <- [
+            {"/:lang/blog/category/:slug", ideas.slug},
+            {"/:lang/blog/tag/:slug", phoenix.slug}
+          ] do
+        row = page(site, path)
+        source = source(site, row, %{"slug" => slug}, "en", nil)
+
+        assigns = %{
+          page: %{language: "en", path: String.replace(path, ":lang", "en")},
+          site: site.name,
+          query_params: %{"slug" => slug},
+          page_languages: [],
+          page_source: source
+        }
+
+        asked =
+          queries_while(fn ->
+            LiveViewHelpers.rendering_for(site.name, fn ->
+              LiveViewCompiler.render_template(row.template, assigns)
+            end)
+          end)
+
+        read = fn table -> Enum.count(asked, &String.contains?(&1, ~s(FROM "#{table}" AS m0))) end
+
+        assert read.("mishka_blog_collections") == 1, "#{path} read its category again"
+        assert read.("mishka_blog_tags") == 0, "#{path} read its tag again"
+        assert read.("mishka_blog_posts") == 0, "#{path} read its posts again"
+      end
     end
   end
 end

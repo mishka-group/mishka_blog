@@ -796,21 +796,14 @@ defmodule MishkaBlog.Provision do
   #
   #   * `:everything` — nothing; `q` and `tag` in the query string do, when a reader sends them.
   #   * `:category` — the `:slug` capture is a category. It is named by `collection`, which also
-  #     makes the list head itself with the category's name and description and mark its chip.
-  #   * `:tag` — the `:slug` capture is a tag, shown as the chip the design draws for one.
+  #     marks its chip; the page's h1 is the category's name (`masthead/1`).
+  #   * `:tag` — the `:slug` capture is a tag, shown as the chip the design draws for one; the
+  #     page's h1 is the tag's name.
   defp index_screen(site, filter) do
     """
     <section class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] items-end gap-8 pt-16 pb-10">
       <div class="flex flex-col gap-3.5">
-        <span class="text-xs font-semibold tracking-[0.16em] text-subtle uppercase dark:text-subtle-dark">
-          {t("Journal")}
-        </span>
-        <h1 class="font-newsreader text-[clamp(44px,6vw,68px)] leading-none font-normal tracking-[-0.03em] text-balance">
-          {t("Notes, guides &")} <em class="text-brand dark:text-brand-dark">{t("long reads")}</em>.
-        </h1>
-        <p class="max-w-[480px] text-[17px] leading-[1.6] text-dim dark:text-dim-dark">
-          {t("Written by the team, in more than one language.")}
-        </p>
+    #{masthead(filter)}
       </div>
 
       <.component
@@ -860,6 +853,54 @@ defmodule MishkaBlog.Provision do
     />
     """
   end
+
+  # THE PAGE'S ONE H1. The front page heads itself with the blog's own title. A category's and a tag's
+  # page head themselves with the row's own name, and a category's description under it, both from
+  # the row the page already read for its address (`page_source`, `MishkaBlog.PageSource`) in the
+  # page's language, so naming it costs no read. The list under it is not titled with the name again.
+  # Where no row was handed — the admin's Preview — the page keeps the blog's title.
+  defp masthead(:everything) do
+    """
+        <span class="text-xs font-semibold tracking-[0.16em] text-subtle uppercase dark:text-subtle-dark">
+          {t("Journal")}
+        </span>
+        <h1 class="font-newsreader text-[clamp(44px,6vw,68px)] leading-none font-normal tracking-[-0.03em] text-balance">
+          {t("Notes, guides &")} <em class="text-brand dark:text-brand-dark">{t("long reads")}</em>.
+        </h1>
+        <p class="max-w-[480px] text-[17px] leading-[1.6] text-dim dark:text-dim-dark">
+          {t("Written by the team, in more than one language.")}
+        </p>\
+    """
+  end
+
+  defp masthead(filter) do
+    """
+        <span class="text-xs font-semibold tracking-[0.16em] text-subtle uppercase rtl:tracking-normal dark:text-subtle-dark">
+          {t("#{eyebrow(filter)}")}
+        </span>
+        <h1
+          data-role="blog-page-title"
+          dir="auto"
+          class="font-newsreader text-[clamp(44px,6vw,68px)] leading-none font-normal tracking-[-0.03em] text-balance break-words rtl:tracking-normal"
+        >
+          {case assigns[:page_source] do
+            %{rows_of: "mishka_blog", record: %{name: name}} -> name
+            _no_row -> t("Notes, guides &") <> " " <> t("long reads") <> "."
+          end}
+        </h1>
+        <p
+          :if={match?(%{rows_of: "mishka_blog", record: %{description: text}} when is_binary(text) and text != "", assigns[:page_source])}
+          data-role="blog-page-description"
+          dir="auto"
+          class="max-w-[480px] text-[17px] leading-[1.6] text-dim dark:text-dim-dark"
+        >
+          {assigns[:page_source].record.description}
+        </p>\
+    """
+  end
+
+  defp eyebrow(:category), do: "Category"
+  defp eyebrow(:tag), do: "Tag"
 
   # WHAT THE SEARCH BOX COUNTS. On the home, every post the reader may open in this language: the
   # strip's and the list's. The list's own pager says fewer, because it counts the posts it pages
@@ -922,8 +963,9 @@ defmodule MishkaBlog.Provision do
 
   defp list_attributes(:category) do
     """
-      heading={t("Category")}
+      heading={t("Latest posts")}
       collection={@query_params["slug"] || ""}
+      show_filter_title={false}
       clear_href={#{kind_url("blog:home", @blog)}}
       empty_text={t("Nothing is published in this category yet.")}\
     """

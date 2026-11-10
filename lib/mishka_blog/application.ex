@@ -65,6 +65,13 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.PageSeo
   ]
 
+  # The feed settings under the Blog tab (a `settings:register` plugin) and the feeds named in the
+  # head of a site's pages (a `RootHtml.MetaTags` plugin); see `MishkaBlog.Feeds`.
+  @feed_plugins [
+    MishkaBlog.Plugins.FeedSettings,
+    MishkaBlog.Plugins.FeedLinks
+  ]
+
   # Each record's share card looked at again after the record is saved, on its own
   # `blog:<resource>:after_save` event, and every card of a site named for a redraw of them all, on
   # `runtime:share_card:targets` (`MishkaCmsCore.Runtime.ShareCard`).
@@ -110,7 +117,8 @@ defmodule MishkaBlog.Application do
         @settings_plugins ++
         @sidebar_menus ++
         @provision_plugins ++
-        @seo_plugins ++ @share_card_plugins ++ @runtime_plugins ++ @frame_plugins
+        @seo_plugins ++
+        @feed_plugins ++ @share_card_plugins ++ @runtime_plugins ++ @frame_plugins
 
   @impl true
   def start(_type, _args) do
