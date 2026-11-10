@@ -75,7 +75,10 @@ defmodule MishkaBlog.Feeds.RendererTest do
   test "drops bytes that are not UTF-8 and still writes every format" do
     item = %{title: "a" <> <<0xFF, 0xC3>> <> "b", content_html: <<"<p>x", 0x80, "y</p>">>}
 
-    for format <- Renderer.formats(), do: assert(is_binary(Renderer.render(format, feed(item))))
+    assert %{"items" => [%{"title" => "ab"}]} =
+             :json |> Renderer.render(feed(item)) |> Jason.decode!()
+
+    assert xpath(Renderer.render(:atom, feed(item)), ~x"//entry/title/text()"s) == "ab"
 
     rss = Renderer.render(:rss, feed(item))
     assert xpath(rss, ~x"//item/title/text()"s) == "ab"
