@@ -757,7 +757,7 @@
         {
           "name": "feed_links",
           "args": "show, variant, collection, tag, language",
-          "code": "# The address of the RSS feed of what the list shows, as a list that holds it or nothing: the\n# category or the tag that narrows the list, else the whole site, in the language the list shows.\n# A compact list, and a site whose feeds are off or that has no such language, draw no link.\nsite = site_id()\n\nlanguage =\n  case trimmed(language) do\n    code when code in [\"\", \"all\"] -> MishkaCmsCore.Runtime.Languages.primary(site)\n    code -> code\n  end\n\nscope =\n  cond do\n    trimmed(collection) != \"\" ->\n      {\"category\", collection |> trimmed() |> String.split(\"/\") |> List.last() |> trimmed()}\n\n    trimmed(tag) != \"\" ->\n      {\"tag\", trimmed(tag)}\n\n    true ->\n      :site\n  end\n\nwith true <- show == true and variant != \"compact\" and MishkaCmsCore.Feeds.enabled?(site),\n     path when is_binary(path) <- MishkaCmsCore.Feeds.path(scope, :rss, language, site) do\n  [path]\nelse\n  _no_feed -> []\nend"
+          "code": "# The address of the RSS feed of what the list shows, as a list that holds it or nothing: the\n# category or the tag that narrows the list, else the whole site, in the language the list shows.\n# A compact list, and a site whose feeds are off or that has no such language, draw no link.\nsite = site_id()\n\nlanguage =\n  case trimmed(language) do\n    code when code in [\"\", \"all\"] -> MishkaCmsCore.Runtime.Languages.primary(site)\n    code -> code\n  end\n\nscope =\n  cond do\n    trimmed(collection) != \"\" ->\n      {\"category\", collection |> trimmed() |> String.split(\"/\") |> List.last() |> trimmed()}\n\n    trimmed(tag) != \"\" ->\n      {\"tag\", trimmed(tag)}\n\n    true ->\n      :site\n  end\n\nwith true <- show == true and variant != \"compact\" and MishkaBlog.Feeds.enabled?(site),\n     path when is_binary(path) <- MishkaBlog.Feeds.path(scope, :rss, language, site) do\n  [path]\nelse\n  _no_feed -> []\nend"
         }
       ],
       "permissions": [],
@@ -2215,7 +2215,7 @@
         {
           "name": "feed_links",
           "args": "show, post",
-          "code": "# The address of the site's RSS feed in the post's language, as a list that holds it or nothing: a\n# site whose feeds are off, or that has no such language, draws no link.\nsite = site_id()\n\nwith true <- show == true and MishkaCmsCore.Feeds.enabled?(site),\n     path when is_binary(path) <- MishkaCmsCore.Feeds.path(:site, :rss, post.language, site) do\n  [path]\nelse\n  _no_feed -> []\nend"
+          "code": "# The address of the site's RSS feed in the post's language, as a list that holds it or nothing: a\n# site whose feeds are off, or that has no such language, draws no link.\nsite = site_id()\n\nwith true <- show == true and MishkaBlog.Feeds.enabled?(site),\n     path when is_binary(path) <- MishkaBlog.Feeds.path(:site, :rss, post.language, site) do\n  [path]\nelse\n  _no_feed -> []\nend"
         }
       ],
       "permissions": [],

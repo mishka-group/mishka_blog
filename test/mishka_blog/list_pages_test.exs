@@ -598,7 +598,7 @@ defmodule MishkaBlog.ListPagesTest do
 
     test "links no feed while the site's feeds are off", %{site: site} do
       the_design!(site)
-      {:ok, _} = Settings.put("feeds.enabled", false, site_id: site.id)
+      {:ok, _} = Settings.put("blog.feeds.enabled", false, site_id: site.id)
 
       assert count(render_page(site, "/:lang/blog"), ~s([data-role="blog-list-feed"])) == 0
     end
