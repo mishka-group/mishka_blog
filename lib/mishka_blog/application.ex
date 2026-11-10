@@ -65,11 +65,11 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.PageSeo
   ]
 
-  # Gives the blog's newest posts to each site's RSS, Atom and JSON feeds (a `feeds:entries` plugin) and names the term a page shows for the head's feed links (a
-  # `feeds:page:scope` plugin).
+  # The feed settings under the Blog tab (a `settings:register` plugin) and the feeds named in the
+  # head of a site's pages (a `RootHtml.MetaTags` plugin); see `MishkaBlog.Feeds`.
   @feed_plugins [
-    MishkaBlog.Plugins.FeedEntries,
-    MishkaBlog.Plugins.FeedPageScope
+    MishkaBlog.Plugins.FeedSettings,
+    MishkaBlog.Plugins.FeedLinks
   ]
 
   # Each record's share card looked at again after the record is saved, on its own

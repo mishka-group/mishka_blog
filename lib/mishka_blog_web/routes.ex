@@ -4,7 +4,13 @@
 
 defmodule MishkaBlogWeb.Routes do
   @moduledoc """
-  Extension routes for MishkaBlog.
+  Extension routes for MishkaBlog: the admin pages, and the feeds as API routes (`routes(:api)`).
+
+  The feeds are `/feed` (also `/feed.rss`), `/feed/atom`, `/feed.json` and the feed of a term, `/feed/:kind/:key` with
+  `/atom` or `/json` after it, or a nested term by its whole chain,
+  `/feed/category/design/accessibility` (last, so it takes only what the others leave), each also
+  under a language, `/:lang/feed`. A reader asks for them whatever `Accept` it sends, so they answer
+  any (`accepts: :any`), and the format is the route's own (`feed_format`). See `MishkaBlog.Feeds`.
   """
 
   @behaviour MishkaCmsCore.ExtensionRouter
@@ -25,6 +31,23 @@ defmodule MishkaBlogWeb.Routes do
   end
 
   def routes(:public), do: []
-  def routes(:api), do: []
+
+  def routes(:api) do
+    for prefix <- ["", "/:lang"],
+        {format, path} <- [
+          {:rss, "/feed"},
+          {:rss, "/feed.rss"},
+          {:atom, "/feed/atom"},
+          {:json, "/feed.json"},
+          {:rss, "/feed/:kind/:key"},
+          {:atom, "/feed/:kind/:key/atom"},
+          {:json, "/feed/:kind/:key/json"},
+          {:rss, "/feed/:kind/*chain"}
+        ] do
+      {:get, prefix <> path, MishkaBlogWeb.FeedController, :show,
+       private: %{accepts: :any, feed_format: format}}
+    end
+  end
+
   def routes(_), do: []
 end

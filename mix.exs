@@ -73,6 +73,8 @@ defmodule MishkaBlog.MixProject do
       {:ash_phoenix, "~> 2.3"},
       {:ash, "~> 3.37"},
       {:html_sanitize_ex, "~> 1.5"},
+      # The RSS and Atom feeds (`MishkaBlog.Feeds.Renderer`) are written with it.
+      {:xml_builder, "~> 2.4"},
       {:makeup, "~> 1.2"},
       {:makeup_elixir, "~> 1.0"},
       {:makeup_eex, "~> 2.0"},

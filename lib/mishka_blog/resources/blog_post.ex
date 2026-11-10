@@ -37,7 +37,7 @@ defmodule MishkaBlog.BlogPost do
       Ash.Notifier.PubSub,
       MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
       MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh,
-      MishkaCmsCore.Runtime.Resources.Notifiers.FeedRefresh
+      MishkaBlog.Resources.Notifiers.FeedRefresh
     ]
 
   import Phoenix.Component, only: [sigil_H: 2]
@@ -2582,6 +2582,17 @@ defmodule MishkaBlog.BlogPost do
            master: true,
            label: dgettext_noop("errors", "blog post")}
     end
+
+    # The site's feeds, built from what a guest may read: see `MishkaBlog.Feeds`.
+    action :feed, :map do
+      description "The site's newest posts, or a category's, tag's or blogger's, as RSS, Atom and JSON Feed"
+
+      argument :language, :string, allow_nil?: false
+      argument :kind, :string
+      argument :key, :string
+
+      run MishkaBlog.Resources.Actions.Feed
+    end
   end
 
   # Authorization policies for blog post access
@@ -2592,6 +2603,11 @@ defmodule MishkaBlog.BlogPost do
     end
 
     bypass action(:public_get) do
+      authorize_if always()
+    end
+
+    # A feed reads as a guest, through `:public_list`, whoever asks for it.
+    bypass action(:feed) do
       authorize_if always()
     end
 
