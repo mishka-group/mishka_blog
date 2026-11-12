@@ -19,6 +19,8 @@ defmodule MishkaBlog.Plugins.PageRecords do
   use Gettext, backend: MishkaCmsCore.Gettext
   use MishkaInstaller.Event.Hook, event: "runtime:page:records", initial: %{priority: 50}
 
+  require Ash.Query
+
   alias MishkaBlog.{Blogger, BlogPost, Collection, Tag, Team}
   alias MishkaCmsCore.Runtime.Languages
 
@@ -57,11 +59,14 @@ defmodule MishkaBlog.Plugins.PageRecords do
   defp type(id, label, samples),
     do: %{id: id, group: gettext("Blog"), label: label, captures: ["slug"], samples: samples}
 
-  # The latest a guest may open, each with the captures that open it. The hook names no reader, and
-  # a preview is of the page a visitor is served.
+  # The latest a guest may open, in a language the site publishes in, each with the captures that
+  # open it. The hook names no reader, and a preview is of the page a visitor is served.
   defp samples(resource, name, newest, site_id) when is_binary(site_id) do
+    languages = Languages.site(site_id)
+
     resource
     |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site_id)
+    |> Ash.Query.filter(language in ^languages)
     |> Ash.Query.select([name, :slug, :language])
     |> Ash.Query.sort([{newest, :desc}])
     |> Ash.read(page: [limit: @samples])
