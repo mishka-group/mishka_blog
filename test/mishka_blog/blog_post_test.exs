@@ -565,6 +565,20 @@ defmodule MishkaBlog.Test.BlogPostTest do
       end
     end
 
+    describe "the Publish row action" do
+      test "is offered for a draft or a scheduled post only" do
+        action = MishkaGervaz.Resource.Info.Table.row_action(BlogPost, :publish)
+        state = %{archive_status: :active, template: MishkaGervaz.Table.Templates.MediaGallery}
+
+        offered =
+          for status <- [:draft, :scheduled, :published, :archived],
+              action.visible.(%BlogPost{status: status}, state),
+              do: status
+
+        assert offered == [:draft, :scheduled]
+      end
+    end
+
     describe "archive/unarchive actions" do
       test "destroy soft deletes blog post" do
         site = create_site!()

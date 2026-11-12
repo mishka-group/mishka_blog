@@ -779,8 +779,9 @@ defmodule MishkaBlog.BlogPost do
           type :update
           action {:master_publish, :publish}
 
-          visible fn _record, state ->
-            state.archive_status == :active and state.template != @table_template
+          visible fn record, state ->
+            record.status in [:draft, :scheduled] and state.archive_status == :active and
+              state.template != @table_template
           end
 
           ui do
