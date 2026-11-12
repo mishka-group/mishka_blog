@@ -58,11 +58,13 @@ defmodule MishkaBlog.Application do
   # Adds the blog's posts, categories, tags, bloggers and teams to each site's sitemap (a
   # `seo:sitemap:urls` plugin), names them as kinds of record a page can show (a
   # `runtime:page:records` plugin), and gives each its own head on the page that shows it (a
-  # `runtime:page:seo` plugin).
+  # `runtime:page:seo` plugin), and sends a post asked for at an address that is not its own to its
+  # own (a `runtime:page:moved` plugin).
   @seo_plugins [
     MishkaBlog.Plugins.SitemapUrls,
     MishkaBlog.Plugins.PageRecords,
-    MishkaBlog.Plugins.PageSeo
+    MishkaBlog.Plugins.PageSeo,
+    MishkaBlog.Plugins.PostMoved
   ]
 
   # The feed settings under the Blog tab (a `settings:register` plugin) and the feeds named in the

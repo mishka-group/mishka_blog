@@ -8,6 +8,9 @@ defmodule MishkaBlog.Plugins.PageRecords do
   on the `runtime:page:records` mishka_installer hook, for a page's "This page shows each" choice
   (see `MishkaCmsCore.Runtime.Seo.record_types/1`), each with a few of the site's own to preview a
   page with. Each is labelled as the blog's admin names it, where its Permissions and SEO Tags are set.
+
+  A post `moves: true`: an address that names it by a category, a date or a page that is not its own
+  is answered by `MishkaBlog.Plugins.PostMoved` with a 301 to its own.
   `MishkaBlog.Plugins.PageSeo` answers for the same kinds.
 
   A module because a mishka_installer hook is one. Registered in `MishkaBlog.Application`.
@@ -31,7 +34,9 @@ defmodule MishkaBlog.Plugins.PageRecords do
   @spec types(String.t() | nil) :: [map()]
   def types(site_id) do
     [
-      type("blog:post", gettext("Post"), samples(BlogPost, :title, :published_at, site_id)),
+      "blog:post"
+      |> type(gettext("Post"), samples(BlogPost, :title, :published_at, site_id))
+      |> Map.put(:moves, true),
       type(
         "blog:category",
         gettext("Collection"),

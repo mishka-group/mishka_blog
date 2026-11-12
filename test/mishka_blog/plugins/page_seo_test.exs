@@ -961,6 +961,60 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
     blog
   end
 
+  describe "a post at a page that names its category" do
+    test "is canonical at its first category under any of its categories, each edition at its own",
+         %{
+           site: site
+         } do
+      path = "/:lang/blog/:category/:slug"
+      post = published!(site, title: "Filed twice")
+
+      persian =
+        published!(site,
+          title: "Filed twice fa",
+          language: "fa",
+          language_group_id: post.language_group_id || post.id
+        )
+
+      news = create_collection!(site_id: site.id, status: :active, display_order: 1)
+      apps = create_collection!(site_id: site.id, status: :active, display_order: 2)
+
+      akhbar =
+        create_collection!(site_id: site.id, status: :active, language: "fa", display_order: 1)
+
+      for category <- [news, apps],
+          do: create_post_collection!(post_id: post.id, collection_id: category.id)
+
+      create_post_collection!(post_id: persian.id, collection_id: akhbar.id)
+
+      url = base() <> "/blog/#{news.slug}/#{post.slug}"
+
+      for asked <- [news, apps] do
+        answered =
+          answer(
+            given_at(site, path, "blog:post", %{
+              "lang" => "en",
+              "category" => asked.slug,
+              "slug" => post.slug
+            })
+          )
+
+        assert answered.url == url, asked.slug
+        assert %{"mainEntityOfPage" => ^url} = schema_of(answered, "BlogPosting")
+
+        alternates =
+          for %{tag: "link", attrs: %{"rel" => "alternate"} = attrs} <- answered.tags,
+              do: {attrs["hreflang"], attrs["href"]}
+
+        assert Enum.sort(alternates) == [
+                 {"en", url},
+                 {"fa", base() <> "/fa/blog/#{akhbar.slug}/#{persian.slug}"},
+                 {"x-default", url}
+               ]
+      end
+    end
+  end
+
   describe "the blog's home and its people" do
     test "are a collection page open to whoever may open the page, wherever they are", %{
       site: site

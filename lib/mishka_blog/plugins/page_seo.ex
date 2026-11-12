@@ -38,6 +38,9 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
     * `title`, `description`, `image` — the post's title, excerpt and featured image;
     * `type` — `"article"`;
+    * `url` — the post's own address at the page's path, filled with its first category: a post
+      read under another of its categories names its first category's address as canonical, as
+      WordPress's `rel_canonical()` does;
     * `tags` — `author` (the authors' names), a `twitter:creator` with the X account of the first
       author, in the authors' order, who has one, `article:published_time`, `article:modified_time`,
       `article:section` (the first category), one `article:tag` per tag, the pairs Slack and
@@ -409,6 +412,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
   end
 
   defp post_seo(seo, post) do
+    seo = %{seo | url: own_address(seo, post)}
     base = base(seo)
     image = Seo.absolute(post.featured_image_url, base)
     authors = Enum.map(post.bloggers, & &1.display_name)
@@ -855,7 +859,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
 
   # A category's canonical address is its own, at the page's path filled from it: its whole chain at
   # a page ending in `*slug`, whether the request named it by the chain or by its slug alone, with
-  # the page number the request asked for.
+  # the page number the request asked for. A post's is filled with its first category, whichever
+  # of its categories the request named.
   defp own_address(%{url: url, page: %{path: path}, site_id: site_id}, collection)
        when is_binary(url) and is_binary(path) do
     case Address.fill(path, collection, site_id) do
