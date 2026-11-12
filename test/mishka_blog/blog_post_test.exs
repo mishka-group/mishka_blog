@@ -532,6 +532,39 @@ defmodule MishkaBlog.Test.BlogPostTest do
       end
     end
 
+    describe "unpublishing a scheduled post" do
+      test "takes it back to a draft with no schedule, so nothing publishes it later" do
+        site = create_site!()
+        at = DateTime.utc_now() |> DateTime.add(86_400, :second) |> DateTime.truncate(:second)
+
+        scheduled =
+          create_blog_post!(status: :scheduled, scheduled_publish_at: at, site_id: site.id)
+
+        unpublished =
+          scheduled
+          |> Ash.Changeset.for_update(:unpublish, %{}, tenant: site.id, authorize?: false)
+          |> Ash.update!()
+
+        assert unpublished.status == :draft
+        assert unpublished.scheduled_publish_at == nil
+        assert unpublished.published_at == nil
+      end
+    end
+
+    describe "the Unpublish row action" do
+      test "is offered for a published or a scheduled post only" do
+        action = MishkaGervaz.Resource.Info.Table.row_action(BlogPost, :unpublish)
+        state = %{archive_status: :active, template: MishkaGervaz.Table.Templates.MediaGallery}
+
+        offered =
+          for status <- [:published, :scheduled, :draft, :archived],
+              action.visible.(%BlogPost{status: status}, state),
+              do: status
+
+        assert offered == [:published, :scheduled]
+      end
+    end
+
     describe "archive/unarchive actions" do
       test "destroy soft deletes blog post" do
         site = create_site!()

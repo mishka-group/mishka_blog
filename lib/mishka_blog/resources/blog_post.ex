@@ -794,8 +794,9 @@ defmodule MishkaBlog.BlogPost do
           type :update
           action {:master_unpublish, :unpublish}
 
-          visible fn _record, state ->
-            state.archive_status == :active and state.template != @table_template
+          visible fn record, state ->
+            record.status in [:published, :scheduled] and state.archive_status == :active and
+              state.template != @table_template
           end
 
           ui do
@@ -1982,12 +1983,13 @@ defmodule MishkaBlog.BlogPost do
 
       change set_attribute(:status, :draft)
       change set_attribute(:published_at, nil)
+      change set_attribute(:scheduled_publish_at, nil)
 
-      description "Reverts a published blog post back to draft status"
+      description "Reverts a published or scheduled blog post back to draft status, its schedule cleared"
     end
 
     update :master_unpublish do
-      description "Reverts a published blog post back to draft status (master users)"
+      description "Reverts a published or scheduled blog post back to draft status, its schedule cleared (master users)"
       accept []
       require_atomic? false
       multitenancy :bypass
@@ -1996,6 +1998,7 @@ defmodule MishkaBlog.BlogPost do
 
       change set_attribute(:status, :draft)
       change set_attribute(:published_at, nil)
+      change set_attribute(:scheduled_publish_at, nil)
     end
 
     update :schedule do
