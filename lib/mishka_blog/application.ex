@@ -67,11 +67,14 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.PostMoved
   ]
 
-  # The feed settings under the Blog tab (a `settings:register` plugin) and the feeds named in the
-  # head of a site's pages (a `RootHtml.MetaTags` plugin); see `MishkaBlog.Feeds`.
+  # The blog's settings under the Blog tab (a `settings:register` plugin), the feeds named in the
+  # head of a site's pages (a `RootHtml.MetaTags` plugin, see `MishkaBlog.Feeds`), and the post
+  # page put where a site's Post address setting says, once it is saved (a
+  # `cms_core:setting:after_save` plugin).
   @feed_plugins [
-    MishkaBlog.Plugins.FeedSettings,
-    MishkaBlog.Plugins.FeedLinks
+    MishkaBlog.Plugins.BlogSettings,
+    MishkaBlog.Plugins.FeedLinks,
+    MishkaBlog.Plugins.PostAddress
   ]
 
   # Each record's share card looked at again after the record is saved, on its own

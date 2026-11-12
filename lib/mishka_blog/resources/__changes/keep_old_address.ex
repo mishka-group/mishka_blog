@@ -76,12 +76,7 @@ defmodule MishkaBlog.Resources.Changes.KeepOldAddress do
          {:ok, new} <- addresses(result) do
       old
       |> Enum.flat_map(&moved(&1, new))
-      |> Enum.reduce_while({:ok, result, []}, fn {from, to}, {:ok, result, notifications} ->
-        case move(result.site_id, from, to) do
-          {:ok, more} -> {:cont, {:ok, result, notifications ++ more}}
-          {:error, error} -> {:halt, {:error, error}}
-        end
-      end)
+      |> Enum.reduce_while({:ok, result, []}, &move_one/2)
     else
       {:error, error} -> {:error, error}
       _not_shown -> {:ok, result}
@@ -89,6 +84,13 @@ defmodule MishkaBlog.Resources.Changes.KeepOldAddress do
   end
 
   defp keep(_changeset, result), do: {:ok, result}
+
+  defp move_one({from, to}, {:ok, result, notifications}) do
+    case move(result.site_id, from, to) do
+      {:ok, more} -> {:cont, {:ok, result, notifications ++ more}}
+      {:error, error} -> {:halt, {:error, error}}
+    end
+  end
 
   # An old address and the new one of the same language, each with its key as a rule stores it.
   defp moved({language, old}, new) do

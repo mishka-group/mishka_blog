@@ -962,10 +962,17 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
   end
 
   describe "a post at a page that names its category" do
-    test "is canonical at its first category under any of its categories, each edition at its own",
-         %{
-           site: site
-         } do
+    test "is canonical at its first category under any of its categories, each edition at its own, with the category in its breadcrumb",
+         %{site: site} do
+      create_page!(
+        site_id: site.id,
+        path: "/:lang/blog/category/:slug",
+        extra: %{"record" => "blog:category"},
+        active: true,
+        permissions: []
+      )
+
+      route_pages!(site)
       path = "/:lang/blog/:category/:slug"
       post = published!(site, title: "Filed twice")
 
@@ -1010,6 +1017,15 @@ defmodule MishkaBlog.Plugins.PageSeoTest do
                  {"en", url},
                  {"fa", base() <> "/fa/blog/#{akhbar.slug}/#{persian.slug}"},
                  {"x-default", url}
+               ]
+
+        assert %{"itemListElement" => crumbs} = schema_of(answered, "BreadcrumbList")
+
+        assert Enum.map(crumbs, &{&1["name"], &1["item"]}) == [
+                 {"Home", base()},
+                 {"Blog", base() <> "/blog"},
+                 {news.name, base() <> "/blog/category/#{news.slug}"},
+                 {"Filed twice", url}
                ]
       end
     end

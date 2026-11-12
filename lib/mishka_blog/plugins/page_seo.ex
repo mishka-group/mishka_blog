@@ -53,7 +53,8 @@ defmodule MishkaBlog.Plugins.PageSeo do
       a `Person` per author — their name, their address on the site's `"blog:author"` page and
       `sameAs` their social links — whose `articleSection` is the first category, and whose
       `publisher` is the site's Organization by its `@id`, `<site address>/#organization`; then a
-      `BreadcrumbList`, Home → Blog → the post;
+      `BreadcrumbList`, Home → Blog → the post, with its first category before it on a page whose
+      path names `:category` (Home → Blog → Category → Post);
     * `vars` — `post.title`, `post.excerpt`, `post.image`, `post.author`, `post.published_at`,
       `post.modified_at`, `post.url`, `post.collection`, `post.tags`, and `post.rating` (the
       readers' average, one decimal) with `post.rating_count` once a reader has rated it.
@@ -464,7 +465,7 @@ defmodule MishkaBlog.Plugins.PageSeo do
         tags: with_own(generated, post.seo_tags),
         schema:
           own_schema(post.schema, posting) ++
-            breadcrumb(seo, base, post.title),
+            breadcrumb(seo, base, post.title, filed_under(seo, post, base)),
         permissions: post.effective_permissions,
         card: %{
           eyebrow: section,
@@ -832,14 +833,16 @@ defmodule MishkaBlog.Plugins.PageSeo do
   defp own_schema([_ | _] = own, _built), do: own
   defp own_schema(_none, built), do: [built]
 
-  defp breadcrumb(_seo, nil, _name), do: []
+  defp breadcrumb(seo, base, name, between \\ [])
 
-  defp breadcrumb(%{language: language, url: url, site_id: site_id}, base, name) do
+  defp breadcrumb(_seo, nil, _name, _between), do: []
+
+  defp breadcrumb(%{language: language, url: url, site_id: site_id}, base, name, between) do
     blog_url = "blog:home" |> Address.page_url(language, site_id) |> Seo.absolute(base)
 
     items =
       Enum.reject(
-        [{gettext("Home"), base}, {gettext("Blog"), blog_url}, {name, url}],
+        [{gettext("Home"), base}, {gettext("Blog"), blog_url}] ++ between ++ [{name, url}],
         fn {_name, item} -> is_nil(item) end
       )
 
@@ -856,6 +859,19 @@ defmodule MishkaBlog.Plugins.PageSeo do
       }
     ]
   end
+
+  # The post's first category, a step of its breadcrumb at a page whose path names `:category`.
+  defp filed_under(%{page: %{path: path}, site_id: site_id}, post, base) when is_binary(path) do
+    with true <- ":category" in String.split(path, "/"),
+         [%Collection{} = category | _rest] <- rows(post.collections) do
+      address = category |> Address.of(site_id, post.language) |> Seo.absolute(base)
+      [{category.name, address}]
+    else
+      _none -> []
+    end
+  end
+
+  defp filed_under(_seo, _post, _base), do: []
 
   # A category's canonical address is its own, at the page's path filled from it: its whole chain at
   # a page ending in `*slug`, whether the request named it by the chain or by its slug alone, with

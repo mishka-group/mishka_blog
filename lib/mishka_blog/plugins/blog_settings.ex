@@ -2,22 +2,29 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-defmodule MishkaBlog.Plugins.FeedSettings do
+defmodule MishkaBlog.Plugins.BlogSettings do
   @moduledoc """
-  Registers the feed settings with the Settings page through the `settings:register`
-  mishka_installer hook, in a **Feeds** group under the **Blog** tab, each with a global default a
-  site may override (`scope: :both`): `blog.feeds.enabled`, `blog.feeds.items` and
-  `blog.feeds.full_content`. `MishkaBlog.Feeds` reads them. Registered in `MishkaBlog.Application`.
+  Registers the blog's settings with the Settings page through the `settings:register`
+  mishka_installer hook, under the **Blog** tab:
+
+    * a **Feeds** group, each with a global default a site may override (`scope: :both`):
+      `blog.feeds.enabled`, `blog.feeds.items` and `blog.feeds.full_content`, which
+      `MishkaBlog.Feeds` reads;
+    * an **Addresses** group: a site's `blog.post_address`, which
+      `MishkaBlog.Plugins.PostAddress` defines and acts on.
+
+  Registered in `MishkaBlog.Application`.
   """
 
   use MishkaInstaller.Event.Hook, event: "settings:register", initial: %{priority: 45}
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaBlog.Plugins.PostAddress
   alias MishkaCmsCore.Settings
 
   @impl true
   def call(%{definitions: definitions} = data) do
-    {:reply, %{data | definitions: definitions ++ definitions()}}
+    {:reply, %{data | definitions: definitions ++ definitions() ++ [PostAddress.definition()]}}
   end
 
   defp definitions do

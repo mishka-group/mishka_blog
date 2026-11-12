@@ -34,7 +34,7 @@ defmodule MishkaBlog.Feeds do
 
   ## Settings
 
-  Under the Blog tab (`MishkaBlog.Plugins.FeedSettings`):
+  Under the Blog tab (`MishkaBlog.Plugins.BlogSettings`):
 
     * `blog.feeds.enabled` - the site's feeds are served at all, default on;
     * `blog.feeds.items` - how many entries, 1 to 100, default 20;
