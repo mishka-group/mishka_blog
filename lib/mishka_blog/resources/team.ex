@@ -1041,6 +1041,8 @@ defmodule MishkaBlog.Team do
                on_lookup: :relate
              )
 
+      change MishkaBlog.Resources.Changes.KeepOldAddress
+
       description "Updates team for tenant users - requires tenant context, prevents site_id changes"
     end
 
@@ -1078,6 +1080,8 @@ defmodule MishkaBlog.Team do
                on_no_match: :error,
                on_lookup: :relate
              )
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     read :by_slug do
@@ -1506,6 +1510,8 @@ defmodule MishkaBlog.Team do
               version: MishkaBlog.Team.Version,
               fields: List.delete(@admin_fields, :site_id),
               label: dgettext_noop("errors", "team")}
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     action :restore_version_api, :struct do
@@ -1580,6 +1586,8 @@ defmodule MishkaBlog.Team do
               version: MishkaBlog.Team.Version,
               fields: List.delete(@admin_fields, :site_id),
               label: dgettext_noop("errors", "team")}
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     action :master_restore_version_api, :struct do

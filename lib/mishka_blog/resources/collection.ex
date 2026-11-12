@@ -1271,6 +1271,8 @@ defmodule MishkaBlog.Collection do
 
       change {Change, Languages.public_slug(language: :language)}
 
+      change MishkaBlog.Resources.Changes.KeepOldAddress
+
       description "Updates collection for tenant users - requires tenant context, prevents site_id changes"
     end
 
@@ -1295,6 +1297,8 @@ defmodule MishkaBlog.Collection do
                 message: dgettext_noop("errors", "Collection cannot be its own parent.")}
 
       change {Change, Languages.public_slug(language: :language)}
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     read :master_read do
@@ -1673,6 +1677,8 @@ defmodule MishkaBlog.Collection do
               version: MishkaBlog.Collection.Version,
               fields: List.delete(@admin_fields, :site_id),
               label: dgettext_noop("errors", "collection")}
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     action :restore_version_api, :struct do
@@ -1721,6 +1727,8 @@ defmodule MishkaBlog.Collection do
               version: MishkaBlog.Collection.Version,
               fields: List.delete(@admin_fields, :site_id),
               label: dgettext_noop("errors", "collection")}
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     action :master_restore_version_api, :struct do

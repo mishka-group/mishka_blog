@@ -1107,6 +1107,8 @@ defmodule MishkaBlog.Blogger do
                on_lookup: :relate
              )
 
+      change MishkaBlog.Resources.Changes.KeepOldAddress
+
       description "Updates blogger profile for tenant users - requires tenant context, prevents site_id changes"
     end
 
@@ -1142,6 +1144,8 @@ defmodule MishkaBlog.Blogger do
                on_no_match: :error,
                on_match: :ignore
              )
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     read :by_user do
@@ -1534,6 +1538,8 @@ defmodule MishkaBlog.Blogger do
               version: MishkaBlog.Blogger.Version,
               fields: List.delete(@admin_fields, :site_id),
               label: dgettext_noop("errors", "blogger profile")}
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     action :restore_version_api, :struct do
@@ -1605,6 +1611,8 @@ defmodule MishkaBlog.Blogger do
               version: MishkaBlog.Blogger.Version,
               fields: List.delete(@admin_fields, :site_id),
               label: dgettext_noop("errors", "blogger profile")}
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     action :master_restore_version_api, :struct do

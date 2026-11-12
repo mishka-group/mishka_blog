@@ -1715,6 +1715,8 @@ defmodule MishkaBlog.BlogPost do
       change MishkaBlog.Resources.Changes.HighlightCode
       change MishkaBlog.Resources.Changes.ContentFacts
 
+      change MishkaBlog.Resources.Changes.KeepOldAddress
+
       description "Updates blog post for tenant users - requires tenant context, prevents site_id changes"
     end
 
@@ -1786,6 +1788,8 @@ defmodule MishkaBlog.BlogPost do
       # what the content says: its reading time and the components it names.
       change MishkaBlog.Resources.Changes.HighlightCode
       change MishkaBlog.Resources.Changes.ContentFacts
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     read :published do
@@ -2421,6 +2425,8 @@ defmodule MishkaBlog.BlogPost do
       # says worked out again.
       change MishkaBlog.Resources.Changes.HighlightCode
       change MishkaBlog.Resources.Changes.ContentFacts
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     action :restore_version_api, :struct do
@@ -2497,6 +2503,8 @@ defmodule MishkaBlog.BlogPost do
       # says worked out again.
       change MishkaBlog.Resources.Changes.HighlightCode
       change MishkaBlog.Resources.Changes.ContentFacts
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     action :master_restore_version_api, :struct do
