@@ -101,9 +101,9 @@ defmodule MishkaBlog.Resources.Changes.KeepOldAddressTest do
     |> Enum.map(&{&1.from_path, &1.to, &1.status, &1.active})
   end
 
-  defp rule!(site, from, to) do
+  defp rule!(site, from, to, attrs \\ %{}) do
     Redirect
-    |> Ash.Changeset.for_create(:create, %{from_path: from, to: to},
+    |> Ash.Changeset.for_create(:create, Map.merge(%{from_path: from, to: to}, attrs),
       tenant: site.id,
       authorize?: false
     )
@@ -158,6 +158,19 @@ defmodule MishkaBlog.Resources.Changes.KeepOldAddressTest do
 
       assert rules(site) == [{"/blog/a", "/elsewhere", 301, true}]
       assert Ash.get!(Redirect, own.id, tenant: site.id, authorize?: false).to == "/elsewhere"
+    end
+
+    test "switches an inactive rule at its old address on, pointed at the new one", %{site: site} do
+      post = post!(site, slug: "a")
+      off = rule!(site, "/blog/a", "/imported-target", %{active: false, status: 302})
+
+      assert {:ok, _post} = save(post, %{slug: "b"})
+
+      assert rules(site) == [{"/blog/a", "/blog/b", 301, true}]
+      assert Ash.get!(Redirect, off.id, tenant: site.id, authorize?: false).active
+
+      _handled = :sys.get_state(RedirectsState)
+      assert RedirectsState.lookup(site.id, "/blog/a", nil) == {:redirect, "/blog/b", 301}
     end
 
     test "points a hand-written redirect to its old address at the new one", %{site: site} do

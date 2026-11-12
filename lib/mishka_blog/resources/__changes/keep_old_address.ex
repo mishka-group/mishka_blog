@@ -21,8 +21,10 @@ defmodule MishkaBlog.Resources.Changes.KeepOldAddress do
     * a rule at the new address (no query) is archived, since it would hide the row and loop back;
     * every redirect whose target is the old address is pointed at the new one, so A to B to C
       leaves A to C and B to C, never a chain;
-    * the old address gets a 301 to the new one, unless a rule is already there: a rule someone
-      wrote by hand is never overwritten.
+    * the old address gets a 301 to the new one, unless an active rule is already there: a rule
+      someone wrote by hand and serves is never overwritten. An inactive rule there, such as an
+      imported one that was switched off, is the address's old answer: it is pointed at the new
+      address as a 301 and switched on.
 
   The rules are written with `authorize?: false`, as the system: the editor was allowed to save the
   row, and a blog editor need not hold the redirect section (`admin:dashboard:runtime:redirect`).
@@ -150,7 +152,7 @@ defmodule MishkaBlog.Resources.Changes.KeepOldAddress do
     with {:ok, rules} <- rules(from, to, targets, opts),
          {:ok, archived} <- archive(Enum.filter(rules, &at?(&1, to)), opts),
          {:ok, pointed} <- point(Enum.filter(rules, &pointing?(&1, targets, to)), new, opts),
-         {:ok, created} <- create(Enum.any?(rules, &at?(&1, from)), from, new, opts) do
+         {:ok, created} <- answer_at(Enum.filter(rules, &at?(&1, from)), from, new, opts) do
       {:ok, archived ++ pointed ++ created}
     end
   end
@@ -177,18 +179,25 @@ defmodule MishkaBlog.Resources.Changes.KeepOldAddress do
     end)
   end
 
-  defp point(rules, new, opts) do
+  defp point(rules, new, opts, changes \\ %{}) do
     Enum.reduce_while(rules, {:ok, []}, fn rule, {:ok, notifications} ->
-      case Ash.update(rule, %{to: new}, opts) do
+      case Ash.update(rule, Map.put(changes, :to, new), opts) do
         {:ok, _rule, more} -> {:cont, {:ok, notifications ++ more}}
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
   end
 
-  defp create(true, _from, _new, _opts), do: {:ok, []}
+  # The old address's own rule: a 301 to the new address, unless an active rule answers it already.
+  defp answer_at([], from, new, opts), do: create(from, new, opts)
 
-  defp create(false, from, new, opts) do
+  defp answer_at([rule | _rest] = rules, _from, new, opts) do
+    if Enum.any?(rules, & &1.active),
+      do: {:ok, []},
+      else: point([rule], new, opts, %{kind: :redirect, status: 301, active: true})
+  end
+
+  defp create(from, new, opts) do
     Redirect
     |> Ash.Changeset.for_create(
       :create,
