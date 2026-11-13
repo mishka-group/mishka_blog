@@ -130,6 +130,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       |> assign(:accent, LanguageAccent.of(record))
       |> assign(:editions, EditionChips.editions(record))
       |> assign(:posts, count(record, :post_count))
+      |> assign(:views, count(record, :view_count))
       |> assign(
         :has_actions?,
         Gervaz.has_user_visible_actions?(
@@ -193,6 +194,20 @@ defmodule MishkaBlogWeb.Templates.TagCard do
         class="flex-none rounded-[5px] bg-[#f2f1ec] px-1.5 py-[2px] text-[8.5px] font-bold uppercase tracking-[0.05em] text-[#8a877f]"
       >
         {String.upcase(@record.language || "")}
+      </span>
+
+      <span
+        data-role="views"
+        class="inline-flex flex-none items-center gap-[5px] text-[11px] font-semibold text-[#a8a5a0]"
+        title={dgettext("mishka_gervaz", "Views")}
+      >
+        <.dynamic_component
+          module={@static.ui_adapter}
+          function={:icon}
+          name="hero-eye"
+          class="size-[13px]"
+        />
+        {@views}
       </span>
 
       <span class={[

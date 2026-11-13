@@ -137,6 +137,7 @@ defmodule MishkaBlogWeb.Templates.TeamCard do
       |> assign(:row_class, Gervaz.custom_row_class(assigns.static, record))
       |> assign(:status, status_badge(record))
       |> assign(:members_count, count(record, :member_count))
+      |> assign(:views, count(record, :view_count))
       |> assign(:followers, count(record, :follower_count))
       |> assign(:members_shown, Enum.take(members, @members_shown))
       |> assign(:members_rest, length(members) - @members_shown)
@@ -241,6 +242,20 @@ defmodule MishkaBlogWeb.Templates.TeamCard do
         @members_shown == [] && "mt-4"
       ]}>
         <div class="flex min-w-0 items-center gap-4">
+          <span
+            data-role="views"
+            class="inline-flex flex-none items-center gap-[5px] text-[11px] font-semibold text-[#a8a5a0]"
+            title={dgettext("mishka_gervaz", "Views")}
+          >
+            <.dynamic_component
+              module={@static.ui_adapter}
+              function={:icon}
+              name="hero-eye"
+              class="size-[13px]"
+            />
+            {@views}
+          </span>
+
           <span class="inline-flex items-center gap-[5px] text-[11px] font-semibold text-[#a8a5a0]">
             <.dynamic_component
               module={@static.ui_adapter}
