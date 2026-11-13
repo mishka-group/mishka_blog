@@ -104,6 +104,17 @@ defmodule MishkaBlogWeb.Test.PageHintsTest do
       assert status < hint
     end
 
+    test "the post form asks for the publish time only while the status is Scheduled", ctx do
+      view = open(ctx, "/admin/dashboard/blog/posts")
+      refute has_element?(view, "[id^=post_form-form_scheduled_publish_at]")
+
+      view |> form("#post_form-form", form: %{status: "scheduled"}) |> render_change()
+      assert has_element?(view, "[id^=post_form-form_scheduled_publish_at]")
+
+      view |> form("#post_form-form", form: %{status: "draft"}) |> render_change()
+      refute has_element?(view, "[id^=post_form-form_scheduled_publish_at]")
+    end
+
     test "the blogger form says what Can Publish Directly does", ctx do
       view = open(ctx, "/admin/dashboard/blog/bloggers")
 

@@ -1045,6 +1045,25 @@ defmodule MishkaBlog.BlogPost do
           end
         end
 
+        # Asked for only while the status is Scheduled: the time a scheduled post goes out.
+        field :scheduled_publish_at, :datetime do
+          visible fn
+            %{form: %Phoenix.HTML.Form{} = form} ->
+              to_string(Phoenix.HTML.Form.input_value(form, :status)) == "scheduled"
+
+            _no_form ->
+              false
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Publish At") end
+
+            description fn ->
+              dgettext("mishka_gervaz", "When the post is published, in UTC.")
+            end
+          end
+        end
+
         field :language, :combobox do
           options fn ->
             case Ecto.Adapters.SQL.query(
@@ -1357,6 +1376,7 @@ defmodule MishkaBlog.BlogPost do
             :title,
             :slug,
             :status,
+            :scheduled_publish_at,
             :language,
             :site_id,
             :language_group_id,
