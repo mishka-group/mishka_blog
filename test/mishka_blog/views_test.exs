@@ -159,6 +159,14 @@ defmodule MishkaBlog.Test.ViewsTest do
       assert [] = rows(post)
     end
 
+    test "a reader with no user agent, behind any proxy, still counts", %{post: post} do
+      post |> page(user_agent: nil) |> show()
+      post |> page([]) |> Map.update!(:private, &Map.delete(&1, :mishka_blog_reader)) |> show()
+      Views.flush()
+
+      assert [%{views: 2}] = rows(post)
+    end
+
     test "a bot counts nothing", %{post: post} do
       post |> page(user_agent: "Mozilla/5.0 (compatible; Googlebot/2.1)") |> show()
       post |> page(user_agent: "Mozilla/5.0 HeadlessChrome/140.0") |> show()
