@@ -70,7 +70,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       create_blogger!(site_id: site.id, can_publish_directly: true)
       create_team!(site_id: site.id, status: :active)
       create_auto_posting!(site_id: site.id, is_active: true)
-      create_post_view!(post_id: post.id)
+      create_post_views!(post_id: post.id)
 
       added = added(Overview.load(master()), before)
 
@@ -121,9 +121,9 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       team_b = create_team!(site_id: site_b.id, status: :active)
       blogger_b = create_blogger!(site_id: site_b.id)
 
-      create_post_view!(post_id: post_a.id)
-      create_post_view!(post_id: post_a.id)
-      create_post_view!(post_id: post_b.id)
+      create_post_views!(post_id: post_a.id)
+      create_post_views!(post_id: post_a.id)
+      create_post_views!(post_id: post_b.id)
       create_post_bookmark!(post_id: post_a.id)
       create_team_member!(team_id: team_a.id, blogger_id: blogger_a.id)
       create_team_member!(team_id: team_b.id, blogger_id: blogger_b.id)
@@ -159,7 +159,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       site = create_site!()
       other = create_site!()
       create_blog_post!(site_id: other.id, status: :published)
-      create_post_view!(post_id: create_blog_post!(site_id: other.id).id)
+      create_post_views!(post_id: create_blog_post!(site_id: other.id).id)
 
       stats = Overview.load(site_admin(site.id))
 
@@ -748,7 +748,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       create_blog_post!(site_id: site.id, status: :draft)
       create_comment!(site_id: site.id, post_id: post.id, status: :pending)
       create_blogger!(site_id: site.id)
-      create_post_view!(post_id: post.id)
+      create_post_views!(post_id: post.id)
 
       %{site: site}
     end

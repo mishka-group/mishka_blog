@@ -5,7 +5,8 @@
 defmodule MishkaBlog.Dashboard.Widgets.TopPosts do
   @moduledoc """
   Dashboard widget (a `dashboard:widgets` plugin): the most-viewed published posts with their view
-  tally (`BlogPost` + the `view_count` aggregate), read as the viewer through
+  tally (`BlogPost` + the `view_count` aggregate, the sum of its `MishkaBlog.PostViewDaily` days),
+  ranked in one read, read as the viewer through
   `MishkaBlog.Dashboard.Scope`: a master ranks posts across every site, a site's admin only their
   own site's, and a viewer without `admin:dashboard:blog:post` none.
 
@@ -80,17 +81,8 @@ defmodule MishkaBlog.Dashboard.Widgets.TopPosts do
       icon="hero-arrow-trending-up"
       tone={:violet}
       title={gettext("Top posts")}
-      subtitle={gettext("Most viewed this month")}
-    >
-      <:right>
-        <span
-          data-role="roadmap-badge"
-          title={gettext("Page views are not recorded yet. Counting them is on our roadmap.")}
-        >
-          <Widget.pill label={gettext("Not tracked yet")} tone={:amber} />
-        </span>
-      </:right>
-    </Widget.card_header>
+      subtitle={gettext("Most viewed")}
+    />
     <div :if={@rows != []}>
       <div
         :for={r <- @rows}

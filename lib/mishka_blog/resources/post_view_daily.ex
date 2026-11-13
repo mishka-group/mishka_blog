@@ -158,7 +158,6 @@ defmodule MishkaBlog.PostViewDaily do
     end
 
     belongs_to :post, MishkaBlog.BlogPost do
-      read_action :any_state
       allow_nil? false
       public? true
     end

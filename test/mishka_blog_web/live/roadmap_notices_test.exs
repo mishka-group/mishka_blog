@@ -8,10 +8,9 @@ defmodule MishkaBlogWeb.Test.RoadmapNoticesTest do
 
   Auto Posting and Analytics each open on a notice that the section is on the roadmap. Auto Posting's
   Edit and Versions buttons have no handler yet, so they are drawn disabled with a tooltip instead of
-  doing nothing when clicked. The dashboard marks every figure counted from the view log — nothing
-  records a view yet — and the two sections that are not built; a viewer who is shown no view figure
-  is shown no label. The post form's Scheduled status and a blogger's Can Publish Directly toggle
-  each carry a hint that the thing they promise is on the roadmap.
+  doing nothing when clicked. The dashboard marks the two sections that are not built; a viewer who
+  is shown neither is shown no label. The post form's Scheduled status and a blogger's Can Publish
+  Directly toggle each say what they do.
   """
   use MishkaBlog.ConnCase
 
@@ -69,10 +68,8 @@ defmodule MishkaBlogWeb.Test.RoadmapNoticesTest do
     view
   end
 
-  defp badges(view, kind), do: view |> render() |> LazyHTML.from_fragment() |> badges_of(kind)
-
-  defp badges_of(document, kind),
-    do: document |> LazyHTML.query("#{@badge}[data-kind=#{kind}]") |> Enum.to_list()
+  defp badges(view),
+    do: view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query(@badge) |> Enum.to_list()
 
   describe "Auto Posting" do
     test "opens on a notice that the section is on the roadmap", ctx do
@@ -146,40 +143,24 @@ defmodule MishkaBlogWeb.Test.RoadmapNoticesTest do
   end
 
   describe "the blog dashboard" do
-    test "labels each figure counted from the view log as not tracked yet", ctx do
-      view = open(ctx, "/admin/dashboard/blog")
-
-      untracked = badges(view, :untracked)
-
-      assert length(untracked) == 4
-      assert Enum.all?(untracked, &(LazyHTML.text(&1) =~ "Not tracked yet"))
-
-      for figure <- ["Today's Views", "Engagement", "Total Views", "Engagement Rate"] do
-        assert Home.untracked?(figure)
-      end
-
-      refute Home.untracked?("Today's Posts")
-      refute Home.untracked?("Posts Published")
-    end
-
     test "labels the Auto Posting and Analytics cards as on the roadmap", ctx do
       view = open(ctx, "/admin/dashboard/blog")
 
-      assert [_, _] = roadmap = badges(view, :roadmap)
+      assert [_, _] = roadmap = badges(view)
       assert Enum.all?(roadmap, &(LazyHTML.text(&1) =~ "On our roadmap"))
 
       assert has_element?(
                view,
-               "a[href$='/admin/dashboard/blog/auto-posting'] [data-kind=roadmap]"
+               "a[href$='/admin/dashboard/blog/auto-posting'] #{@badge}"
              )
 
-      assert has_element?(view, "a[href$='/admin/dashboard/blog/analytics'] [data-kind=roadmap]")
-      refute has_element?(view, "a[href$='/admin/dashboard/blog/tags'] [data-kind=roadmap]")
+      assert has_element?(view, "a[href$='/admin/dashboard/blog/analytics'] #{@badge}")
+      refute has_element?(view, "a[href$='/admin/dashboard/blog/tags'] #{@badge}")
       assert Home.on_roadmap?("Auto Posting")
       refute Home.on_roadmap?("Tags")
     end
 
-    test "draws no label for a viewer who is shown no view figure", ctx do
+    test "draws no label for a viewer who is shown no unbuilt section", ctx do
       moderator =
         create_user_with_permissions!(["admin:dashboard:blog:comment"], site_id: ctx.site.id)
 
@@ -207,13 +188,13 @@ defmodule MishkaBlogWeb.Test.RoadmapNoticesTest do
       assert status < hint
     end
 
-    test "the blogger form says enforcing Can Publish Directly is on the roadmap", ctx do
+    test "the blogger form says what Can Publish Directly does", ctx do
       view = open(ctx, "/admin/dashboard/blog/bloggers")
 
       assert has_element?(
                view,
                "#blogger_form-form [data-role=gervaz-field-description]",
-               "Enforcing this when a post is published is on our roadmap."
+               "Off: this blogger saves drafts, and an editor publishes them."
              )
     end
   end

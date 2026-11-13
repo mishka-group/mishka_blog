@@ -56,13 +56,13 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
     read_b = create_blog_post!(site_id: site_b.id, title: "B Read", status: :published)
     create_blog_post!(site_id: site_b.id, title: "B Draft", status: :draft)
 
-    create_post_view!(post_id: read_a.id, referer: "https://news.example.com/item")
-    create_post_view!(post_id: read_a.id)
-    create_post_view!(post_id: read_b.id, referer: "https://other.example.org/")
+    create_post_views!(post_id: read_a.id, referer: "https://news.example.com/item")
+    create_post_views!(post_id: read_a.id)
+    create_post_views!(post_id: read_b.id, referer: "https://other.example.org/")
 
     # A view of a post that is archived since is no longer counted, by anybody.
     gone_a = create_blog_post!(site_id: site_a.id, title: "A Gone", status: :published)
-    create_post_view!(post_id: gone_a.id)
+    create_post_views!(post_id: gone_a.id)
 
     gone_a
     |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site_a.id, authorize?: false)

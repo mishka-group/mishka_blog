@@ -330,10 +330,16 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
-  # One day's views of a post, written as `MishkaBlog.Views` writes them: `:post` (the post record),
-  # `:views`, `:unique_readers` and `:day` (today).
+  # One day's views of a post, written as `MishkaBlog.Views` writes them: `:post` (the post record)
+  # or `:post_id`, `:views` (1), `:unique_readers` (0) and `:day` (today).
   def create_post_views!(overrides) do
-    post = Keyword.fetch!(overrides, :post)
+    post =
+      Keyword.get_lazy(overrides, :post, fn ->
+        Ash.get!(MishkaBlog.BlogPost, Keyword.fetch!(overrides, :post_id),
+          action: :master_get,
+          authorize?: false
+        )
+      end)
 
     Ash.create!(
       MishkaBlog.PostViewDaily,

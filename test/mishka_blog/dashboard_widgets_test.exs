@@ -374,30 +374,34 @@ defmodule MishkaBlog.Dashboard.WidgetsTest do
     end
   end
 
-  # A WIDGET THAT SHOWS A FIGURE NOTHING RECORDS YET SAYS SO. Page views are read from a log that no
-  # route writes to, and a scheduled post is never published by itself.
-  describe "roadmap labels" do
-    test "blog-top-posts is labelled as not tracked yet", %{tenant: tenant, site: site} do
-      create_blog_post!(site_id: site.id, status: :published)
+  # A WIDGET'S VIEW COUNTS ARE THE SUM OF A POST'S DAYS (`MishkaBlog.PostViewDaily`), and none of
+  # them says views are not recorded.
+  describe "view counts" do
+    test "blog-top-posts ranks published posts by their views", %{tenant: tenant, site: site} do
+      quiet = create_blog_post!(site_id: site.id, status: :published, title: "Quiet Post")
+      read = create_blog_post!(site_id: site.id, status: :published, title: "Read Post")
+      create_post_views!(post: read, views: 1_200, day: Date.add(Date.utc_today(), -3))
+      create_post_views!(post: read, views: 300)
+      create_post_views!(post: quiet, views: 2)
+
+      assert [%{id: read_id, view_count: 1_500}, %{view_count: 2} | _] =
+               TopPosts.load(tenant).posts
+
+      assert read_id == read.id
 
       html = render_widget(TopPosts, tenant)
-
-      assert html =~ ~s(data-role="roadmap-badge")
-      assert html =~ "Not tracked yet"
-      assert html =~ "Counting them is on our roadmap."
+      assert html =~ "1.5K"
+      refute html =~ "roadmap"
     end
 
-    test "blog-recent-posts says on each view count that views are not recorded yet", %{
-      tenant: tenant,
-      site: site
-    } do
-      create_blog_post!(site_id: site.id, title: "First Recent Post")
-      create_blog_post!(site_id: site.id, title: "Second Recent Post")
+    test "blog-recent-posts shows each post's views", %{tenant: tenant, site: site} do
+      post = create_blog_post!(site_id: site.id, title: "First Recent Post")
+      create_post_views!(post: post, views: 42)
 
       html = render_widget(RecentPosts, tenant)
 
-      assert length(String.split(html, ~s(data-role="roadmap-hint"))) - 1 == 2
-      assert html =~ "Page views are not recorded yet. Counting them is on our roadmap."
+      assert html =~ "42"
+      refute html =~ "roadmap"
     end
 
     test "blog-drafts-scheduled names no roadmap for a scheduled post", %{
