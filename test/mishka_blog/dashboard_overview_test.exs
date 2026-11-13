@@ -54,7 +54,6 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
 
       assert added.posts_published == 3
       assert added.posts_drafts == 2
-      assert added.posts_scheduled == 1
       assert added.comments_total == 3
       assert added.bloggers_active == 2
       assert added.collections_total == 2
@@ -69,7 +68,6 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       create_post_collection!(post_id: post.id, collection_id: collection.id)
       create_blogger!(site_id: site.id, can_publish_directly: true)
       create_team!(site_id: site.id, status: :active)
-      create_auto_posting!(site_id: site.id, is_active: true)
       create_post_views!(post_id: post.id)
 
       added = added(Overview.load(master()), before)
@@ -78,7 +76,6 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       assert added.bloggers_publishers == 1
       assert added.bloggers_new == 1
       assert added.teams_active == 1
-      assert added.automation_rules == 1
       assert added.views_total == 1
       assert added.views_window == 1
       assert added.month_posts == 1
@@ -95,7 +92,6 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
 
       assert a.posts_published == 2
       assert a.posts_drafts == 1
-      assert a.posts_scheduled == 1
       assert a.comments_total == 2
       assert a.bloggers_active == 1
       assert a.collections_total == 1
@@ -103,7 +99,6 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
 
       assert b.posts_published == 1
       assert b.posts_drafts == 1
-      assert b.posts_scheduled == 0
       assert b.comments_total == 1
       assert b.bloggers_active == 1
       assert b.collections_total == 1
@@ -180,14 +175,14 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       stats = Overview.load(site_admin(site.id))
 
       assert length(Index.kpi_cards(stats, @both)) == 5
-      assert length(Index.section_cards(stats, @both)) == 8
+      assert length(Index.section_cards(stats, @both)) == 7
       assert length(Index.month_rows(stats, @both)) == 4
 
       assert {"Engagement", _, _, "0%", "Steady vs prev. 30d", @muted} =
                Index.kpi_cards(stats, @both) |> Enum.at(4)
 
       assert {"Analytics", _, _, _, _, [{"Total Views", "0", _}, {"Growth Rate", "No data", _}]} =
-               Index.section_cards(stats, @both) |> Enum.at(7)
+               Index.section_cards(stats, @both) |> Enum.at(6)
     end
   end
 
@@ -651,7 +646,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       blank = Index.section_cards(nil, @both)
       loaded = Index.section_cards(Overview.load(master()), @both)
 
-      assert length(blank) == 8
+      assert length(blank) == 7
       assert length(loaded) == length(blank)
 
       for {title, description, link, icon, tone, rows} <- blank do
@@ -675,7 +670,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
 
       assert [{"Total Tags", "0", _}, {"Most Used", "—", _}] =
                Index.section_cards(Overview.load(site_admin(site.id)), @both)
-               |> Enum.at(6)
+               |> Enum.at(5)
                |> elem(5)
     end
 
@@ -815,7 +810,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
                ["Today's Posts", "Today's Views", "Active Bloggers"]
 
       assert "Comments" not in labels(Index.section_cards(nil, @editor))
-      assert length(Index.section_cards(nil, @editor)) == 7
+      assert length(Index.section_cards(nil, @editor)) == 6
       assert labels(Index.month_rows(nil, @editor)) == ["Posts Published", "Total Views"]
 
       assert labels(Index.quick_actions(@editor)) ==

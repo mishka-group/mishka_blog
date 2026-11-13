@@ -141,7 +141,6 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
 
       assert added.posts_published == 3
       assert added.posts_drafts == 2
-      assert added.posts_scheduled == 1
       assert added.comments_total == 3
       assert added.comments_pending == 3
       assert added.views_total == 3
@@ -152,11 +151,11 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
       a = Overview.load(admin_a)
       b = Overview.load(admin_b)
 
-      assert {a.posts_published, a.posts_drafts, a.posts_scheduled} == {2, 1, 1}
+      assert {a.posts_published, a.posts_drafts} == {2, 1}
       assert {a.comments_total, a.views_total, a.bloggers_active} == {2, 2, 1}
       assert a.engagement_rate == 100
 
-      assert {b.posts_published, b.posts_drafts, b.posts_scheduled} == {1, 1, 0}
+      assert {b.posts_published, b.posts_drafts} == {1, 1}
       assert {b.comments_total, b.views_total, b.bloggers_active} == {1, 1, 1}
 
       assert a.activity |> Enum.map(& &1.title) |> Enum.all?(&String.starts_with?(&1, "A "))

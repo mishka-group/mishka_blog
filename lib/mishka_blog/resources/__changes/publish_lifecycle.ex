@@ -18,6 +18,14 @@ defmodule MishkaBlog.Resources.Changes.PublishLifecycle do
   On a create it applies to every post. On an update it applies only when the status is changing, so
   saving an already published post never moves its `:published_at`.
 
+  ## The `blog:post:published` event
+
+  A post that becomes `:published` — by `:publish`, `:master_publish`, a create or an update saving
+  it as published, or `MishkaBlog.Workers.PublishScheduledWorker` at its scheduled time — fires
+  `"blog:post:published"` once its write is committed, with `%{post: post, site_id: site_id,
+  actor: actor | nil}`, so a plugin can share it elsewhere. Saving a post that was already published
+  fires nothing.
+
   ## Usage
 
       create :create do
@@ -36,23 +44,30 @@ defmodule MishkaBlog.Resources.Changes.PublishLifecycle do
   use Ash.Resource.Change
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  @event "blog:post:published"
+
+  @doc "The event a post that becomes published fires."
+  @spec event() :: String.t()
+  def event, do: @event
+
   @impl true
-  def change(%{action_type: :update} = changeset, _opts, _context) do
+  def change(%{action_type: :update} = changeset, _opts, context) do
     status = Ash.Changeset.get_attribute(changeset, :status)
 
     if status == changeset.data.status,
       do: changeset,
-      else: lifecycle(changeset, status)
+      else: lifecycle(changeset, status, context)
   end
 
-  def change(changeset, _opts, _context) do
-    lifecycle(changeset, Ash.Changeset.get_attribute(changeset, :status))
+  def change(changeset, _opts, context) do
+    lifecycle(changeset, Ash.Changeset.get_attribute(changeset, :status), context)
   end
 
-  defp lifecycle(changeset, :published) do
+  defp lifecycle(changeset, :published, context) do
     now = DateTime.truncate(DateTime.utc_now(), :second)
 
     changeset
+    |> Ash.Changeset.after_transaction(&published(&1, &2, context.actor))
     |> Ash.Changeset.force_change_attribute(:scheduled_publish_at, nil)
     |> stamp_published_at(
       Ash.Changeset.get_attribute(changeset, :published_at),
@@ -61,7 +76,7 @@ defmodule MishkaBlog.Resources.Changes.PublishLifecycle do
     )
   end
 
-  defp lifecycle(changeset, :scheduled) do
+  defp lifecycle(changeset, :scheduled, _context) do
     if is_nil(Ash.Changeset.get_attribute(changeset, :scheduled_publish_at)) do
       Ash.Changeset.add_error(changeset,
         field: :scheduled_publish_at,
@@ -73,7 +88,17 @@ defmodule MishkaBlog.Resources.Changes.PublishLifecycle do
     end
   end
 
-  defp lifecycle(changeset, _other_status), do: changeset
+  defp lifecycle(changeset, _other_status, _context), do: changeset
+
+  defp published(_changeset, {:ok, post} = result, actor) do
+    MishkaInstaller.Event.Hook.call(@event, %{post: post, site_id: post.site_id, actor: actor},
+      return: false
+    )
+
+    result
+  end
+
+  defp published(_changeset, error, _actor), do: error
 
   defp stamp_published_at(changeset, nil, %DateTime{} = scheduled_at, now) do
     case DateTime.compare(scheduled_at, now) do

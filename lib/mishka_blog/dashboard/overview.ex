@@ -6,7 +6,7 @@ defmodule MishkaBlog.Dashboard.Overview do
   @moduledoc """
   Every number on the blog admin overview page (`/admin/dashboard/blog`), read from the database.
 
-  `load/1` gathers the whole page in one pass — the five KPI cards, the eight section cards, the
+  `load/1` gathers the whole page in one pass — the five KPI cards, the seven section cards, the
   "This Month" panel and the recent-activity list — and `calendar/2` reads one month of the editorial
   calendar. Both are pure reads returning plain numbers and records; every label, delta and
   abbreviation is the page's business, not this module's.
@@ -26,7 +26,7 @@ defmodule MishkaBlog.Dashboard.Overview do
   ## What a viewer's figures are read from
 
   Each figure is read only from the blog area the viewer holds (`areas/1`): posts, views, bloggers,
-  collections, tags, teams and auto posting from `admin:dashboard:blog:post`, comments from
+  collections, tags and teams from `admin:dashboard:blog:post`, comments from
   `admin:dashboard:blog:comment` — the permissions those resources' policies ask for. A read of an
   area the viewer does not hold is refused and counted as no data, so its counts are zero, its rows
   are missing from `:activity`, and an engagement rate — comments over views — is zero unless both
@@ -41,7 +41,6 @@ defmodule MishkaBlog.Dashboard.Overview do
   """
   require Ash.Query
 
-  alias MishkaBlog.AutoPosting
   alias MishkaBlog.Blogger
   alias MishkaBlog.BlogPost
   alias MishkaBlog.Collection
@@ -122,10 +121,8 @@ defmodule MishkaBlog.Dashboard.Overview do
       posts_organised: count(in_a_collection(posts)),
       posts_published: count(with_status(posts, :published)),
       posts_drafts: count(with_status(posts, :draft)),
-      posts_scheduled: count(with_status(posts, :scheduled)),
       teams_active: count(active_teams(user)),
       team_members: count(members_base(user)),
-      automation_rules: count(active_rules(user)),
       tags_total: count(Scope.query(Tag, user)),
       tags_top: top_tag(user),
       views_total: Scope.sum(views, :views),
@@ -270,9 +267,6 @@ defmodule MishkaBlog.Dashboard.Overview do
 
   defp active_teams(user),
     do: Team |> Scope.query(user) |> Ash.Query.filter(status == :active)
-
-  defp active_rules(user),
-    do: AutoPosting |> Scope.query(user) |> Ash.Query.filter(is_active == true)
 
   defp with_status(query, status), do: Ash.Query.filter(query, status == ^status)
   defp pending(query), do: Ash.Query.filter(query, status == :pending)

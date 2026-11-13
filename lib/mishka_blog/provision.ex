@@ -191,13 +191,13 @@ defmodule MishkaBlog.Provision do
   @permissions [
     {"admin:dashboard:blog:*", "The whole blog on the dashboard: posts and comments."},
     {"admin:dashboard:blog:post",
-     "The editorial side of the blog: posts, collections, tags, bloggers, teams and auto posting, with their views, ratings, bookmarks and follows. Holders are told when a post is published."},
+     "The editorial side of the blog: posts, collections, tags, bloggers and teams, with their views, ratings, bookmarks and follows. Holders are told when a post is published."},
     {"admin:dashboard:blog:publish",
      "Publish and schedule posts even with a blogger profile that cannot publish directly."},
     {"admin:dashboard:blog:comment", "Comment moderation: comments and comment votes."},
     {"admin:api:blog:*", "The whole blog over the admin JSON:API."},
     {"admin:api:blog:post",
-     "Posts, collections, tags, bloggers, teams and auto posting over the admin JSON:API."},
+     "Posts, collections, tags, bloggers and teams over the admin JSON:API."},
     {"admin:api:blog:publish",
      "Publish and schedule posts over the admin JSON:API even with a blogger profile that cannot publish directly."},
     {"admin:api:blog:comment", "Comments over the admin JSON:API."}

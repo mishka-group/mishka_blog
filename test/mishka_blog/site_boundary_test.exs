@@ -17,7 +17,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
   alias MishkaBlog.Resources.Changes.RestoreVersion
 
   alias MishkaBlog.{
-    AutoPosting,
     Blogger,
     BlogPost,
     Collection,
@@ -97,7 +96,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
       case record do
         %Blogger{} -> %{slug: "aside-#{unique}", user_id: create_user!().id}
         %Team{} -> %{slug: "aside-#{unique}"}
-        %AutoPosting{} -> %{plugin: "aside_#{unique}"}
         _with_language_group -> %{slug: "aside-#{unique}", language: "de"}
       end
 
@@ -646,7 +644,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
       comment_b = create_comment!(site_id: b, post_id: ctx.post_b.id)
 
       records = %{
-        AutoPosting => create_auto_posting!(site_id: b),
         BlogPost => create_blog_post!(site_id: b, status: :draft),
         Blogger => ctx.blogger_b,
         Collection => create_collection!(site_id: b),
@@ -681,7 +678,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
       b = ctx.site_b.id
 
       records = %{
-        AutoPosting => create_auto_posting!(site_id: b),
         BlogPost => create_blog_post!(site_id: b, status: :draft),
         Blogger => ctx.blogger_b,
         Collection => create_collection!(site_id: b),
@@ -857,7 +853,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
           {Collection, Collection.Version, :create_collection!, :name},
           {Blogger, Blogger.Version, :create_blogger!, :display_name},
           {Team, Team.Version, :create_team!, :name},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :name},
           {BlogPost, BlogPost.Version, :create_blog_post!, :title}
         ] do
       test "#{inspect(resource)}: a site user cannot restore another site's version", ctx do
@@ -931,8 +926,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
           {Collection, Collection.Version, :create_collection!, :name, {:read, :collection_id}},
           {Blogger, Blogger.Version, :create_blogger!, :display_name, {:action, :blogger_id}},
           {Team, Team.Version, :create_team!, :name, {:action, :team_id}},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :name,
-           {:action, :auto_posting_id}},
           {BlogPost, BlogPost.Version, :create_blog_post!, :title, {:action, :post_id}}
         ] do
       test "#{inspect(resource)}: a site user naming another site cannot preview its version",
@@ -1070,8 +1063,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
           {Collection, Collection.Version, :create_collection!, :name, {:read, :collection_id}},
           {Blogger, Blogger.Version, :create_blogger!, :display_name, {:action, :blogger_id}},
           {Team, Team.Version, :create_team!, :name, {:action, :team_id}},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :name,
-           {:action, :auto_posting_id}},
           {BlogPost, BlogPost.Version, :create_blog_post!, :title, {:action, :post_id}}
         ] do
       test "#{inspect(resource)}: its preview shows the record as it is and its restore changes nothing",
@@ -1182,7 +1173,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
     for {resource, version, factory, field, record_argument} <- [
           {Blogger, Blogger.Version, :create_blogger!, :display_name, :blogger_id},
           {Team, Team.Version, :create_team!, :name, :team_id},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :name, :auto_posting_id},
           {BlogPost, BlogPost.Version, :create_blog_post!, :title, :post_id}
         ],
         {action, scope} <- [
@@ -1259,7 +1249,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
     for {resource, version, factory, record_argument} <- [
           {Blogger, Blogger.Version, :create_blogger!, :blogger_id},
           {Team, Team.Version, :create_team!, :team_id},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :auto_posting_id},
           {BlogPost, BlogPost.Version, :create_blog_post!, :post_id}
         ] do
       test "#{inspect(resource)}: a user without the blog permission gets no preview", ctx do
@@ -1319,8 +1308,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
            "collection"},
           {Blogger, Blogger.Version, :create_blogger!, {:action, :blogger_id}, "blogger profile"},
           {Team, Team.Version, :create_team!, {:action, :team_id}, "team"},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, {:action, :auto_posting_id},
-           "auto-posting configuration"},
           {BlogPost, BlogPost.Version, :create_blog_post!, {:action, :post_id}, "blog post"}
         ] do
       test "#{inspect(resource)}: a restore through the API and a preview name the record", ctx do
@@ -1448,7 +1435,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
           {Collection.Version, :create_collection!},
           {Blogger.Version, :create_blogger!},
           {Team.Version, :create_team!},
-          {AutoPosting.Version, :create_auto_posting!},
           {BlogPost.Version, :create_blog_post!}
         ] do
       test "#{inspect(version)}: a site user reads its own site's versions only", ctx do
@@ -1491,7 +1477,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
           {Collection, Collection.Version, :create_collection!},
           {Blogger, Blogger.Version, :create_blogger!},
           {Team, Team.Version, :create_team!},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!},
           {BlogPost, BlogPost.Version, :create_blog_post!}
         ] do
       test "#{inspect(resource)}: a site admin and a master read a record's own history", ctx do
@@ -1522,7 +1507,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
           {Collection, Collection.Version, :create_collection!, :collection_id},
           {Blogger, Blogger.Version, :create_blogger!, :blogger_id},
           {Team, Team.Version, :create_team!, :team_id},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :auto_posting_id},
           {BlogPost, BlogPost.Version, :create_blog_post!, :post_id}
         ] do
       test "#{inspect(resource)}: a site admin and a master list a record's own history", ctx do

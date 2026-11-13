@@ -154,8 +154,7 @@ defmodule MishkaBlogWeb.Test.SidebarMenuTest do
     test "a moderator's gate is not an editor's — the whole reason pages are declared apart" do
       assert SidebarMenu.permissions("blog.comments") == ["admin:dashboard:blog:comment"]
 
-      for key <- ~w(blog.posts blog.collections blog.tags blog.bloggers blog.teams
-                    blog.auto_posting blog.analytics) do
+      for key <- ~w(blog.posts blog.collections blog.tags blog.bloggers blog.teams blog.analytics) do
         assert SidebarMenu.permissions(key) == ["admin:dashboard:blog:post"], key
       end
     end

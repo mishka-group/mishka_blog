@@ -18,7 +18,6 @@ defmodule MishkaBlog.Test.AreaPermissionsTest do
   require Ash.Query
 
   alias MishkaBlog.{
-    AutoPosting,
     Blogger,
     BlogPost,
     Collection,
@@ -87,8 +86,7 @@ defmodule MishkaBlog.Test.AreaPermissionsTest do
           {Collection, create_collection!(site_id: site.id)},
           {Tag, tag},
           {Blogger, blogger},
-          {Team, team},
-          {AutoPosting, create_auto_posting!(site_id: site.id)}
+          {Team, team}
         ],
         joins: [
           {PostTag, create_post_tag!(post_id: post.id, tag_id: tag.id)},

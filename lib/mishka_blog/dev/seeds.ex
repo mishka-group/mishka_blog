@@ -17,7 +17,7 @@ defmodule MishkaBlog.Dev.Seeds do
   Posts. Seeded data therefore satisfies **status `:archived` if and only if `archived_at` is set**,
   which `MishkaBlog.Dev.SeedsArchivalTest` pins.
 
-  `Comment`, `Tag`, `Blogger`, `Team` and `AutoPosting` have no `:archived` status at all: for them
+  `Comment`, `Tag`, `Blogger` and `Team` have no `:archived` status at all: for them
   the soft delete is the only archival concept, and their destroy actions leave the status untouched
   — an archived `:spam` comment keeps its `:spam` label.
 
@@ -385,8 +385,7 @@ defmodule MishkaBlog.Dev.Seeds do
       bloggers: :erlang.phash2({site_id, :bloggers}, 5) + 4,
       teams: :erlang.phash2({site_id, :teams}, 2) + 3,
       posts: :erlang.phash2({site_id, :posts}, 23) + 18,
-      comments: :erlang.phash2({site_id, :comments}, 101) + 60,
-      auto_postings: :erlang.phash2({site_id, :auto_postings}, 2) + 3
+      comments: :erlang.phash2({site_id, :comments}, 101) + 60
     }
   end
 
@@ -397,8 +396,7 @@ defmodule MishkaBlog.Dev.Seeds do
       bloggers: Keyword.get(opts, :bloggers, 10),
       teams: Keyword.get(opts, :teams, 5),
       posts: max(div(Keyword.get(opts, :posts, 500), length(@languages)), 1),
-      comments: Keyword.get(opts, :comments, 1000),
-      auto_postings: Keyword.get(opts, :auto_postings, 5)
+      comments: Keyword.get(opts, :comments, 1000)
     }
   end
 
@@ -435,8 +433,6 @@ defmodule MishkaBlog.Dev.Seeds do
 
     progress.("Comments")
     comments = seed_comments(site_id, posts, site_users, counts.comments)
-    progress.("Auto-postings")
-    auto_postings = seed_auto_postings(site_id, counts.auto_postings)
 
     progress.("Lifecycle transitions")
     posts = run_post_lifecycle(site_id, posts)
@@ -449,8 +445,7 @@ defmodule MishkaBlog.Dev.Seeds do
         tag_groups: tag_groups,
         collection_groups: collection_groups,
         bloggers: bloggers,
-        teams: teams,
-        auto_postings: auto_postings
+        teams: teams
       })
 
     progress.("Post views")
@@ -477,7 +472,6 @@ defmodule MishkaBlog.Dev.Seeds do
       teams: teams,
       posts: posts,
       comments: comments,
-      auto_postings: auto_postings,
       archived: archived
     }
   end
@@ -850,14 +844,6 @@ defmodule MishkaBlog.Dev.Seeds do
   defp comment_author_id([], _i), do: nil
   defp comment_author_id(users, i), do: Enum.at(users, rem(i, length(users))).id
 
-  defp seed_auto_postings(_site_id, count) when count < 1, do: []
-
-  defp seed_auto_postings(site_id, count) do
-    Enum.map(1..min(count, 5), fn _i ->
-      dev_auto_posting([], site_id) |> Ash.Generator.generate()
-    end)
-  end
-
   # ---------------------------------------------------------------------------
   # Lifecycle transitions (extra versions in the history)
   # ---------------------------------------------------------------------------
@@ -1145,8 +1131,7 @@ defmodule MishkaBlog.Dev.Seeds do
       collections: collection_targets,
       collection_ids: MapSet.new(collection_targets, & &1.id),
       bloggers: pick_n(data.bloggers, site_id, :blogger, 1),
-      teams: pick_n(data.teams, site_id, :team, 1),
-      auto_postings: pick_n(data.auto_postings, site_id, :auto_posting, 1)
+      teams: pick_n(data.teams, site_id, :team, 1)
     }
   end
 
@@ -1185,7 +1170,7 @@ defmodule MishkaBlog.Dev.Seeds do
   `Ash.destroy!/2` on these resources is a soft delete: `AshArchival` rewrites the `:destroy` action to
   set `archived_at` instead of removing the row. `:permanent_destroy` is the one that really deletes
   and is never used here. On `BlogPost` and `Collection` the destroy also force-sets `status:
-  :archived`; on `Comment`, `Tag`, `Blogger` and `AutoPosting` the status is left alone, so an archived
+  :archived`; on `Comment`, `Tag` and `Blogger` the status is left alone, so an archived
   `:spam` comment keeps its moderation label.
 
   A team's `MishkaBlog.TeamMember` rows are left in place: that join resource has no archival, so
@@ -1205,7 +1190,6 @@ defmodule MishkaBlog.Dev.Seeds do
     Enum.each(plan.collections, &archive(&1, site_id))
     Enum.each(plan.bloggers, &archive(&1, site_id))
     Enum.each(plan.teams, &archive(&1, site_id))
-    Enum.each(plan.auto_postings, &archive(&1, site_id))
 
     verify_archived(site_id, plan.posts)
 
@@ -1215,8 +1199,7 @@ defmodule MishkaBlog.Dev.Seeds do
       tags: length(plan.tags),
       collections: length(plan.collections),
       bloggers: length(plan.bloggers),
-      teams: length(plan.teams),
-      auto_postings: length(plan.auto_postings)
+      teams: length(plan.teams)
     }
   end
 
