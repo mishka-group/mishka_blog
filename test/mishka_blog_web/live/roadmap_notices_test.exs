@@ -6,10 +6,10 @@ defmodule MishkaBlogWeb.Test.RoadmapNoticesTest do
   @moduledoc """
   A blog section that is not finished says so where the admin opens it, and does not pretend to work.
 
-  Auto Posting and Analytics each open on a notice that the section is on the roadmap. Auto Posting's
+  Auto Posting opens on a notice that the section is on the roadmap, and Analytics on its figures. Auto Posting's
   Edit and Versions buttons have no handler yet, so they are drawn disabled with a tooltip instead of
-  doing nothing when clicked. The dashboard marks the two sections that are not built; a viewer who
-  is shown neither is shown no label. The post form's Scheduled status and a blogger's Can Publish
+  doing nothing when clicked. The dashboard marks the section that is not built; a viewer who is
+  not shown it is shown no label. The post form's Scheduled status and a blogger's Can Publish
   Directly toggle each say what they do.
   """
   use MishkaBlog.ConnCase
@@ -114,24 +114,11 @@ defmodule MishkaBlogWeb.Test.RoadmapNoticesTest do
   end
 
   describe "Analytics" do
-    test "opens on a notice that Analytics is on the roadmap, above its figures", ctx do
+    test "opens on its figures, with no roadmap notice", ctx do
       view = open(ctx, "/admin/dashboard/blog/analytics")
 
-      notice = "#analytics-roadmap#{@notice}"
-
-      assert has_element?(view, notice, "Analytics is not available yet")
-
-      assert has_element?(
-               view,
-               notice,
-               "It is on our roadmap. What you see here shows how it will work."
-             )
-
-      html = render(view)
-      {notice, _} = :binary.match(html, ~s(id="analytics-roadmap"))
-      {figures, _} = :binary.match(html, ~s(data-role="analytics-kpis"))
-
-      assert notice < figures
+      refute has_element?(view, @notice)
+      assert has_element?(view, "[data-role=analytics-kpis]", "Unique Readers")
     end
 
     test "is still there to use: the range buttons and the chart are not hidden", ctx do
@@ -143,10 +130,10 @@ defmodule MishkaBlogWeb.Test.RoadmapNoticesTest do
   end
 
   describe "the blog dashboard" do
-    test "labels the Auto Posting and Analytics cards as on the roadmap", ctx do
+    test "labels the Auto Posting card as on the roadmap", ctx do
       view = open(ctx, "/admin/dashboard/blog")
 
-      assert [_, _] = roadmap = badges(view)
+      assert [_] = roadmap = badges(view)
       assert Enum.all?(roadmap, &(LazyHTML.text(&1) =~ "On our roadmap"))
 
       assert has_element?(
@@ -154,7 +141,7 @@ defmodule MishkaBlogWeb.Test.RoadmapNoticesTest do
                "a[href$='/admin/dashboard/blog/auto-posting'] #{@badge}"
              )
 
-      assert has_element?(view, "a[href$='/admin/dashboard/blog/analytics'] #{@badge}")
+      refute has_element?(view, "a[href$='/admin/dashboard/blog/analytics'] #{@badge}")
       refute has_element?(view, "a[href$='/admin/dashboard/blog/tags'] #{@badge}")
       assert Home.on_roadmap?("Auto Posting")
       refute Home.on_roadmap?("Tags")

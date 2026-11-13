@@ -454,7 +454,7 @@ defmodule MishkaBlog.Dev.Seeds do
       })
 
     progress.("Post views")
-    seed_post_views(site_id, posts, site_users, plan.post_ids)
+    seed_post_views(site_id, posts, plan.post_ids)
 
     progress.("Ratings, bookmarks, votes & followers")
 
@@ -891,50 +891,43 @@ defmodule MishkaBlog.Dev.Seeds do
   # Views
   # ---------------------------------------------------------------------------
 
-  defp seed_post_views(site_id, posts, users, skip_ids) do
+  defp seed_post_views(site_id, posts, skip_ids) do
     base = 180 + :erlang.phash2({site_id, :views}, 121)
 
     posts
     |> Enum.filter(&(&1.status == :published and !MapSet.member?(skip_ids, &1.id)))
     |> Enum.sort_by(&:erlang.phash2({site_id, &1.id, :rank}))
     |> Enum.with_index(1)
-    |> Enum.each(fn {post, rank} -> seed_views_for_post(post, rank, base, users) end)
+    |> Enum.each(fn {post, rank} -> seed_views_for_post(post, rank, base) end)
   end
 
-  defp seed_views_for_post(post, rank, base, users) do
-    total = max(round(base * :math.pow(rank, -0.9)), 1)
-    viewers = view_users(post, users, total)
-    net = :erlang.phash2({post.id, :net}, 200) + 11
-    subnet = :erlang.phash2({post.id, :subnet}, 254) + 1
-    window = view_window(post)
-    span = max(DateTime.diff(DateTime.utc_now(), window), 1)
+  # One row per day for the last 90 days since the post went out, the views of a day spread around
+  # the post's share of `base`, about two thirds of them unique readers.
+  defp seed_views_for_post(post, rank, base) do
+    daily = max(round(base * :math.pow(rank, -0.9) / 10), 1)
+    today = Date.utc_today()
 
-    0..(total - 1)
-    |> Enum.map(fn i ->
+    post
+    |> view_from(today)
+    |> Date.range(today)
+    |> Enum.map(fn day ->
+      views = daily + :erlang.phash2({post.id, day}, daily + 1)
+
       %{
+        site_id: post.site_id,
         post_id: post.id,
-        user_id: viewer_id(Enum.at(viewers, i)),
-        ip_address: "#{net}.#{subnet}.#{div(i, 254)}.#{rem(i, 254) + 1}",
-        user_agent: user_agent(),
-        inserted_at: DateTime.add(window, :erlang.phash2({post.id, i, :seen}, span), :second)
+        day: day,
+        views: views,
+        unique_readers: max(div(views * 2, 3), 1)
       }
     end)
-    |> then(&Ash.Seed.seed!(MishkaBlog.PostView, &1))
+    |> then(&Ash.Seed.seed!(MishkaBlog.PostViewDaily, &1))
   end
 
-  defp view_users(_post, [], _total), do: []
+  defp view_from(%{published_at: %DateTime{} = at}, today),
+    do: Enum.max([DateTime.to_date(at), Date.add(today, -89)], Date)
 
-  defp view_users(post, users, total) do
-    users
-    |> Enum.sort_by(&:erlang.phash2({post.id, &1.id, :view}))
-    |> Enum.take(min(round(total * 0.2), length(users)))
-  end
-
-  defp viewer_id(nil), do: nil
-  defp viewer_id(user), do: user.id
-
-  defp view_window(%{published_at: %DateTime{} = at}), do: at
-  defp view_window(%{id: id}), do: past_datetime(id, :viewed, 180)
+  defp view_from(_post, today), do: Date.add(today, -89)
 
   # ---------------------------------------------------------------------------
   # Engagement

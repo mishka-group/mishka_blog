@@ -387,22 +387,6 @@ defmodule MishkaBlog.Dev.Generator do
     )
   end
 
-  def post_view(opts \\ []) do
-    changeset_generator(
-      MishkaBlog.PostView,
-      :create,
-      authorize?: false,
-      defaults: [
-        post_id: nil,
-        user_id: nil,
-        ip_address: sequence(:ip_address, &"192.168.1.#{rem(&1, 255)}"),
-        user_agent: "Mozilla/5.0 Test Browser",
-        referer: nil
-      ],
-      overrides: opts
-    )
-  end
-
   @doc """
   A comment. One that names no `author_id` is a guest's, named `"Guest <n>"`, since a comment is
   a user's or a guest's.
@@ -728,7 +712,7 @@ defmodule MishkaBlog.Dev.Generator do
   end
 
   @doc """
-  A plausible browser user agent, used by the seeds when writing post-view rows.
+  A plausible browser user agent, for the sender data the seeds write.
   """
   def user_agent, do: Enum.random(@user_agents)
 

@@ -56,9 +56,9 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
     read_b = create_blog_post!(site_id: site_b.id, title: "B Read", status: :published)
     create_blog_post!(site_id: site_b.id, title: "B Draft", status: :draft)
 
-    create_post_views!(post_id: read_a.id, referer: "https://news.example.com/item")
-    create_post_views!(post_id: read_a.id)
-    create_post_views!(post_id: read_b.id, referer: "https://other.example.org/")
+    create_post_views!(post_id: read_a.id, unique_readers: 1)
+    create_post_views!(post_id: read_a.id, unique_readers: 1)
+    create_post_views!(post_id: read_b.id, unique_readers: 1)
 
     # A view of a post that is archived since is no longer counted, by anybody.
     gone_a = create_blog_post!(site_id: site_a.id, title: "A Gone", status: :published)
@@ -223,14 +223,12 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
       b = Analytics.load(admin_b, 7)
 
       assert {a.views_total, a.views_window, a.views_today, a.comments_window} == {2, 2, 2, 2}
-      assert a.audience == %{members: 0, guests: 2}
       assert Enum.map(a.top_posts, &{&1.title, &1.views}) == [{"A Read", 2}]
-      assert a.referrers |> Enum.map(& &1.label) |> Enum.sort() == ["Direct", "news.example.com"]
       assert Enum.sum(Enum.map(a.series, & &1.count)) == 2
+      assert a.visitors == 2
 
       assert {b.views_total, b.views_window, b.comments_window} == {1, 1, 1}
       assert Enum.map(b.top_posts, &{&1.title, &1.views}) == [{"B Read", 1}]
-      assert Enum.map(b.referrers, & &1.label) == ["other.example.org"]
     end
 
     test "a moderator reads the comments alone", %{moderator_a: moderator} do
@@ -239,7 +237,6 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
       assert {stats.views_total, stats.views_window, stats.visitors} == {0, 0, 0}
       assert stats.comments_window == 2
       assert stats.top_posts == []
-      assert stats.referrers == []
     end
 
     for actor <- [:nobody_a, :bare_master, :page_master] do
@@ -248,8 +245,6 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
 
         assert {stats.views_total, stats.views_window, stats.comments_window} == {0, 0, 0}
         assert stats.top_posts == []
-        assert stats.referrers == []
-        assert stats.audience == %{members: 0, guests: 0}
       end
     end
   end

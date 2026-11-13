@@ -4,13 +4,14 @@
 
 defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   @moduledoc """
-  The blog analytics page: five KPI tiles, a daily views chart, the most-read posts, where their
-  readers came from and whether they were signed in — every figure read from the view log by
+  The blog analytics page: five KPI tiles, a daily views chart and the most-read posts — every
+  figure read from the daily view counts (`MishkaBlog.PostViewDaily`) by
   `MishkaBlog.Dashboard.Analytics`.
 
-  The page shows only what `MishkaBlog.PostView` records. There is no average read time and no bounce
-  rate here because nothing in the schema observes a reader leaving a post, and a tile that cannot be
-  measured is worse than a tile that is missing.
+  The page shows only what is counted. There is no average read time, no bounce rate and no
+  referrer here because nothing observes a reader leaving a post or keeps where they came from, and
+  a tile that cannot be measured is worse than a tile that is missing. Unique Readers says it is
+  approximate: each node of a site tells its readers apart on its own.
 
   The read runs off the render in a `start_async/3` and is repeated whenever the period changes, so
   every figure and every panel describes the same window. A result is only assigned while its `days`
@@ -26,9 +27,6 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   `move_tone/2`, `delta/2` and `status_tone/1` — so the overview and this page colour and word the
   same figures identically rather than drifting apart; counts, dates and percentages are written in
   the reader's language by `MishkaCmsCore.Localized`.
-
-  The page opens on a notice (`#analytics-roadmap`) that Analytics is on the roadmap: nothing records
-  a view yet, so every figure here is empty or sample data.
 
   The page is a holder's of the blog's `admin:dashboard:blog:post` (`MishkaBlogWeb.SidebarMenu`).
   The Engagement tile divides comments by views, so it is drawn only for a viewer who also holds
@@ -164,33 +162,12 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   @spec day_label(Date.t()) :: String.t()
   def day_label(date), do: Localized.date(date, :MMMd)
 
-  @doc "A referrer as the page shows it: the `Direct` bucket in the reader's language, a host as it is."
-  @spec referrer_label(String.t()) :: String.t()
-  def referrer_label(label), do: Gettext.gettext(MishkaCmsCore.Gettext, label)
-
   @doc "When a top-performing post went out, or that it has not."
   @spec published_label(map()) :: String.t()
   def published_label(%{published_at: %DateTime{} = at}),
     do: gettext("Published %{date}", date: Localized.date(at, :yMMMd))
 
   def published_label(_post), do: gettext("Not published")
-
-  @doc """
-  A count's share of the period's views, as a whole percentage.
-
-  A source with views but under half a percent reads `<1%` rather than `0%`, which would say it
-  brought nobody.
-  """
-  @spec share(non_neg_integer(), non_neg_integer()) :: String.t()
-  def share(0, _total), do: Home.percent(0)
-  def share(_count, 0), do: Home.percent(0)
-  def share(count, total), do: percentage(round(count * 100 / total))
-
-  @doc "The bar width for a share, floored so a small but real source still draws as a bar."
-  @spec share_width(non_neg_integer(), non_neg_integer()) :: String.t()
-  def share_width(0, _total), do: "width: 0%"
-  def share_width(_count, 0), do: "width: 0%"
-  def share_width(count, total), do: "width: #{max(round(count * 100 / total), 2)}%"
 
   defp select_range(socket, nil), do: socket
 
@@ -236,7 +213,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   defp all_time_note(_total), do: gettext("All time")
 
   defp readers_note(0), do: gettext("No readers in this period")
-  defp readers_note(_visitors), do: gettext("By account, by IP for guests")
+  defp readers_note(_visitors), do: gettext("Approximate when the site runs on several servers")
 
   defp trend(0, 0, days), do: gettext("Nothing in the last %{days} days", days: days)
   defp trend(_current, 0, _days), do: gettext("First views in this period")
@@ -263,7 +240,4 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
         points: Localized.number(previous - rate),
         days: days
       )
-
-  defp percentage(0), do: "<" <> Home.percent(1)
-  defp percentage(value), do: Home.percent(value)
 end

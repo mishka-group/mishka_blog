@@ -29,7 +29,7 @@ defmodule MishkaBlog.Test.AreaPermissionsTest do
     PostCollection,
     PostRating,
     PostTag,
-    PostView,
+    PostViewDaily,
     Tag,
     Team,
     TeamFollower,
@@ -102,7 +102,7 @@ defmodule MishkaBlog.Test.AreaPermissionsTest do
           {TeamPermission, create_team_permission!(team_id: team.id)}
         ],
         engagement: [
-          {PostView, create_post_view!(post_id: post.id)},
+          {PostViewDaily, create_post_views!(post: post)},
           {PostRating, create_post_rating!(post_id: post.id)},
           {PostBookmark, create_post_bookmark!(post_id: post.id)},
           {TeamFollower, create_team_follower!(team_id: team.id)}

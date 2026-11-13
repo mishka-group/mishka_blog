@@ -18,7 +18,7 @@ SPDX-License-Identifier: Apache-2.0
     {gettext("Analytics")}
     <:subtitle>
       {gettext(
-        "How your posts are actually being read, counted from the view log — one view is one reader opening one post."
+        "How your posts are being read: one view is a reader opening a post, counted when the page is shown in a browser."
       )}
     </:subtitle>
     <:actions>
@@ -41,14 +41,6 @@ SPDX-License-Identifier: Apache-2.0
       </div>
     </:actions>
   </.header>
-
-  <.roadmap_notice
-    id="analytics-roadmap"
-    class="mb-5"
-    title={gettext("Analytics is not available yet")}
-  >
-    {gettext("It is on our roadmap. What you see here shows how it will work.")}
-  </.roadmap_notice>
 
   <%!-- KPI tiles, in the overview page's shape: two per row on a phone rather than three, where
         "Unique Readers" and its note both wrap. --%>
@@ -178,8 +170,8 @@ SPDX-License-Identifier: Apache-2.0
     </div>
   </div>
 
-  <div data-role="analytics-bottom" class="grid grid-cols-3 gap-4 max-[980px]:grid-cols-1!">
-    <div class="col-span-2 rounded-[18px] border border-[#ecebe6] bg-white px-[22px] py-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)] max-[980px]:col-span-1!">
+  <div data-role="analytics-bottom">
+    <div class="rounded-[18px] border border-[#ecebe6] bg-white px-[22px] py-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)]">
       <div class="font-['Space_Grotesk'] text-[16px] font-semibold text-[#17161a]">
         {gettext("Top Performing Posts")}
       </div>
@@ -243,108 +235,6 @@ SPDX-License-Identifier: Apache-2.0
           <div class="text-[12px] font-medium text-[#8a877f]">
             {gettext("No post was opened in this period.")}
           </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="flex flex-col gap-4">
-      <div class="rounded-[18px] border border-[#ecebe6] bg-white px-[22px] py-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)]">
-        <div class="font-['Space_Grotesk'] text-[16px] font-semibold text-[#17161a]">
-          {gettext("Referrers")}
-        </div>
-        <div class="mt-[3px] text-[12px] font-medium text-[#8a877f]">
-          {gettext("The page each reader arrived from")}
-        </div>
-
-        <div :if={!@stats} class="mt-[18px] flex animate-pulse flex-col gap-3.5">
-          <div :for={w <- [72, 54, 38, 26]}>
-            <div class="mb-1.5 flex items-center justify-between gap-2">
-              <div class="h-3 w-[38%] rounded bg-[#eeedea]"></div>
-              <div class="h-3 w-[34px] rounded bg-[#f2f1ee]"></div>
-            </div>
-            <div class="h-2 overflow-hidden rounded-full bg-[#f4f3ef]">
-              <div class="h-full rounded-full bg-[#eeedea]" style={"width: #{w}%"}></div>
-            </div>
-          </div>
-        </div>
-
-        <div :if={@stats} class="mt-[18px] flex flex-col gap-3.5">
-          <div :for={source <- @stats.referrers}>
-            <div class="mb-1.5 flex items-center justify-between gap-2">
-              <span class="truncate text-[12.5px] font-medium text-[#6d6a63]">
-                {referrer_label(source.label)}
-              </span>
-              <span class="flex-none font-['Space_Grotesk'] text-[12.5px] font-bold text-[#17161a]">
-                {share(source.count, @stats.views_window)}
-              </span>
-            </div>
-            <div class="h-1.5 w-full overflow-hidden rounded-full bg-[#f2f1ec]">
-              <div
-                class="h-full rounded-full bg-[#5b57d6]"
-                style={share_width(source.count, @stats.views_window)}
-              />
-            </div>
-          </div>
-
-          <div
-            :if={@stats.referrers == []}
-            class="rounded-[12px] border border-dashed border-[#e6e4de] py-7 text-center text-[12px] font-medium text-[#8a877f]"
-          >
-            {gettext("No views recorded in this period.")}
-          </div>
-        </div>
-      </div>
-
-      <div class="rounded-[18px] border border-[#ecebe6] bg-white px-[22px] py-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)]">
-        <div class="font-['Space_Grotesk'] text-[16px] font-semibold text-[#17161a]">
-          {gettext("Audience")}
-        </div>
-        <div class="mt-[3px] text-[12px] font-medium text-[#8a877f]">
-          {gettext("Signed in when they read, or not")}
-        </div>
-
-        <div :if={!@stats} class="mt-[18px] flex animate-pulse flex-col gap-3.5">
-          <div :for={w <- [64, 36]}>
-            <div class="mb-1.5 flex items-center justify-between gap-2">
-              <div class="h-3 w-[32%] rounded bg-[#eeedea]"></div>
-              <div class="h-3 w-[46px] rounded bg-[#f2f1ee]"></div>
-            </div>
-            <div class="h-2 overflow-hidden rounded-full bg-[#f4f3ef]">
-              <div class="h-full rounded-full bg-[#eeedea]" style={"width: #{w}%"}></div>
-            </div>
-          </div>
-        </div>
-
-        <div
-          :if={@stats && @stats.views_window > 0}
-          class="mt-[18px] flex flex-col gap-3.5"
-        >
-          <div :for={
-            {label, count, bar} <- [
-              {gettext("Signed-in readers"), @stats.audience.members, "bg-[#5b57d6]"},
-              {gettext("Guests"), @stats.audience.guests, "bg-[#c3c0b8]"}
-            ]
-          }>
-            <div class="mb-1.5 flex items-center justify-between gap-2">
-              <span class="truncate text-[12.5px] font-medium text-[#6d6a63]">{label}</span>
-              <span class="flex-none font-['Space_Grotesk'] text-[12.5px] font-bold text-[#17161a]">
-                {Localized.compact(count)} · {share(count, @stats.views_window)}
-              </span>
-            </div>
-            <div class="h-1.5 w-full overflow-hidden rounded-full bg-[#f2f1ec]">
-              <div
-                class={["h-full rounded-full", bar]}
-                style={share_width(count, @stats.views_window)}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div
-          :if={@stats && @stats.views_window == 0}
-          class="mt-[18px] rounded-[12px] border border-dashed border-[#e6e4de] py-7 text-center text-[12px] font-medium text-[#8a877f]"
-        >
-          {gettext("No views recorded in this period.")}
         </div>
       </div>
     </div>

@@ -306,30 +306,6 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
-  # PostView factory
-  def create_post_view!(overrides \\ []) do
-    {post_id, overrides} = Keyword.pop(overrides, :post_id)
-    {user_id, overrides} = Keyword.pop(overrides, :user_id)
-
-    post_id = post_id || create_blog_post!().id
-    # user_id is optional for guest views
-
-    overrides =
-      overrides
-      |> Keyword.put(:post_id, post_id)
-
-    overrides =
-      if user_id do
-        Keyword.put(overrides, :user_id, user_id)
-      else
-        overrides
-      end
-
-    overrides
-    |> post_view()
-    |> generate()
-  end
-
   # One day's views of a post, written as `MishkaBlog.Views` writes them: `:post` (the post record)
   # or `:post_id`, `:views` (1), `:unique_readers` (0) and `:day` (today).
   def create_post_views!(overrides) do

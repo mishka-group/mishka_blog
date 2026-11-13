@@ -39,7 +39,7 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
     setup do
       site = create_site!()
       post = create_blog_post!(site_id: site.id, status: :published)
-      create_post_view!(post_id: post.id)
+      create_post_views!(post: post)
       create_comment!(site_id: site.id, post_id: post.id)
 
       %{site: site}
@@ -78,7 +78,7 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
   end
 
   describe "the page's labels" do
-    test "write the chart's days, a post's publishing day and a source's share" do
+    test "write the chart's days and a post's publishing day" do
       assert Index.day_label(~D[2026-07-20]) == "Jul 20"
       assert Index.day_label(~D[2026-01-03]) == "Jan 3"
 
@@ -86,11 +86,6 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
                "Published Jul 3, 2026"
 
       assert Index.published_label(%{published_at: nil}) == "Not published"
-
-      assert Index.share(0, 10) == "0%"
-      assert Index.share(5, 0) == "0%"
-      assert Index.share(1, 1_000) == "<1%"
-      assert Index.share(1, 3) == "33%"
     end
   end
 end

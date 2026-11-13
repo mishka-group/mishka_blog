@@ -437,7 +437,6 @@ defmodule MishkaBlog do
     resource MishkaBlog.PostTag
     resource MishkaBlog.AutoPosting
     resource MishkaBlog.PostRating
-    resource MishkaBlog.PostView
     resource MishkaBlog.PostViewDaily
     resource MishkaBlog.Blogger
     resource MishkaBlog.PostBlogger

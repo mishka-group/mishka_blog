@@ -7,26 +7,22 @@ defmodule MishkaBlog.Dashboard.Analytics do
   Every number on the blog analytics page (`/admin/dashboard/blog/analytics`), read from the database.
 
   `load/2` reads one window — seven, thirty or ninety whole days ending today — and returns the KPI
-  figures, the daily views series, the posts read most in that window, where their readers came from
-  and whether those readers were signed in. Nothing is estimated: the page carries a metric only
-  where `MishkaBlog.PostView` actually records one, which is why there is no read time, no session
-  length and no bounce rate — nothing in the schema observes a reader leaving.
+  figures, the daily views series and the posts read most in that window, from
+  `MishkaBlog.PostViewDaily`: one row per post and day with its views and unique readers. Nothing is
+  estimated, which is why there is no read time and no bounce rate: nothing observes a reader leaving.
 
-  A view row is written once per post per reader (per account when signed in, per IP otherwise) and
-  never updated, so "views" here means *distinct readers who opened a post*, and `inserted_at` is the
-  first time each one did. That is the unit every figure below is in.
+  A reader is counted once a day for each post they read (`MishkaBlog.Views`), so "Unique Readers" is
+  the sum of those, and approximate where the site runs on several nodes, each telling its readers
+  apart on its own. Views are written within a minute of being counted.
 
   Every figure is read as `user` through `MishkaBlog.Dashboard.Scope`, as
   `MishkaBlog.Dashboard.Overview` reads its own: a master (a user whose `site_id` is nil) counts every
-  site, a site user only its own. `MishkaBlog.PostView` has no master read and carries no `site_id`;
-  both viewers read it through `:read`, which its policies keep to the viewer's site, joined to its
-  post (`not is_nil(post.id)`), so a view of an archived post is not counted.
+  site, a site user only its own. A day's row is joined to its post (`not is_nil(post.id)`), so the
+  views of an archived post are not counted.
 
-  The window is read once — five selected columns over one read — and the series, the reader count,
-  the referrers, the audience split and the top posts are folded out of those rows in memory. Each of
-  those panels is a `GROUP BY` that an Ash read does not express, and one narrow read beats five
-  hand-written queries. The all-time and previous-window totals stay `Ash.count/2` calls, as they are
-  single numbers.
+  The window's rows are read once — four selected columns — and the series, the readers and the top
+  posts are folded out of them in memory, as an Ash read does not `GROUP BY`. The all-time and
+  previous-window totals are one `SUM` each (`Scope.sum/2`).
 
   Views and posts are read only for a holder of `admin:dashboard:blog:post`, and comments only for a
   holder of `admin:dashboard:blog:comment` (`MishkaBlog.Dashboard.Overview.areas/1`) — the
@@ -35,20 +31,17 @@ defmodule MishkaBlog.Dashboard.Analytics do
 
   The caller runs this off the render — see `MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index`.
   """
-  use Gettext, backend: MishkaCmsCore.Gettext
-
   require Ash.Query
 
   alias MishkaBlog.BlogPost
   alias MishkaBlog.Comment
   alias MishkaBlog.Dashboard.Figures
   alias MishkaBlog.Dashboard.Scope
-  alias MishkaBlog.PostView
+  alias MishkaBlog.PostViewDaily
 
   @ranges [7, 30, 90]
   @default_days 30
   @top_posts 5
-  @top_referrers 6
 
   @doc "The windows the page offers, in whole days."
   @spec ranges() :: [pos_integer()]
@@ -62,10 +55,9 @@ defmodule MishkaBlog.Dashboard.Analytics do
   Reads the analytics page for the last `days` days, as `user` (see `MishkaBlog.Dashboard.Scope`).
 
   Returns a flat map: the all-time and windowed view totals, the window before it to compare
-  against, today and yesterday, the distinct readers behind them, the comment engagement rate, and
-  four collections — `:series` (one `%{date, count}` per day of the window, zeros included),
-  `:top_posts` (`%{title, status, published_at, views}`, most read first), `:referrers`
-  (`%{label, count}`, busiest first) and `:audience` (`%{members, guests}`).
+  against, today and yesterday, the readers behind the window, the comment engagement rate, and two
+  collections — `:series` (one `%{date, count}` per day of the window, zeros included) and
+  `:top_posts` (`%{title, status, published_at, views}`, most read first).
 
   `:from` and `:to` are the window's own bounds, so the page can say which days it is describing
   rather than assuming they match the `days` it asked for.
@@ -81,29 +73,36 @@ defmodule MishkaBlog.Dashboard.Analytics do
     comments = Scope.query(Comment, user)
 
     rows = window_rows(views, from, today)
-    daily = series(rows, from, days)
-    views_window = length(rows)
-    views_previous = count(in_days(views, previous_from, previous_to))
-    comments_window = count(in_days(comments, from, today))
+
+    by_day =
+      rows
+      |> Enum.group_by(& &1.day, & &1.views)
+      |> Map.new(fn {day, v} -> {day, Enum.sum(v)} end)
+
+    daily = series(by_day, from, days)
+    views_window = Enum.sum_by(rows, & &1.views)
+    views_previous = views |> in_days(previous_from, previous_to) |> Scope.sum(:views)
+    comments_window = count(comments_in_days(comments, from, today))
 
     %{
       days: days,
       from: from,
       to: today,
-      views_total: count(views),
+      views_total: Scope.sum(views, :views),
       views_window: views_window,
       views_previous: views_previous,
-      views_today: count(on_day(views, today)),
-      views_yesterday: count(on_day(views, Date.add(today, -1))),
-      visitors: visitors(rows),
+      views_today: Map.get(by_day, today, 0),
+      views_yesterday: Map.get(by_day, Date.add(today, -1), 0),
+      visitors: Enum.sum_by(rows, & &1.unique_readers),
       comments_window: comments_window,
       engagement_rate: Figures.rate(comments_window, views_window),
       engagement_previous:
-        Figures.rate(count(in_days(comments, previous_from, previous_to)), views_previous),
+        Figures.rate(
+          count(comments_in_days(comments, previous_from, previous_to)),
+          views_previous
+        ),
       series: daily,
       peak: Enum.max_by(daily, & &1.count),
-      referrers: referrers(rows),
-      audience: audience(rows),
       top_posts: top_posts(rows, user)
     }
   end
@@ -111,59 +110,25 @@ defmodule MishkaBlog.Dashboard.Analytics do
   defp window_rows(views, from, to) do
     views
     |> in_days(from, to)
-    |> Ash.Query.select([:inserted_at, :ip_address, :referer, :user_id, :post_id])
+    |> Ash.Query.select([:day, :views, :unique_readers, :post_id])
     |> Scope.list()
   end
 
   # Every day of the window is emitted, including the empty ones: a line drawn only through the days
   # that happened to have a view would space a quiet week the same as a busy one.
-  defp series(rows, from, days) do
-    counts = Enum.frequencies_by(rows, &DateTime.to_date(&1.inserted_at))
-
+  defp series(by_day, from, days) do
     Enum.map(0..(days - 1), fn offset ->
       date = Date.add(from, offset)
 
-      %{date: date, count: Map.get(counts, date, 0)}
+      %{date: date, count: Map.get(by_day, date, 0)}
     end)
   end
 
-  # A reader is their account where they have one and their IP where they do not — the same pair the
-  # resource dedupes a view on, so this counts the people the view log can actually tell apart.
-  defp visitors(rows) do
-    rows
-    |> Enum.uniq_by(&(&1.user_id || &1.ip_address))
-    |> length()
-  end
-
-  defp audience(rows) do
-    {members, guests} = Enum.split_with(rows, & &1.user_id)
-
-    %{members: length(members), guests: length(guests)}
-  end
-
-  defp referrers(rows) do
-    rows
-    |> Enum.frequencies_by(&source(&1.referer))
-    |> Enum.sort_by(fn {label, count} -> {-count, label} end)
-    |> Enum.take(@top_referrers)
-    |> Enum.map(fn {label, count} -> %{label: label, count: count} end)
-  end
-
-  # A view recorded without a referer is a reader who arrived without one — typed in, bookmarked, or
-  # from a client that strips the header. That is what direct traffic is, not a missing measurement.
-  defp source(nil), do: gettext_noop("Direct")
-  defp source(referer), do: referer |> String.trim() |> parse_source()
-
-  defp parse_source(""), do: gettext_noop("Direct")
-  defp parse_source(referer), do: referer |> URI.parse() |> Map.get(:host) |> host_label(referer)
-
-  defp host_label(host, _referer) when is_binary(host) and host != "", do: String.downcase(host)
-  defp host_label(_host, referer), do: referer
-
   defp top_posts(rows, user) do
     rows
-    |> Enum.frequencies_by(& &1.post_id)
-    |> Enum.sort_by(fn {_id, count} -> -count end)
+    |> Enum.group_by(& &1.post_id, & &1.views)
+    |> Enum.map(fn {id, views} -> {id, Enum.sum(views)} end)
+    |> Enum.sort_by(fn {_id, views} -> -views end)
     |> Enum.take(@top_posts)
     |> with_titles(user)
   end
@@ -193,17 +158,17 @@ defmodule MishkaBlog.Dashboard.Analytics do
   end
 
   defp views_base(user),
-    do: PostView |> Scope.query(user, :read) |> Ash.Query.filter(not is_nil(post.id))
+    do: PostViewDaily |> Scope.query(user) |> Ash.Query.filter(not is_nil(post.id))
 
-  defp in_days(query, from, to) do
+  defp in_days(query, from, to), do: Ash.Query.filter(query, day >= ^from and day <= ^to)
+
+  defp comments_in_days(query, from, to) do
     Ash.Query.filter(
       query,
       inserted_at >= ^Figures.beginning_of_day(from) and
         inserted_at < ^Figures.beginning_of_day(Date.add(to, 1))
     )
   end
-
-  defp on_day(query, date), do: in_days(query, date, date)
 
   defp count(query), do: Scope.count(query)
 end

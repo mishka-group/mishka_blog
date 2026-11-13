@@ -28,7 +28,7 @@ defmodule MishkaBlog.SiteBoundaryTest do
     PostCollection,
     PostRating,
     PostTag,
-    PostView,
+    PostViewDaily,
     Tag,
     Team,
     TeamFollower,
@@ -480,32 +480,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
 
       assert updated.author_id == user_a.id
     end
-
-    test "PostView :create refuses another site's user as the viewer", ctx do
-      post_a = create_blog_post!(site_id: ctx.site_a.id, status: :published)
-      user_b = create_user!(site_id: ctx.site_b.id)
-      user_a = create_user!(site_id: ctx.site_a.id)
-
-      refused =
-        PostView
-        |> Ash.Changeset.for_create(
-          :create,
-          %{post_id: post_a.id, user_id: user_b.id, ip_address: "10.2.2.2"},
-          tenant: ctx.site_a.id
-        )
-        |> Ash.create()
-
-      assert {:error, _} = refused
-
-      assert {:ok, _} =
-               PostView
-               |> Ash.Changeset.for_create(
-                 :create,
-                 %{post_id: post_a.id, user_id: user_a.id, ip_address: "10.2.2.3"},
-                 tenant: ctx.site_a.id
-               )
-               |> Ash.create()
-    end
   end
 
   describe "a site admin keeps its own site's rows whatever state their parent is in" do
@@ -526,7 +500,7 @@ defmodule MishkaBlog.SiteBoundaryTest do
         PostCollection => create_post_collection!(post_id: post.id, collection_id: collection.id),
         TeamPermission => create_team_permission!(team_id: team.id),
         TeamMember => create_team_member!(team_id: team.id, blogger_id: blogger.id),
-        PostView => create_post_view!(post_id: post.id),
+        PostViewDaily => create_post_views!(post: post),
         TeamFollower => create_team_follower!(team_id: team.id, actor: visitor),
         PostBookmark => create_post_bookmark!(post_id: post.id, actor: visitor),
         PostRating => create_post_rating!(post_id: post.id, actor: visitor),
@@ -568,7 +542,7 @@ defmodule MishkaBlog.SiteBoundaryTest do
                "#{inspect(resource)} hid a site admin's own row once its parent was archived"
       end
 
-      for {resource, row} <- ctx.own_rows, resource != PostView do
+      for {resource, row} <- ctx.own_rows, resource != PostViewDaily do
         assert :ok = Ash.destroy(row, opts),
                "#{inspect(resource)} refused a site admin its own row once its parent was archived"
       end
@@ -755,7 +729,7 @@ defmodule MishkaBlog.SiteBoundaryTest do
           create_post_collection!(post_id: post_b.id, collection_id: collection_b.id),
         TeamPermission => create_team_permission!(team_id: team_b.id),
         TeamMember => create_team_member!(team_id: team_b.id, blogger_id: blogger_b.id),
-        PostView => create_post_view!(post_id: post_b.id, ip_address: "10.9.8.7"),
+        PostViewDaily => create_post_views!(post: post_b),
         TeamFollower => create_team_follower!(team_id: team_b.id, actor: user_b),
         PostBookmark => create_post_bookmark!(post_id: post_b.id, actor: user_b),
         PostRating => create_post_rating!(post_id: post_b.id, actor: user_b),
@@ -800,7 +774,7 @@ defmodule MishkaBlog.SiteBoundaryTest do
     end
 
     test "a site user holding * destroys none of another site's rows", ctx do
-      for {resource, row_b} <- ctx.rows_b, resource != PostView do
+      for {resource, row_b} <- ctx.rows_b, resource != PostViewDaily do
         assert {:error, _} = Ash.destroy(row_b, actor: ctx.admin_a),
                "#{inspect(resource)} let a site user destroy another site's row"
       end
@@ -820,7 +794,8 @@ defmodule MishkaBlog.SiteBoundaryTest do
          %{team_id: ctx.team_b.id, permission_id: create_permission!().id}},
         {TeamMember, :assign, %{team_id: ctx.team_a.id, blogger_id: ctx.blogger_b.id}},
         {TeamMember, :assign, %{team_id: ctx.team_b.id, blogger_id: ctx.blogger_a.id}},
-        {PostView, :create, %{post_id: ctx.post_b.id, ip_address: "10.1.1.1"}}
+        {PostViewDaily, :record,
+         %{site_id: ctx.site_b.id, post_id: ctx.post_b.id, day: Date.utc_today(), views: 1}}
       ]
 
       for {resource, action, params} <- writes do

@@ -30,8 +30,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   figures divide comments by views, so they need both. A card, a row or a link whose area the
   viewer does not hold is not drawn, and `MishkaBlog.Dashboard.Overview` does not read its data.
 
-  The Auto Posting and Analytics cards (`on_roadmap?/1`) carry an "On our roadmap" label, drawn by
-  `roadmap_badge/1`: those two sections are not built.
+  The Auto Posting card (`on_roadmap?/1`) carries an "On our roadmap" label, drawn by
+  `roadmap_badge/1`: that section is not built.
 
   Setting the blog up, the Doctor and the kit upgrade write pages, components and a snippet, and
   read the site they are for, so they need all three of `admin:dashboard:runtime:page` (the pages
@@ -117,7 +117,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   ]
 
   # The sections that are not built yet — the cards that carry a roadmap label.
-  @roadmap_sections ["Auto Posting", "Analytics"]
+  @roadmap_sections ["Auto Posting"]
 
   @month_labels [
     {gettext_noop("Posts Published"), [:post]},
