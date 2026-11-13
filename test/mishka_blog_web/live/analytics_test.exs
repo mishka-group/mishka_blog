@@ -94,7 +94,7 @@ defmodule MishkaBlogWeb.Test.AnalyticsTest do
   test "a filter and the comparison go into the URL and survive a reload", ctx do
     view = open(ctx, @page, ctx.admin)
 
-    view |> element("#analytics-filter-category") |> render_focus()
+    render_hook(view, "relation_focus", %{"filter" => "category"})
     render_async(view, @await)
 
     view
@@ -158,11 +158,11 @@ defmodule MishkaBlogWeb.Test.AnalyticsTest do
   test "opening one filter's list shuts the one open before it", ctx do
     view = open(ctx, @page, ctx.admin)
 
-    view |> element("#analytics-filter-blogger") |> render_focus()
+    render_hook(view, "relation_focus", %{"filter" => "blogger"})
     render_async(view, @await)
     assert has_element?(view, "#analytics-filter-blogger[aria-expanded=true]")
 
-    view |> element("#analytics-filter-team") |> render_focus()
+    render_hook(view, "relation_focus", %{"filter" => "team"})
     render_async(view, @await)
     assert has_element?(view, "#analytics-filter-team[aria-expanded=true]")
     assert has_element?(view, "#analytics-filter-blogger[aria-expanded=false]")
