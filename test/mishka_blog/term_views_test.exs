@@ -50,6 +50,21 @@ defmodule MishkaBlog.Test.TermViewsTest do
     assert views(team, site) == 10
   end
 
+  test "a team counts a post its members co-wrote once", %{site: site, posts: [read, also]} do
+    first = create_blogger!(site_id: site.id)
+    second = create_blogger!(site_id: site.id)
+    team = create_team!(site_id: site.id)
+
+    for blogger <- [first, second] do
+      create_post_blogger!(post_id: read.id, blogger_id: blogger.id)
+      create_team_member!(team_id: team.id, blogger_id: blogger.id)
+    end
+
+    create_post_blogger!(post_id: also.id, blogger_id: second.id)
+
+    assert views(team, site) == 15
+  end
+
   test "a term with no read post is at zero", %{site: site, unread: unread} do
     tag = create_blog_tag!(site_id: site.id)
     create_post_tag!(post_id: unread.id, tag_id: tag.id)

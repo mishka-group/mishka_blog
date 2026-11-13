@@ -1848,6 +1848,21 @@ defmodule MishkaBlog.Team do
   end
 
   calculations do
+    # Every view of every post its members wrote, the sum of their days (`MishkaBlog.PostViewDaily`),
+    # each post once however many members co-wrote it: an aggregate through members and their posts
+    # walks a post once per member. Read with the page of rows it is shown on, in the same query.
+    calculate :view_count,
+              :integer,
+              expr(
+                fragment(
+                  "(SELECT COALESCE(SUM(v.views), 0) FROM mishka_blog_post_views_daily v JOIN mishka_blog_posts p ON p.id = v.post_id AND p.archived_at IS NULL WHERE v.post_id IN (SELECT pb.post_id FROM mishka_blog_post_bloggers pb JOIN mishka_blog_team_members tm ON tm.blogger_id = pb.blogger_id WHERE tm.team_id = ?))",
+                  id
+                )
+              ) do
+      public? true
+      description "How many times its posts were read"
+    end
+
     calculate :latest_version, :struct do
       public? true
       constraints instance_of: MishkaBlog.Team.Version
@@ -1897,15 +1912,6 @@ defmodule MishkaBlog.Team do
   end
 
   aggregates do
-    # Every view of every post it holds, the sum of their days (`MishkaBlog.PostViewDaily`): read with
-    # the page of rows it is shown on, in the same query.
-    sum :view_count, [:tenant_members, :tenant_posts, :views], :views do
-      public? true
-      multitenancy :bypass
-      default 0
-      description "How many times its posts were read"
-    end
-
     count :member_count, :tenant_members do
       public? true
       authorize? false
