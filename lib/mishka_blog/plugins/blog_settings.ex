@@ -76,7 +76,9 @@ defmodule MishkaBlog.Plugins.BlogSettings do
         source: :plugin,
         label: gettext_noop("Keep daily views for (days)"),
         description:
-          gettext_noop("Each night, the daily view counts older than this are deleted.")
+          gettext_noop(
+            "Each night, the daily view counts older than this are deleted. From 1 to 3650 days."
+          )
       )
     ]
   end

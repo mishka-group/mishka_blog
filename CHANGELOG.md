@@ -1,5 +1,6 @@
 # Changelog for MishkaBlog 0.0.3
 
+- The Keep daily views for (days) setting says it takes 1 to 3650 days, and with mishka_cms_core 0.0.5-alpha.18 a number out of that range is refused on the Settings page with the field's error instead of being saved bounded
 - The Categories, Tags, Bloggers and Teams admin lists show how many times their posts were read, in the card and the table's Stats, from a new `view_count` sum aggregate (`PostViewDaily` through the posts, a team's through its members' posts) loaded with the page of rows
 - The post form asks for Publish At, the time a scheduled post goes out, while its status is Scheduled, so a scheduled post can be saved from the form
 - Engagement, on the dashboard and the Analytics page, is the share of views with a comment, never above 100%, and its note says "New" when the period before had none and "No data" when neither had any, instead of a points delta from zero
