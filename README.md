@@ -23,7 +23,7 @@ Mishka Blog is an extension of [Mishka CMS](https://mishka.tools/cms), an open s
 
 ## ✨ Features
 
-- Posts that are a draft, scheduled, published or archived, with a scheduled publish time, an excerpt, a featured flag and image, reading time, SEO tags and Schema.org data. A post's text can place components from the site's library, and its code blocks are highlighted when the post is saved.
+- Posts that are a draft, scheduled, published or archived, with a scheduled publish time (a scheduled post is published at its time by `MishkaBlog.Workers.PublishScheduledWorker`, which the host runs on its Oban crontab once a minute), an excerpt, a featured flag and image, reading time, SEO tags and Schema.org data. A post's text can place components from the site's library, and its code blocks are highlighted when the post is saved.
 - Collections for nested categories, and nested tags. Posts, collections and tags can be written in several languages.
 - Version history with restore for posts, collections, tags, bloggers and teams.
 - Bloggers with a public profile (bio, expertise, social links and a slug). A post can have several authors. Bloggers can be grouped into teams, and each team has its own page.

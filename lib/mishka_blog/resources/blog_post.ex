@@ -8,8 +8,8 @@ defmodule MishkaBlog.BlogPost do
 
   This resource represents individual blog posts with rich text content and comprehensive metadata.
   Each post belongs to a specific site and can have multiple language variants through the translation
-  system. Posts support various statuses (draft, published, scheduled, archived) with automatic
-  publishing based on scheduled timestamps.
+  system. Posts support various statuses (draft, published, scheduled, archived); a scheduled post is
+  published at its time by `MishkaBlog.Workers.PublishScheduledWorker`.
 
   Blog posts feature full version control through PaperTrail integration, tracking all changes
   with snapshot-based history and the ability to restore previous versions. The resource
@@ -191,24 +191,6 @@ defmodule MishkaBlog.BlogPost do
         """
 
         down "DROP TRIGGER IF EXISTS prevent_archived_post_updates_trigger ON mishka_blog_posts;"
-      end
-
-      statement :auto_publish_scheduled_posts_function do
-        up """
-        CREATE OR REPLACE FUNCTION auto_publish_scheduled_posts()
-        RETURNS void AS $$
-        BEGIN
-          UPDATE mishka_blog_posts
-          SET status = 'published',
-              published_at = scheduled_publish_at
-          WHERE status = 'scheduled'
-            AND scheduled_publish_at <= timezone('UTC', NOW())
-            AND archived_at IS NULL;
-        END;
-        $$ LANGUAGE plpgsql;
-        """
-
-        down "DROP FUNCTION IF EXISTS auto_publish_scheduled_posts();"
       end
     end
   end
@@ -1058,7 +1040,7 @@ defmodule MishkaBlog.BlogPost do
             label fn -> dgettext("mishka_gervaz", "Status") end
 
             description fn ->
-              dgettext("mishka_gervaz", "Publishing at the scheduled time is on our roadmap.")
+              dgettext("mishka_gervaz", "A scheduled post is published at its time.")
             end
           end
         end
@@ -1821,6 +1803,13 @@ defmodule MishkaBlog.BlogPost do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
     end
 
+    read :due_scheduled do
+      description "Reads the scheduled posts of every site whose time has come (the publish job's read)"
+      multitenancy :bypass
+      filter expr(status == :scheduled and scheduled_publish_at <= now() and is_nil(archived_at))
+      pagination keyset?: true, required?: false
+    end
+
     read :featured do
       description "Reads featured blog posts within current tenant context"
       filter expr(featured == true and status == :published)
@@ -1933,17 +1922,7 @@ defmodule MishkaBlog.BlogPost do
 
       change set_attribute(:status, :published)
 
-      change fn changeset, _context ->
-        if is_nil(changeset.data.published_at) do
-          Ash.Changeset.force_change_attribute(
-            changeset,
-            :published_at,
-            DateTime.utc_now() |> DateTime.truncate(:second)
-          )
-        else
-          changeset
-        end
-      end
+      change MishkaBlog.Resources.Changes.PublishLifecycle
 
       # A post published names its components to its site's stylesheet.
       change MishkaBlog.Resources.Changes.ContentFacts
@@ -1961,17 +1940,7 @@ defmodule MishkaBlog.BlogPost do
 
       change set_attribute(:status, :published)
 
-      change fn changeset, _context ->
-        if is_nil(changeset.data.published_at) do
-          Ash.Changeset.force_change_attribute(
-            changeset,
-            :published_at,
-            DateTime.utc_now() |> DateTime.truncate(:second)
-          )
-        else
-          changeset
-        end
-      end
+      change MishkaBlog.Resources.Changes.PublishLifecycle
 
       # A post published names its components to its site's stylesheet.
       change MishkaBlog.Resources.Changes.ContentFacts

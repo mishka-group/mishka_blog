@@ -400,23 +400,17 @@ defmodule MishkaBlog.Dashboard.WidgetsTest do
       assert html =~ "Page views are not recorded yet. Counting them is on our roadmap."
     end
 
-    test "blog-drafts-scheduled hints at the roadmap once a post is scheduled", %{
+    test "blog-drafts-scheduled names no roadmap for a scheduled post", %{
       tenant: tenant,
       site: site
     } do
-      create_blog_post!(site_id: site.id, status: :draft)
-      refute render_widget(DraftsScheduled, tenant) =~ "on our roadmap"
-
       create_blog_post!(
         site_id: site.id,
         status: :scheduled,
         scheduled_publish_at: ~U[2099-07-03 18:04:00Z]
       )
 
-      html = render_widget(DraftsScheduled, tenant)
-
-      assert html =~ ~s(data-role="roadmap-hint")
-      assert html =~ "Publishing at the scheduled time is on our roadmap."
+      refute render_widget(DraftsScheduled, tenant) =~ "on our roadmap"
     end
   end
 

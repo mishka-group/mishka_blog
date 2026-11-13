@@ -167,7 +167,7 @@ defmodule MishkaBlog.Agent.OperationsTest do
   end
 
   describe "the other post operations" do
-    test "a schedule is partial: the post is scheduled, and nothing will publish it", %{
+    test "a schedule is partial while the publish job is not on the crontab", %{
       site: site,
       post: post
     } do
@@ -184,7 +184,7 @@ defmodule MishkaBlog.Agent.OperationsTest do
       assert %{status: :verified, observed: %{status: :scheduled}} = stage(receipt, :db_read_back)
       assert %{status: :skipped, reason: :no_publication} = stage(receipt, :broadcast_published)
 
-      assert %{status: :unverified, reason: :nothing_publishes_it} =
+      assert %{status: :unverified, reason: :not_on_crontab} =
                stage(receipt, :published_when_due)
 
       assert receipt.status == :partial

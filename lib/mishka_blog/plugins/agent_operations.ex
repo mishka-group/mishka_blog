@@ -23,16 +23,16 @@ defmodule MishkaBlog.Plugins.AgentOperations do
   | `blog:blog_post:update` | the title, slug, status and language the action returned | broadcast, sitemap job |
   | `blog:blog_post:publish` | `published`, with a publication time | broadcast, sitemap job and build, share-card job and look, the site's feeds dropped, a LiveView that saw it |
   | `blog:blog_post:unpublish` | `draft`, with no publication time and no schedule | broadcast, sitemap job |
-  | `blog:blog_post:schedule` | `scheduled`, with a time | broadcast (the master twin only publishes one), sitemap job, and that the post will be published at its time, which is never verified (below) |
+  | `blog:blog_post:schedule` | `scheduled`, with a time | broadcast (the master twin only publishes one), sitemap job, and that the host's crontab runs the job that publishes it at its time (below) |
   | `blog:blog_post:destroy` | archived | broadcast, sitemap job |
   | `blog:blog_post:unarchive` | not archived | broadcast, sitemap job |
   | `blog:blog_post:permanent_destroy` | gone | broadcast, sitemap job |
   | `blog:blog_post:restore_version` | the title, slug and status the action returned | broadcast, sitemap job |
 
-  A scheduled post's receipt is `:partial` at best: nothing in the CMS publishes a post when its
-  time comes (no job, no trigger), so `:published_when_due` stays unverified
-  (`:nothing_publishes_it`). The receipt says the post is scheduled and does not claim it will go
-  out.
+  A scheduled post is published at its time by `MishkaBlog.Workers.PublishScheduledWorker`, which
+  the host runs on its Oban crontab. That publish comes later than the receipt, so
+  `:published_when_due` checks only that the worker is on the crontab of the running Oban: when it is
+  not (`:not_on_crontab`), nothing will publish the post and the receipt is `:partial`.
 
   ## Categories and tags
 
@@ -46,6 +46,7 @@ defmodule MishkaBlog.Plugins.AgentOperations do
   use MishkaCmsCore.Agent.Operation
 
   alias MishkaBlog.{BlogPost, Collection, Feeds, ShareCards, Tag}
+  alias MishkaBlog.Workers.PublishScheduledWorker
   alias MishkaCmsCore.Agent.Operation
   alias MishkaCmsCore.Agent.Stages.{JobDone, JobEnqueued}
   alias MishkaCmsCore.Runtime.ShareCard
@@ -174,5 +175,14 @@ defmodule MishkaBlog.Plugins.AgentOperations do
   def feeds_dropped(_ctx), do: {:skip, :not_applicable}
 
   @doc false
-  def published_when_due(_ctx), do: {:unverified, :nothing_publishes_it}
+  def published_when_due(_ctx) do
+    if Enum.any?(Oban.config().plugins, &on_crontab?/1),
+      do: {:ok, %{worker: PublishScheduledWorker}},
+      else: {:unverified, :not_on_crontab}
+  end
+
+  defp on_crontab?({Oban.Plugins.Cron, opts}),
+    do: Enum.any?(Keyword.get(opts, :crontab, []), &(elem(&1, 1) == PublishScheduledWorker))
+
+  defp on_crontab?(_plugin), do: false
 end

@@ -191,18 +191,18 @@ defmodule MishkaBlogWeb.Test.RoadmapNoticesTest do
   end
 
   describe "the forms" do
-    test "the post form says publishing at the scheduled time is on the roadmap", ctx do
+    test "the post form says a scheduled post is published at its time", ctx do
       view = open(ctx, "/admin/dashboard/blog/posts")
 
       assert has_element?(
                view,
                "#post_form-form [data-role=gervaz-field-description]",
-               "Publishing at the scheduled time is on our roadmap."
+               "A scheduled post is published at its time."
              )
 
       html = render(view)
       {status, _} = :binary.match(html, ~s(id="post_form-form_status-label"))
-      {hint, _} = :binary.match(html, "Publishing at the scheduled time is on our roadmap.")
+      {hint, _} = :binary.match(html, "A scheduled post is published at its time.")
 
       assert status < hint
     end
