@@ -146,14 +146,13 @@ defmodule MishkaBlog.Dashboard.Analytics do
   `:id` alone, to label one already picked (`{[{label, id}], false}`, or `{[], false}` when the
   viewer cannot read it).
   """
-  @spec choices(atom(), map(), keyword()) :: {[{String.t(), String.t()}], boolean()}
+  @spec choices(String.t(), map(), keyword()) :: {[{String.t(), String.t()}], boolean()}
   def choices(kind, user, opts) when kind in @filters do
-    case Keyword.fetch(opts, :id) do
-      {:ok, id} ->
-        (match?({:ok, _id}, Ecto.UUID.cast(id)) && read_choices(kind, user, opts)) || {[], false}
-
-      :error ->
-        read_choices(kind, user, opts)
+    with {:ok, id} <- Keyword.fetch(opts, :id),
+         :error <- Ecto.UUID.cast(id) do
+      {[], false}
+    else
+      _readable -> read_choices(kind, user, opts)
     end
   end
 
