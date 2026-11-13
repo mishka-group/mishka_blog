@@ -588,16 +588,18 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   end
 
   @doc "Shows the `key` tab of the tabbed card `id` and hides its other `keys`, on the client."
-  @spec show_tab(String.t(), String.t(), [String.t()]) :: JS.t()
+  @spec show_tab(String.t(), String.t(), [String.t()]) :: %JS{}
   def show_tab(id, key, keys) do
-    keys
-    |> Enum.reduce(%JS{}, fn other, js ->
+    shown =
+      JS.set_attribute(JS.show(to: "##{id}-#{key}"), {"aria-selected", "true"},
+        to: "##{id}-tab-#{key}"
+      )
+
+    Enum.reduce(keys -- [key], shown, fn other, js ->
       js
       |> JS.hide(to: "##{id}-#{other}")
       |> JS.set_attribute({"aria-selected", "false"}, to: "##{id}-tab-#{other}")
     end)
-    |> JS.show(to: "##{id}-#{key}")
-    |> JS.set_attribute({"aria-selected", "true"}, to: "##{id}-tab-#{key}")
   end
 
   @doc "The Comments card's tiles, `{status, count}`, in the order of `MishkaBlog.Dashboard.Analytics.statuses/0`."
