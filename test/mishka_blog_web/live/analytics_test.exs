@@ -183,6 +183,26 @@ defmodule MishkaBlogWeb.Test.AnalyticsTest do
     assert has_element?(view, "#analytics-compare-form.col-span-full.xl\\:col-span-1")
   end
 
+  test "the keyup of the Escape that closed a filter's list leaves it closed", ctx do
+    view = open(ctx, @page, ctx.admin)
+
+    render_hook(view, "relation_focus", %{"filter" => "blogger"})
+    render_async(view, @await)
+    assert has_element?(view, "#analytics-filter-blogger[aria-expanded=true]")
+
+    render_hook(view, "relation_close_dropdown", %{"filter" => "blogger"})
+
+    render_hook(view, "relation_search", %{
+      "filter" => "blogger",
+      "key" => "Escape",
+      "value" => ""
+    })
+
+    render_async(view, @await)
+
+    assert has_element?(view, "#analytics-filter-blogger[aria-expanded=false]")
+  end
+
   test "a filter's Clear takes it out of the URL", ctx do
     view = open(ctx, "#{@page}?category=#{ctx.news.id}", ctx.admin)
 

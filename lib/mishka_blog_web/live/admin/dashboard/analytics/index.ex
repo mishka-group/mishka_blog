@@ -124,16 +124,16 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
     end)
   end
 
+  # A keyup that leaves the search as it was, such as the Escape that closed the list, changes
+  # nothing, as gervaz's own relation filters do; only a new search opens and reads the list.
   def handle_event("relation_search", %{"filter" => name} = params, socket) do
     with_picker(socket, name, fn kind, picker ->
       term = String.trim(params["value"] || "")
       term = (String.length(term) >= 2 && term) || ""
 
-      socket = close_others(socket, kind)
-
-      case term == picker.search and picker.options != [] do
-        true -> put_picker(socket, kind, %{picker | open?: true})
-        false -> load_choices(socket, kind, term, 0)
+      case term == picker.search do
+        true -> socket
+        false -> socket |> close_others(kind) |> load_choices(kind, term, 0)
       end
     end)
   end
