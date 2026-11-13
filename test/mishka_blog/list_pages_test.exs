@@ -320,7 +320,7 @@ defmodule MishkaBlog.ListPagesTest do
       assert showing(guest) == ["Showing 1–9 of 13"]
 
       strip = text(guest, ~s([data-role="blog-featured-items"] [data-role="blog-list-title"]))
-      assert length(strip) == 3
+      assert [_, _, _] = strip
 
       # a member of the lock is shown one more, in the box and in the list
       members = render_page(site, "/:lang/blog", %{}, user: member)

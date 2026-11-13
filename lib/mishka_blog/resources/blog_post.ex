@@ -3063,10 +3063,15 @@ defmodule MishkaBlog.BlogPost do
     calculate :listed_at,
               :utc_datetime_usec,
               expr(
-                if status == :scheduled and not is_nil(scheduled_publish_at) do
-                  scheduled_publish_at
-                else
-                  if is_nil(published_at), do: inserted_at, else: published_at
+                cond do
+                  status == :scheduled and not is_nil(scheduled_publish_at) ->
+                    scheduled_publish_at
+
+                  is_nil(published_at) ->
+                    inserted_at
+
+                  true ->
+                    published_at
                 end
               )
 

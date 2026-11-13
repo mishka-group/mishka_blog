@@ -1731,8 +1731,8 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         blogger_records = Enum.filter(body["included"], fn inc -> inc["type"] == "blogger" end)
         user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
 
-        assert length(blogger_records) == 2
-        assert length(user_records) == 2
+        assert [_, _] = blogger_records
+        assert [_, _] = user_records
       end
     end
 
@@ -2035,8 +2035,8 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
 
         # Limit of 5 should apply to members (bloggers), and automatically include their 5 users
-        assert length(blogger_records) == 5
-        assert length(user_records) == 5
+        assert [_, _, _, _, _] = blogger_records
+        assert [_, _, _, _, _] = user_records
 
         # Members are public profiles; the accounts behind them stay with their owners and admins.
         assert_no_account_fields(response)
@@ -2271,7 +2271,7 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
 
         # Check sorted_versions in attributes
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert length(sorted_versions) == 3
+        assert [_, _, _] = sorted_versions
       end
 
       test "tenant admin cannot get team with versions from another site", %{
@@ -2345,7 +2345,7 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         assert response1.status == 200
         body1 = Jason.decode!(response1.resp_body)
         sorted_versions1 = body1["data"]["attributes"]["sorted_versions"]
-        assert length(sorted_versions1) == 2
+        assert [_, _] = sorted_versions1
 
         # Get site2 team with versions
         response2 =
@@ -2359,7 +2359,7 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         assert response2.status == 200
         body2 = Jason.decode!(response2.resp_body)
         sorted_versions2 = body2["data"]["attributes"]["sorted_versions"]
-        assert length(sorted_versions2) == 1
+        assert [_] = sorted_versions2
       end
     end
 
@@ -2435,7 +2435,7 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
 
         # Check recent_versions calculation (should return up to 10)
         recent_versions = body["data"]["attributes"]["recent_versions"]
-        assert length(recent_versions) == 5
+        assert [_, _, _, _, _] = recent_versions
 
         # Verify they're sorted descending (newest first)
         descriptions = Enum.map(recent_versions, & &1["changes"]["description"])
@@ -2494,7 +2494,7 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         assert latest["changes"]["description"] == "V3"
 
         recent = body["data"]["attributes"]["recent_versions"]
-        assert length(recent) == 3
+        assert [_, _, _] = recent
       end
 
       test "recent_versions limits to 10 versions when more exist", %{
@@ -2612,7 +2612,7 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         # Check the versions inside the team
         team_data = List.first(body["data"])
         sorted_versions = team_data["attributes"]["sorted_versions"]
-        assert length(sorted_versions) == 4
+        assert [_, _, _, _] = sorted_versions
       end
 
       test "tenant admin cannot list versions from another site's team", %{
@@ -2680,7 +2680,7 @@ defmodule MishkaBlogWeb.Api.Json.TeamTest do
         # Check the versions inside the team
         team_data = List.first(body["data"])
         sorted_versions = team_data["attributes"]["sorted_versions"]
-        assert length(sorted_versions) == 2
+        assert [_, _] = sorted_versions
       end
     end
 

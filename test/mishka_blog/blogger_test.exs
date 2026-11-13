@@ -504,7 +504,7 @@ defmodule MishkaBlog.Test.BloggerTest do
         team_ids = Enum.map(blogger_with_teams.teams.results, & &1.id)
         assert team1.id in team_ids
         assert team2.id in team_ids
-        assert length(team_ids) == 2
+        assert [_, _] = team_ids
       end
 
       test "updates blogger teams" do
@@ -542,7 +542,7 @@ defmodule MishkaBlog.Test.BloggerTest do
         assert team2.id in team_ids
         assert team3.id in team_ids
         assert team1.id not in team_ids
-        assert length(team_ids) == 2
+        assert [_, _] = team_ids
       end
 
       test "removes all teams when empty array provided" do
@@ -647,7 +647,7 @@ defmodule MishkaBlog.Test.BloggerTest do
         assert team2.id in team_ids
         assert team3.id in team_ids
         assert team1.id not in team_ids
-        assert length(team_ids) == 2
+        assert [_, _] = team_ids
       end
     end
 

@@ -43,7 +43,7 @@ defmodule MishkaBlog.Test.PaperTrailMixinTest do
       test "keeps its versions to an admin of the record's site" do
         policies = Ash.Policy.Info.policies(unquote(version))
 
-        assert length(policies) == 2
+        assert [_, _] = policies
       end
     end
   end

@@ -1067,7 +1067,7 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
 
         # Check sorted_versions in attributes
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert length(sorted_versions) >= 3
+        assert [_, _, _ | _] = sorted_versions
       end
 
       test "tenant admin cannot get tag with versions from another site", %{
@@ -1127,7 +1127,7 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
         assert response1.status == 200
         body1 = Jason.decode!(response1.resp_body)
         sorted_versions1 = body1["data"]["attributes"]["sorted_versions"]
-        assert length(sorted_versions1) >= 2
+        assert [_, _ | _] = sorted_versions1
 
         # Get site2 tag with versions
         response2 =
@@ -1215,7 +1215,7 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
 
         # Check recent_versions calculation (should return up to 10)
         recent_versions = body["data"]["attributes"]["recent_versions"]
-        assert length(recent_versions) >= 5
+        assert [_, _, _, _, _ | _] = recent_versions
 
         # Verify they're sorted descending (newest first)
         descriptions = Enum.map(recent_versions, & &1["changes"]["description"])
@@ -1272,7 +1272,7 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
         assert latest["changes"]["description"] == "V3"
 
         recent = body["data"]["attributes"]["recent_versions"]
-        assert length(recent) >= 3
+        assert [_, _, _ | _] = recent
       end
 
       test "recent_versions limits to 10 versions when more exist", %{
@@ -1372,7 +1372,7 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
         # Check the versions inside the tag
         tag_data = List.first(body["data"])
         sorted_versions = tag_data["attributes"]["sorted_versions"]
-        assert length(sorted_versions) >= 4
+        assert [_, _, _, _ | _] = sorted_versions
       end
 
       test "tenant admin cannot list versions from another site's tag", %{
@@ -1436,7 +1436,7 @@ defmodule MishkaBlogWeb.Api.Json.TagTest do
         # Check the versions inside the tag
         tag_data = List.first(body["data"])
         sorted_versions = tag_data["attributes"]["sorted_versions"]
-        assert length(sorted_versions) >= 2
+        assert [_, _ | _] = sorted_versions
       end
     end
 

@@ -380,7 +380,7 @@ defmodule MishkaBlog.Test.CollectionTest do
           |> Ash.Query.set_tenant(site1.id)
           |> Ash.read!(authorize?: false)
 
-        assert length(collections) == 1
+        assert [_] = collections
         assert Enum.at(collections, 0).id == collection1.id
       end
 
@@ -397,7 +397,7 @@ defmodule MishkaBlog.Test.CollectionTest do
           |> Ash.read!(page: [limit: 100])
 
         collections = result.results
-        assert length(collections) >= 2
+        assert [_, _ | _] = collections
       end
 
       test "master_get retrieves collection by ID bypassing tenant" do
@@ -1964,7 +1964,7 @@ defmodule MishkaBlog.Test.CollectionTest do
         collection_ids = Enum.map(collections, & &1.id) |> Enum.sort()
 
         # Should only return active collections
-        assert length(collections) == 2
+        assert [_, _] = collections
         assert Enum.sort([active1.id, active2.id]) == collection_ids
       end
 
@@ -2011,7 +2011,7 @@ defmodule MishkaBlog.Test.CollectionTest do
           |> Ash.read!()
 
         # Should only see site1 collections
-        assert length(collections) == 1
+        assert [_] = collections
         assert Enum.at(collections, 0).id == site1_collection.id
       end
 
@@ -2025,7 +2025,7 @@ defmodule MishkaBlog.Test.CollectionTest do
           |> Ash.Query.for_read(:public_list, %{}, tenant: site.id)
           |> Ash.read!()
 
-        assert length(collections) == 1
+        assert [_] = collections
       end
     end
 

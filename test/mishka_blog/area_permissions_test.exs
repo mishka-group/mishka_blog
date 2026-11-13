@@ -200,7 +200,7 @@ defmodule MishkaBlog.Test.AreaPermissionsTest do
                "#{inspect(resource)} hid its admin fields from an editor"
 
         for actor <- [ctx.moderator, ctx.outsider] do
-          assert seen.(actor) |> Map.values() |> Enum.all?(&forbidden?/1),
+          assert Enum.all?(seen.(actor), fn {_field, value} -> forbidden?(value) end),
                  "#{inspect(resource)} showed its admin fields to #{actor_name(ctx, actor)}"
         end
       end

@@ -231,7 +231,7 @@ defmodule MishkaBlog.Test.PostBookmarkTest do
 
         assert bookmark1.post_id in bookmark_ids
         assert bookmark2.post_id in bookmark_ids
-        assert length(result) == 2
+        assert [_, _] = result
       end
     end
 
@@ -309,7 +309,7 @@ defmodule MishkaBlog.Test.PostBookmarkTest do
             b.post_id == post.id and b.user_id == user.id
           end)
 
-        assert length(matching_bookmarks) == 1
+        assert [_] = matching_bookmarks
       end
     end
   end

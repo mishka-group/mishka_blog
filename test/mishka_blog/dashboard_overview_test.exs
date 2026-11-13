@@ -166,8 +166,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
 
       assert stats
              |> Map.drop([:activity, :tags_top])
-             |> Map.values()
-             |> Enum.all?(&(&1 == 0))
+             |> Enum.all?(fn {_key, value} -> value == 0 end)
     end
 
     test "renders that empty scope through every presentation function" do
@@ -195,7 +194,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
 
       activity = Overview.load(site_admin(site.id)).activity
 
-      assert length(activity) == 3
+      assert [_, _, _] = activity
 
       for entry <- activity do
         assert %{kind: kind, title: title, at: %DateTime{}} = entry
@@ -539,7 +538,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
     test "give each of the three kinds load/1 emits its own dot" do
       kinds = [:post, :comment, :blogger]
 
-      assert Enum.map(kinds, &Index.activity_tone/1) |> Enum.uniq() |> length() == 3
+      assert kinds |> MapSet.new(&Index.activity_tone/1) |> MapSet.size() == 3
     end
 
     test "word a post from its status so a draft is never announced as published" do
@@ -610,7 +609,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       blank = Index.kpi_cards(nil, @both)
       loaded = Index.kpi_cards(Overview.load(master()), @both)
 
-      assert length(blank) == 5
+      assert [_, _, _, _, _] = blank
       assert length(loaded) == length(blank)
 
       for {label, icon, tone, value, note, note_tone} <- blank do
@@ -696,7 +695,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       blank = Index.month_rows(nil, @both)
       loaded = Index.month_rows(Overview.load(master()), @both)
 
-      assert length(blank) == 4
+      assert [_, _, _, _] = blank
       assert length(loaded) == length(blank)
       assert Enum.map(blank, &elem(&1, 0)) == Enum.map(loaded, &elem(&1, 0))
       assert Enum.all?(blank, &match?({_, "—", @waiting}, &1))
@@ -723,7 +722,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
     test "lists four admin destinations with exactly one primary" do
       actions = Index.quick_actions(@both)
 
-      assert length(actions) == 4
+      assert [_, _, _, _] = actions
       assert Enum.count(actions, fn {_, _, _, primary?} -> primary? end) == 1
 
       for {label, icon, path, primary?} <- actions do
@@ -787,7 +786,10 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
     test "a holder of neither reads nothing", %{site: site} do
       stats = Overview.load(site_admin(site.id, ["admin:dashboard:runtime:page"]))
 
-      assert stats |> Map.drop([:activity, :tags_top]) |> Map.values() |> Enum.all?(&(&1 == 0))
+      assert stats
+             |> Map.drop([:activity, :tags_top])
+             |> Enum.all?(fn {_key, value} -> value == 0 end)
+
       assert stats.activity == []
     end
   end

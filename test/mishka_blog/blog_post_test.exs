@@ -366,7 +366,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.Query.set_tenant(site1.id)
           |> Ash.read!(authorize?: false)
 
-        assert length(blog_posts) == 1
+        assert [_] = blog_posts
         assert Enum.at(blog_posts, 0).id == blog_post1.id
       end
 
@@ -383,7 +383,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.read!()
 
         blog_posts = result.results
-        assert length(blog_posts) >= 2
+        assert [_, _ | _] = blog_posts
       end
 
       test "master_get retrieves blog post by ID bypassing tenant" do
@@ -413,7 +413,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.read!()
 
         posts = result.results
-        assert length(posts) == 1
+        assert [_] = posts
         assert Enum.at(posts, 0).id == published.id
       end
 
@@ -433,7 +433,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.read!()
 
         posts = result.results
-        assert length(posts) == 1
+        assert [_] = posts
         assert Enum.at(posts, 0).id == draft.id
       end
 
@@ -459,7 +459,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.read!()
 
         posts = result.results
-        assert length(posts) == 1
+        assert [_] = posts
         assert Enum.at(posts, 0).id == featured.id
       end
     end
@@ -1747,7 +1747,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.read!()
 
         posts = result.results
-        assert length(posts) == 1
+        assert [_] = posts
 
         first_post = List.first(posts)
         assert first_post.id == post.id
@@ -1793,7 +1793,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
           |> Ash.read!(authorize?: false)
 
         posts = result.results
-        assert length(posts) == 1
+        assert [_] = posts
 
         first_post = List.first(posts)
         assert first_post.id == post.id

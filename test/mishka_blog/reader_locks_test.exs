@@ -82,7 +82,7 @@ defmodule MishkaBlog.ReaderLocksTest do
         id == ^post.id and ^ReaderLocks.page_open(reader, kind, ReaderLocks.site(site.id))
       )
       |> Ash.read!(page: false)
-      |> Kernel.!=([])
+      |> Enum.any?()
     end
 
     property "opens for the reader the checker opens it for", ctx do

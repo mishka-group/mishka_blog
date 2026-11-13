@@ -684,7 +684,7 @@ defmodule MishkaBlog.Test.CommentTest do
 
         comment_ids = Enum.map(comments, & &1.id)
         assert comment1.id in comment_ids
-        assert length(comments) == 1
+        assert [_] = comments
       end
 
       test "read with filter finds comments by status" do

@@ -291,7 +291,7 @@ defmodule MishkaBlog.LockedPageRecordsTest do
           |> Ash.read!(page: [limit: 5])
         end)
 
-      assert length(statements) == 1
+      assert [_] = statements
     end
   end
 end

@@ -945,7 +945,7 @@ defmodule MishkaBlog.Test.BlogPostPropertyTest do
 
       {:ok, site} =
         MishkaCmsCore.Runtime.Site
-        |> Ash.Changeset.for_create(:create, Enum.into(attrs, %{}), authorize?: false)
+        |> Ash.Changeset.for_create(:create, Map.new(attrs), authorize?: false)
         |> Ash.create(authorize?: false)
 
       site

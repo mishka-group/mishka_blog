@@ -2063,7 +2063,7 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
 
         # Check sorted_versions in attributes
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert length(sorted_versions) == 3
+        assert [_, _, _] = sorted_versions
       end
 
       test "tenant admin cannot get blogger with versions from another site", %{
@@ -2141,7 +2141,7 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         assert response1.status == 200
         body1 = Jason.decode!(response1.resp_body)
         sorted_versions1 = body1["data"]["attributes"]["sorted_versions"]
-        assert length(sorted_versions1) == 2
+        assert [_, _] = sorted_versions1
 
         # Get site2 blogger with versions
         response2 =
@@ -2155,7 +2155,7 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         assert response2.status == 200
         body2 = Jason.decode!(response2.resp_body)
         sorted_versions2 = body2["data"]["attributes"]["sorted_versions"]
-        assert length(sorted_versions2) == 1
+        assert [_] = sorted_versions2
       end
     end
 
@@ -2232,7 +2232,7 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
 
         # Check recent_versions calculation (should return up to 10)
         recent_versions = body["data"]["attributes"]["recent_versions"]
-        assert length(recent_versions) == 5
+        assert [_, _, _, _, _] = recent_versions
 
         # Verify they're sorted descending (newest first)
         bios = Enum.map(recent_versions, & &1["changes"]["bio"])
@@ -2287,7 +2287,7 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         assert latest["changes"]["bio"] == "V3"
 
         recent = body["data"]["attributes"]["recent_versions"]
-        assert length(recent) == 3
+        assert [_, _, _] = recent
       end
 
       test "recent_versions limits to 10 versions when more exist", %{
@@ -2407,7 +2407,7 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         # Check the versions inside the blogger
         blogger_data = List.first(body["data"])
         sorted_versions = blogger_data["attributes"]["sorted_versions"]
-        assert length(sorted_versions) == 4
+        assert [_, _, _, _] = sorted_versions
       end
 
       test "tenant admin cannot list versions from another site's blogger", %{
@@ -2480,7 +2480,7 @@ defmodule MishkaBlogWeb.Api.Json.BloggerTest do
         # Check the versions inside the blogger
         blogger_data = List.first(body["data"])
         sorted_versions = blogger_data["attributes"]["sorted_versions"]
-        assert length(sorted_versions) == 2
+        assert [_, _] = sorted_versions
       end
     end
 

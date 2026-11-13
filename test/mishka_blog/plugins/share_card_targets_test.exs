@@ -97,7 +97,7 @@ defmodule MishkaBlog.Plugins.ShareCardTargetsTest do
     for target <- targets do
       assert {:record, "blog:" <> _kind, captures} = target
       assert Map.keys(captures) |> Enum.sort() == ["lang", "slug"]
-      assert Enum.all?(Map.values(captures), &is_binary/1)
+      assert Enum.all?(captures, fn {_key, value} -> is_binary(value) end)
     end
   end
 

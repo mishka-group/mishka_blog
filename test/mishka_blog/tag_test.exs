@@ -335,7 +335,7 @@ defmodule MishkaBlog.Test.TagTest do
           |> Ash.Query.set_tenant(site1.id)
           |> Ash.read!(authorize?: false)
 
-        assert length(tags) == 1
+        assert [_] = tags
         assert Enum.at(tags, 0).id == tag1.id
       end
 
@@ -352,7 +352,7 @@ defmodule MishkaBlog.Test.TagTest do
           |> Ash.read!(page: [limit: 100])
 
         tags = result.results
-        assert length(tags) >= 2
+        assert [_, _ | _] = tags
       end
 
       test "master_get retrieves tag by ID bypassing tenant" do
@@ -380,7 +380,7 @@ defmodule MishkaBlog.Test.TagTest do
         tags = result.results
         tag_ids = Enum.map(tags, & &1.id) |> Enum.sort()
 
-        assert length(tags) == 2
+        assert [_, _] = tags
         assert Enum.sort([tag1.id, tag2.id]) == tag_ids
       end
 
@@ -424,7 +424,7 @@ defmodule MishkaBlog.Test.TagTest do
 
         tags = result.results
 
-        assert length(tags) == 1
+        assert [_] = tags
         assert Enum.at(tags, 0).id == site1_tag.id
       end
 
@@ -542,7 +542,7 @@ defmodule MishkaBlog.Test.TagTest do
           |> Ash.read!()
 
         variant_ids = Enum.map(variants, & &1.id) |> Enum.sort()
-        assert length(variants) == 2
+        assert [_, _] = variants
         assert Enum.sort([en_tag.id, fr_tag.id]) == variant_ids
       end
     end
@@ -1003,7 +1003,7 @@ defmodule MishkaBlog.Test.TagTest do
           |> Ash.read!()
 
         tags = result.results
-        assert length(tags) == 1
+        assert [_] = tags
 
         first_tag = List.first(tags)
         assert first_tag.id == tag.id
@@ -1050,7 +1050,7 @@ defmodule MishkaBlog.Test.TagTest do
           |> Ash.read!(authorize?: false)
 
         tags = result.results
-        assert length(tags) == 1
+        assert [_] = tags
 
         first_tag = List.first(tags)
         assert first_tag.id == tag.id

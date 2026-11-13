@@ -197,7 +197,10 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
       test "#{actor} holds no blog area and reads nothing", context do
         stats = Overview.load(context[unquote(actor)])
 
-        assert stats |> Map.drop([:activity, :tags_top]) |> Map.values() |> Enum.all?(&(&1 == 0))
+        assert stats
+               |> Map.drop([:activity, :tags_top])
+               |> Enum.all?(fn {_key, value} -> value == 0 end)
+
         assert stats.activity == []
         assert stats.tags_top == nil
         assert calendar_titles(context[unquote(actor)]) == []
@@ -223,7 +226,7 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
 
       assert {a.views_total, a.views_window, a.views_today, a.comments_window} == {2, 2, 2, 2}
       assert Enum.map(a.top_posts, &{&1.title, &1.views}) == [{"A Read", 2}]
-      assert Enum.sum(Enum.map(a.series, & &1.count)) == 2
+      assert Enum.sum_by(a.series, & &1.count) == 2
       assert a.visitors == 2
 
       assert {b.views_total, b.views_window, b.comments_window} == {1, 1, 1}
@@ -334,7 +337,7 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
         user = context[unquote(actor)]
         data = unquote(module).load(user)
 
-        assert data |> Map.delete(:count) |> Map.values() |> Enum.all?(&empty?/1)
+        assert data |> Map.delete(:count) |> Enum.all?(fn {_key, value} -> empty?(value) end)
 
         html =
           render_component(&Widget.card/1,
@@ -379,7 +382,7 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
 
   defp empty?(value) when is_integer(value), do: value == 0
   defp empty?(value) when is_list(value), do: value == []
-  defp empty?(%{} = map), do: map |> Map.values() |> Enum.all?(&empty?/1)
+  defp empty?(%{} = map), do: Enum.all?(map, fn {_key, value} -> empty?(value) end)
 
   defp added(after_load, before_load) do
     for {key, value} <- after_load, is_integer(value), into: %{} do
