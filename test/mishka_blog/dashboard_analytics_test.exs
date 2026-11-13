@@ -217,6 +217,24 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
     end
   end
 
+  describe "the filter options" do
+    test "list every tag a master reads, past a page of 100, and leave the archived out" do
+      site = create_site!()
+      master = create_user_with_permissions!(["admin:dashboard:*"])
+      tags = for n <- 1..105, do: create_blog_tag!(site_id: site.id, name: "tag-#{n}")
+      gone = create_blog_tag!(site_id: site.id, name: "gone")
+
+      gone
+      |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id, authorize?: false)
+      |> Ash.destroy!()
+
+      listed = master |> Analytics.options() |> Map.fetch!(:tag) |> Enum.map(&elem(&1, 0))
+
+      assert Enum.all?(tags, &(&1.id in listed))
+      refute gone.id in listed
+    end
+  end
+
   describe "the period" do
     test "reads the URL and writes back only what is not the default" do
       id = Ecto.UUID.generate()

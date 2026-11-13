@@ -60,7 +60,6 @@ defmodule MishkaBlog.Dashboard.Analytics do
   @top_posts 10
   @quiet_below 3
   @fresh_days 30
-  @options 200
   @event "blog:analytics:panel"
 
   @type period :: %{
@@ -137,34 +136,42 @@ defmodule MishkaBlog.Dashboard.Analytics do
 
   @doc """
   What the filters can be set to, as `user` reads them: `%{category: [{id, name}], tag: …,
-  blogger: …, team: …}`, by name.
+  blogger: …, team: …}`, by name. Every one is listed, however many there are, and an archived one
+  is left out.
   """
   @spec options(map()) :: %{atom() => [{String.t(), String.t()}]}
   def options(user) do
     %{
-      category: names(MishkaBlog.Collection, :name, user),
-      tag: names(MishkaBlog.Tag, :name, user),
-      blogger: names(MishkaBlog.Blogger, :display_name, user),
-      team: names(MishkaBlog.Team, :name, user)
+      category: choices(MishkaBlog.Collection, :name, user),
+      tag: choices(MishkaBlog.Tag, :name, user),
+      blogger: choices(MishkaBlog.Blogger, :display_name, user),
+      team: choices(MishkaBlog.Team, :name, user)
     }
   end
 
-  defp names(resource, field, user, ids \\ nil)
+  # One read with no page size: a master read pages at 100, which cut a long list short.
+  defp choices(resource, field, user) do
+    resource
+    |> Scope.query(user)
+    |> Scope.grouped(
+      &from(r in &1,
+        where: is_nil(r.archived_at),
+        order_by: field(r, ^field),
+        select: {r.id, field(r, ^field)}
+      )
+    )
+  end
 
   defp names(_resource, _field, _user, []), do: []
 
   defp names(resource, field, user, ids) do
     resource
     |> Scope.query(user)
-    |> only(ids)
+    |> Ash.Query.filter(id in ^ids)
     |> Ash.Query.select([:id, field])
-    |> Ash.Query.sort([{field, :asc}])
-    |> Scope.list(@options)
+    |> Scope.list(length(ids))
     |> Enum.map(&{&1.id, Map.fetch!(&1, field)})
   end
-
-  defp only(query, nil), do: query
-  defp only(query, ids), do: Ash.Query.filter(query, id in ^ids)
 
   @doc """
   Reads `panel` for `period` as `user`, then hands it to the `blog:analytics:panel` plugins.
