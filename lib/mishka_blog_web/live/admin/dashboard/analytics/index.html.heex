@@ -428,7 +428,11 @@ SPDX-License-Identifier: Apache-2.0
       note={gettext("Views by weekday over the period")}
       loading={is_nil(@panels.overview)}
     >
-      <div :if={@panels.overview}>
+      <.empty
+        :if={@panels.overview && @panels.overview.views_window == 0}
+        text={gettext("No views recorded in the last %{days} days.", days: @period.days)}
+      />
+      <div :if={@panels.overview && @panels.overview.views_window > 0}>
         <div class="flex h-[140px] items-end gap-2">
           <div
             :for={day <- @panels.overview.weekdays}
@@ -640,7 +644,7 @@ SPDX-License-Identifier: Apache-2.0
       <.post_list
         :if={@panels.posts}
         posts={@panels.posts.quiet}
-        empty={gettext("Every published post was read in this period.")}
+        empty={quiet_empty(@panels.posts)}
         figure={&gettext("%{count} views", count: Localized.number(&1.views))}
       />
     </.panel>

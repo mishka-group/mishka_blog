@@ -111,6 +111,8 @@ defmodule MishkaBlogWeb.Test.AnalyticsTest do
 
     refute has_element?(view, "[data-role=analytics-bottom]", "Counted post")
     assert has_element?(view, "[data-role=analytics-bottom]", "No post was opened")
+    assert has_element?(view, "[data-role=analytics-quiet]", "No published post matches")
+    assert has_element?(view, "[data-role=analytics-weekdays]", "No views recorded")
   end
 
   test "the period and the sort are patch links", ctx do

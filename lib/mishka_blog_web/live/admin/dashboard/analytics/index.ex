@@ -321,6 +321,14 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   def change_tone(nil), do: @muted
   def change_tone(points), do: Home.move_tone(points, 0)
 
+  @doc """
+  What Quiet Posts says when it lists none: that every published post was read only when some post
+  was read at all; with no post read and none quiet, no published post matches the period.
+  """
+  @spec quiet_empty(map()) :: String.t()
+  def quiet_empty(%{top: [], quiet: []}), do: gettext("No published post matches this period.")
+  def quiet_empty(_posts), do: gettext("Every published post was read in this period.")
+
   @doc "A commenter's name as the comments page writes it."
   @spec commenter(map()) :: String.t()
   def commenter(comment), do: MishkaBlogWeb.Templates.CommentCard.author(comment)
