@@ -129,7 +129,6 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       |> assign(:tint, tint(record))
       |> assign(:accent, LanguageAccent.of(record))
       |> assign(:editions, EditionChips.editions(record))
-      |> assign(:editions_shown, 1)
       |> assign(:posts, count(record, :post_count))
       |> assign(:views, count(record, :view_count))
       |> assign(
@@ -198,32 +197,18 @@ defmodule MishkaBlogWeb.Templates.TagCard do
         </span>
 
         <%!-- A translated tag names its languages under its name instead of in the badge at the
-              end: each is the way to that edition. Two chips (its own language and one more) are shown on
-              one line and the rest counted, so a tag in many languages keeps the card as short as its
-              neighbours, and every card of a row is as tall as the tallest. --%>
-        <div
-          :if={@editions != []}
-          class="mt-1.5 flex items-center gap-[5px] [&>span]:flex-nowrap"
-        >
-          <EditionChips.inline
-            id={"#{@id}-editions"}
-            record={@record}
-            editions={Enum.take(@editions, @editions_shown)}
-            accent={@accent}
-          />
-          <span
-            :if={length(@editions) > @editions_shown}
-            data-role="editions-rest"
-            title={
-              @editions
-              |> Enum.drop(@editions_shown)
-              |> Enum.map_join(", ", &String.upcase(&1.language))
-            }
-            class="flex-none text-[10px] font-bold text-[#8a877f]"
-          >
-            +{length(@editions) - @editions_shown}
-          </span>
-        </div>
+              end: each is the way to that edition. Two chips (its own language and one more) and a +N that
+              opens the rest sit on one line, so a tag in many languages keeps the card as short as
+              its neighbours, and every card of a row is as tall as the tallest. --%>
+        <EditionChips.row
+          id={@id}
+          record={@record}
+          editions={@editions}
+          accent={@accent}
+          shown={1}
+          label={false}
+          class="mt-1.5"
+        />
       </div>
 
       <span

@@ -44,13 +44,15 @@ defmodule MishkaBlogWeb.Templates.EditionChips do
   The label and the first `shown` chips share one line that never reflows: the rest open underneath
   rather than pushing the row they came from. `id` is the card's own DOM id, which scopes the
   `-editions-more`, `-editions-less` and `-editions-rest` elements the toggle flips
-  (`MishkaCmsCoreWeb.Templates.CardChrome.expand_editions/1`).
+  (`MishkaCmsCoreWeb.Templates.CardChrome.expand_editions/1`). `label` false leaves the Languages
+  label out, for a card too narrow for it.
   """
   attr :id, :string, required: true
   attr :record, :map, required: true
   attr :editions, :list, required: true
   attr :accent, :map, required: true
   attr :shown, :integer, default: 2
+  attr :label, :boolean, default: true
   attr :event, :string, default: "show_edition"
   attr :class, :any, default: nil
 
@@ -65,7 +67,10 @@ defmodule MishkaBlogWeb.Templates.EditionChips do
     ~H"""
     <div :if={@editions != []} id={"#{@id}-editions"} class={@class}>
       <div class="flex items-center gap-2">
-        <span class="flex-none text-[9px] font-bold uppercase tracking-[0.05em] text-[#a8a5a0]">
+        <span
+          :if={@label}
+          class="flex-none text-[9px] font-bold uppercase tracking-[0.05em] text-[#a8a5a0]"
+        >
           {dgettext("mishka_gervaz", "Languages")}
         </span>
 
