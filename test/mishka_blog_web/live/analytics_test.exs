@@ -78,31 +78,56 @@ defmodule MishkaBlogWeb.Test.AnalyticsTest do
 
     assert has_element?(view, "[data-role=analytics-top-categories]", "News")
     assert has_element?(view, "[data-role=analytics-bottom]", "Counted post")
-    assert has_element?(view, "[data-role=analytics-commenters]", "Grace")
-    assert has_element?(view, "[data-role=analytics-categories-chart] svg")
+    assert has_element?(view, "[data-role=analytics-top-commenters]", "Grace")
+    assert has_element?(view, "[data-role=analytics-chart-categories] svg")
+    assert has_element?(view, "[data-role=analytics-chart-publishing]")
+
+    assert has_element?(
+             view,
+             "#analytics-comments-pending[href*='comments_filter_status=pending']",
+             "1"
+           )
+
     assert has_element?(view, "[data-role=analytics-weekdays]")
   end
 
   test "a filter and the comparison go into the URL and survive a reload", ctx do
     view = open(ctx, @page, ctx.admin)
 
-    view
-    |> element("#analytics-filters")
-    |> render_change(%{"filters" => %{"category" => ctx.news.id, "compare" => "true"}})
+    view |> element("#analytics-filter-category") |> render_focus()
+    render_async(view, @await)
 
+    view
+    |> element("#analytics-filter-category")
+    |> render_keyup(%{"filter" => "category", "value" => "New"})
+
+    render_async(view, @await)
+
+    view
+    |> element("[phx-click=relation_select][phx-value-id='#{ctx.news.id}']")
+    |> render_click()
+
+    assert assert_patch(view) =~ "category=#{ctx.news.id}"
+
+    view |> element("#analytics-compare-form") |> render_change(%{"compare" => "true"})
     path = assert_patch(view)
     assert path =~ "category=#{ctx.news.id}"
     assert path =~ "compare=true"
 
     reloaded = open(ctx, path, ctx.admin)
 
-    assert has_element?(
-             reloaded,
-             "#analytics-filter-category option[selected][value='#{ctx.news.id}']"
-           )
+    assert has_element?(reloaded, "#analytics-filter-category[value='News']")
+    assert has_element?(reloaded, "input[name='filters[category]'][value='#{ctx.news.id}']")
 
     assert has_element?(reloaded, "#analytics-compare[checked]")
     assert has_element?(reloaded, "[data-role=previous-line]")
+  end
+
+  test "a filter's Clear takes it out of the URL", ctx do
+    view = open(ctx, "#{@page}?category=#{ctx.news.id}", ctx.admin)
+
+    view |> element("#analytics-clear-category") |> render_click()
+    refute assert_patch(view) =~ "category="
   end
 
   test "a filter with no posts leaves the panels empty", ctx do
@@ -130,7 +155,8 @@ defmodule MishkaBlogWeb.Test.AnalyticsTest do
     view = open(ctx, @page, ctx.editor)
 
     assert has_element?(view, "[data-role=analytics-bottom]", "Counted post")
-    refute has_element?(view, "[data-role=analytics-commenters]")
+    refute has_element?(view, "[data-role=analytics-top-commenters]")
+    refute has_element?(view, "[data-role=analytics-comment-status]")
     refute has_element?(view, "[data-role=analytics-comments]")
     refute has_element?(view, "#analytics-sort-comments")
     refute has_element?(view, "#analytics-sort-engagement")

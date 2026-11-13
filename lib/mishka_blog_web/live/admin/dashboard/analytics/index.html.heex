@@ -40,46 +40,48 @@ SPDX-License-Identifier: Apache-2.0
     </:actions>
   </.header>
 
-  <%!-- The filter bar: every change patches the URL, so the page reads again and a reload keeps it. --%>
-  <form
+  <%!-- The filter bar: a pick or a clear patches the URL, so the page reads again and a reload keeps
+        it. Each filter is gervaz's search select, its options read a page at a time as it opens. --%>
+  <div
     id="analytics-filters"
-    phx-change="filter"
     class="mb-5 grid grid-cols-[repeat(4,minmax(0,1fr))_auto] items-end gap-3 rounded-[16px] border border-[#ecebe6] bg-white p-3 shadow-[0_1px_2px_rgba(30,28,24,0.04)] max-[980px]:grid-cols-2! max-[560px]:grid-cols-1!"
   >
-    <label
-      :for={{key, label, options} <- filter_fields(@options)}
-      class="flex min-w-0 flex-col gap-1"
-    >
-      <span class="text-[11px] font-semibold text-[#8a877f]">{label}</span>
-      <select
-        id={"analytics-filter-#{key}"}
-        name={"filters[#{key}]"}
-        disabled={is_nil(options)}
-        class="h-9 w-full min-w-0 rounded-[10px] border border-[#ecebe6] bg-white px-2.5 text-[12.5px] font-medium text-[#1b1a18]"
-      >
-        <option value="">{gettext("All")}</option>
-        <option
-          :for={{id, name} <- options || []}
-          value={id}
-          selected={Map.get(@period.filters, key) == id}
+    <div :for={{key, label} <- filter_fields()} class="flex min-w-0 flex-col gap-1">
+      <div class="flex items-center justify-between gap-2">
+        <span
+          id={"analytics-filter-#{key}-label"}
+          class="text-[11px] font-semibold text-[#8a877f]"
         >
-          {name}
-        </option>
-      </select>
-    </label>
-    <label class="flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap px-1 text-[12px] font-semibold text-[#6d6a63]">
-      <input type="hidden" name="filters[compare]" value="false" />
-      <input
-        id="analytics-compare"
-        type="checkbox"
-        name="filters[compare]"
-        value="true"
-        checked={@period.compare}
-        class="size-4 rounded accent-[#5b57d6]"
-      />
-      {gettext("Compare with previous period")}
-    </label>
-  </form>
+          {label}
+        </span>
+        <button
+          :if={@period.filters[key]}
+          type="button"
+          id={"analytics-clear-#{key}"}
+          phx-click="clear_filter"
+          phx-value-filter={key}
+          class="text-[11px] font-semibold text-[#4f4bcc] hover:underline"
+        >
+          {gettext("Clear")}
+        </button>
+      </div>
+      {search_select(picker_assigns(key, @pickers[key], @period.filters[key]))}
+    </div>
+    <form id="analytics-compare-form" phx-change="compare">
+      <label class="flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap px-1 text-[12px] font-semibold text-[#6d6a63]">
+        <input type="hidden" name="compare" value="false" />
+        <input
+          id="analytics-compare"
+          type="checkbox"
+          name="compare"
+          value="true"
+          checked={@period.compare}
+          class="size-4 rounded accent-[#5b57d6]"
+        />
+        {gettext("Compare with previous period")}
+      </label>
+    </form>
+  </div>
 
   <%!-- KPI tiles, in the overview page's shape: two per row on a phone rather than three. A note
         wraps rather than being cut, since a phone's tile is narrower than its sentence. --%>
@@ -127,208 +129,150 @@ SPDX-License-Identifier: Apache-2.0
     </div>
   </div>
 
-  <.panel
-    id="analytics-chart"
-    class="mb-4"
-    title={gettext("Views Over Time")}
-    note={gettext("One point per day, over the last %{days} days", days: @period.days)}
-    loading={is_nil(@panels.overview)}
-  >
-    <.empty
-      :if={@panels.overview && @panels.overview.views_window == 0}
-      text={gettext("No views recorded in the last %{days} days.", days: @period.days)}
-    />
+  <.tabbed id="analytics-chart" class="mb-4" title={gettext("Views Over Time")}>
+    <:tab
+      key="total"
+      label={gettext("Total")}
+      note={gettext("One point per day, over the last %{days} days", days: @period.days)}
+      loading={is_nil(@panels.overview)}
+    >
+      <.empty
+        :if={@panels.overview && @panels.overview.views_window == 0}
+        text={gettext("No views recorded in the last %{days} days.", days: @period.days)}
+      />
 
-    <%!-- The viewBox is stretched to the card, so every stroke carries `non-scaling-stroke` — without
-          it the line thins out as the card widens. --%>
-    <div :if={@panels.overview && @panels.overview.views_window > 0}>
-      <svg
-        viewBox={view_box()}
-        preserveAspectRatio="none"
-        role="img"
-        aria-label={chart_label(@panels.overview)}
-        class="h-[180px] w-full"
-      >
-        <line
-          :for={y <- gridlines()}
-          x1="0"
-          y1={y}
-          x2={chart_width()}
-          y2={y}
-          stroke="#f0efea"
-          stroke-width="1"
-          vector-effect="non-scaling-stroke"
-        />
-        <path
-          d={
-            area_path(
-              @panels.overview.series,
-              chart_peak(
-                @panels.overview.series,
-                @panels.overview.previous_series,
-                @period.compare
-              )
-            )
-          }
-          fill="#eef1fc"
-        />
-        <path
-          :if={@period.compare}
-          data-role="previous-line"
-          d={
-            line_path(
-              @panels.overview.previous_series,
-              chart_peak(
-                @panels.overview.series,
-                @panels.overview.previous_series,
-                @period.compare
-              )
-            )
-          }
-          fill="none"
-          stroke="#a8a5a0"
-          stroke-width="1.5"
-          stroke-dasharray="5 4"
-          vector-effect="non-scaling-stroke"
-        />
-        <path
-          d={
-            line_path(
-              @panels.overview.series,
-              chart_peak(
-                @panels.overview.series,
-                @panels.overview.previous_series,
-                @period.compare
-              )
-            )
-          }
-          fill="none"
-          stroke="#5b57d6"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          vector-effect="non-scaling-stroke"
-        />
-      </svg>
-
-      <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] font-medium text-[#a8a5a0]">
-        <span>{day_label(@period.from)}</span>
-        <span :if={@period.compare} class="inline-flex items-center gap-1.5">
-          <span class="inline-block h-0 w-4 border-t-2 border-dashed border-[#a8a5a0]"></span>
-          {gettext("Previous %{days} days: %{views}",
-            days: @period.days,
-            views: Localized.compact(@panels.overview.views_previous)
-          )}
-        </span>
-        <span :if={!@period.compare}>
-          {gettext("%{views} views in this period",
-            views: Localized.compact(@panels.overview.views_window)
-          )}
-        </span>
-        <span>{day_label(@period.to)}</span>
-      </div>
-    </div>
-  </.panel>
-
-  <.panel
-    id="analytics-categories-chart"
-    class="mb-4"
-    icon="hero-square-3-stack-3d"
-    title={gettext("Views by Category")}
-    note={gettext("The five categories read most, and every other one together")}
-    loading={is_nil(@panels.categories)}
-  >
-    <.empty
-      :if={@panels.categories && @panels.categories.top == []}
-      text={gettext("No category was read in this period.")}
-    />
-    <div :if={@panels.categories && @panels.categories.top != []}>
-      <svg
-        viewBox={view_box()}
-        preserveAspectRatio="none"
-        role="img"
-        aria-label={gettext("Daily views stacked by category")}
-        class="h-[180px] w-full"
-      >
-        <path
-          :for={
-            {_key, colour, d} <-
-              stack_paths(@panels.categories.series, stack_keys(@panels.categories))
-          }
-          d={d}
-          fill={colour}
-          fill-opacity="0.85"
-        />
-      </svg>
-      <ul class="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[11.5px] font-semibold text-[#6d6a63]">
-        <li
-          :for={{key, index} <- Enum.with_index(stack_keys(@panels.categories))}
-          class="inline-flex items-center gap-1.5"
+      <%!-- The viewBox is stretched to the card, so every stroke carries `non-scaling-stroke` — without
+            it the line thins out as the card widens. --%>
+      <div :if={@panels.overview && @panels.overview.views_window > 0}>
+        <svg
+          viewBox={view_box()}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label={chart_label(@panels.overview)}
+          class="h-[180px] w-full"
         >
-          <span class="size-2.5 rounded-sm" style={"background: #{layer_colour(index)}"}></span>
-          {layer_name(@panels.categories, key)}
-        </li>
-      </ul>
-    </div>
-  </.panel>
+          <line
+            :for={y <- gridlines()}
+            x1="0"
+            y1={y}
+            x2={chart_width()}
+            y2={y}
+            stroke="#f0efea"
+            stroke-width="1"
+            vector-effect="non-scaling-stroke"
+          />
+          <path
+            d={
+              area_path(
+                @panels.overview.series,
+                chart_peak(
+                  @panels.overview.series,
+                  @panels.overview.previous_series,
+                  @period.compare
+                )
+              )
+            }
+            fill="#eef1fc"
+          />
+          <path
+            :if={@period.compare}
+            data-role="previous-line"
+            d={
+              line_path(
+                @panels.overview.previous_series,
+                chart_peak(
+                  @panels.overview.series,
+                  @panels.overview.previous_series,
+                  @period.compare
+                )
+              )
+            }
+            fill="none"
+            stroke="#a8a5a0"
+            stroke-width="1.5"
+            stroke-dasharray="5 4"
+            vector-effect="non-scaling-stroke"
+          />
+          <path
+            d={
+              line_path(
+                @panels.overview.series,
+                chart_peak(
+                  @panels.overview.series,
+                  @panels.overview.previous_series,
+                  @period.compare
+                )
+              )
+            }
+            fill="none"
+            stroke="#5b57d6"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            vector-effect="non-scaling-stroke"
+          />
+        </svg>
 
-  <div class="mb-4 grid grid-cols-3 gap-4 max-[1180px]:grid-cols-2! max-[760px]:grid-cols-1!">
-    <.panel
-      id="analytics-top-categories"
-      icon="hero-folder"
-      title={gettext("Top Categories")}
+        <div class="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] font-medium text-[#a8a5a0]">
+          <span>{day_label(@period.from)}</span>
+          <span :if={@period.compare} class="inline-flex items-center gap-1.5">
+            <span class="inline-block h-0 w-4 border-t-2 border-dashed border-[#a8a5a0]"></span>
+            {gettext("Previous %{days} days: %{views}",
+              days: @period.days,
+              views: Localized.compact(@panels.overview.views_previous)
+            )}
+          </span>
+          <span :if={!@period.compare}>
+            {gettext("%{views} views in this period",
+              views: Localized.compact(@panels.overview.views_window)
+            )}
+          </span>
+          <span>{day_label(@period.to)}</span>
+        </div>
+      </div>
+    </:tab>
+    <:tab
+      key="categories"
+      label={gettext("By category")}
+      note={gettext("The five categories read most, and every other one together")}
       loading={is_nil(@panels.categories)}
     >
-      <.bar_list
-        :if={@panels.categories}
-        rows={@panels.categories.top}
-        empty={gettext("No category was read in this period.")}
+      <.empty
+        :if={@panels.categories && @panels.categories.top == []}
+        text={gettext("No category was read in this period.")}
       />
-    </.panel>
-
-    <.panel
-      id="analytics-top-tags"
-      icon="hero-hashtag"
-      title={gettext("Top Tags")}
-      loading={is_nil(@panels.tags)}
-    >
-      <.bar_list
-        :if={@panels.tags}
-        rows={@panels.tags}
-        empty={gettext("No tag was read in this period.")}
-      />
-    </.panel>
-
-    <.panel
-      id="analytics-top-bloggers"
-      icon="hero-user-group"
-      title={gettext("Top Bloggers")}
-      loading={is_nil(@panels.bloggers)}
-    >
-      <.empty :if={@panels.bloggers == []} text={gettext("No blogger was read in this period.")} />
-      <ol :if={@panels.bloggers not in [nil, []]} class="flex flex-col gap-2.5">
-        <li
-          :for={blogger <- @panels.bloggers}
-          class="rounded-[12px] border border-[#f0efea] bg-[#fdfdfc] px-3.5 py-2.5"
+      <div :if={@panels.categories && @panels.categories.top != []}>
+        <svg
+          viewBox={view_box()}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label={gettext("Daily views stacked by category")}
+          class="h-[180px] w-full"
         >
-          <div class="truncate text-[12.5px] font-bold text-[#1b1a18]">{name_of(blogger)}</div>
-          <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-semibold text-[#8a877f]">
-            <span>{gettext("%{count} views", count: Localized.compact(blogger.views))}</span>
-            <span>{gettext("%{count} posts published", count: Localized.number(blogger.posts))}</span>
-            <span :if={Home.holds?(@blog_areas, [:comment])}>
-              {gettext("%{count} comments", count: Localized.number(blogger.comments || 0))}
-            </span>
-          </div>
-        </li>
-      </ol>
-    </.panel>
-  </div>
-
-  <div class="mb-4 grid grid-cols-3 gap-4 max-[1180px]:grid-cols-2! max-[760px]:grid-cols-1!">
-    <.panel
-      id="analytics-publishing"
-      icon="hero-pencil-square"
-      title={gettext("Publishing vs Views")}
+          <path
+            :for={
+              {_key, colour, d} <-
+                stack_paths(@panels.categories.series, stack_keys(@panels.categories))
+            }
+            d={d}
+            fill={colour}
+            fill-opacity="0.85"
+          />
+        </svg>
+        <ul class="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[11.5px] font-semibold text-[#6d6a63]">
+          <li
+            :for={{key, index} <- Enum.with_index(stack_keys(@panels.categories))}
+            class="inline-flex items-center gap-1.5"
+          >
+            <span class="size-2.5 rounded-sm" style={"background: #{layer_colour(index)}"}></span>
+            {layer_name(@panels.categories, key)}
+          </li>
+        </ul>
+      </div>
+    </:tab>
+    <:tab
+      key="publishing"
+      label={gettext("Publishing")}
       note={gettext("Posts published each week, under the week's views")}
       loading={is_nil(@panels.overview)}
     >
@@ -374,8 +318,73 @@ SPDX-License-Identifier: Apache-2.0
           </span>
         </div>
       </div>
-    </.panel>
+    </:tab>
+  </.tabbed>
 
+  <.tabbed id="analytics-top" class="mb-4" icon="hero-trophy" title={gettext("Top")}>
+    <:tab key="bloggers" label={gettext("Bloggers")} loading={is_nil(@panels.bloggers)}>
+      <.empty :if={@panels.bloggers == []} text={gettext("No blogger was read in this period.")} />
+      <ol :if={@panels.bloggers not in [nil, []]} class="flex flex-col gap-2.5">
+        <li
+          :for={blogger <- @panels.bloggers}
+          class="rounded-[12px] border border-[#f0efea] bg-[#fdfdfc] px-3.5 py-2.5"
+        >
+          <div class="truncate text-[12.5px] font-bold text-[#1b1a18]">{name_of(blogger)}</div>
+          <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-semibold text-[#8a877f]">
+            <span>{gettext("%{count} views", count: Localized.compact(blogger.views))}</span>
+            <span>{gettext("%{count} posts published", count: Localized.number(blogger.posts))}</span>
+            <span :if={Home.holds?(@blog_areas, [:comment])}>
+              {gettext("%{count} comments", count: Localized.number(blogger.comments || 0))}
+            </span>
+          </div>
+        </li>
+      </ol>
+    </:tab>
+    <:tab key="categories" label={gettext("Categories")} loading={is_nil(@panels.categories)}>
+      <.bar_list
+        :if={@panels.categories}
+        rows={@panels.categories.top}
+        empty={gettext("No category was read in this period.")}
+      />
+    </:tab>
+    <:tab key="tags" label={gettext("Tags")} loading={is_nil(@panels.tags)}>
+      <.bar_list
+        :if={@panels.tags}
+        rows={@panels.tags}
+        empty={gettext("No tag was read in this period.")}
+      />
+    </:tab>
+    <:tab key="teams" label={gettext("Teams")} loading={is_nil(@panels.teams)}>
+      <.bar_list
+        :if={@panels.teams}
+        rows={@panels.teams}
+        empty={gettext("No team was read in this period.")}
+      />
+    </:tab>
+    <:tab
+      :if={Home.holds?(@blog_areas, [:comment])}
+      key="commenters"
+      label={gettext("Commenters")}
+      loading={is_nil(@panels.commenters)}
+    >
+      <.empty
+        :if={@panels.commenters == []}
+        icon="hero-user"
+        text={gettext("No comment in this period.")}
+      />
+      <ol :if={@panels.commenters not in [nil, []]} class="flex flex-col gap-2">
+        <li
+          :for={row <- @panels.commenters}
+          class="flex items-center justify-between gap-3 text-[12.5px]"
+        >
+          <span class="min-w-0 truncate font-semibold text-[#1b1a18]">{commenter(row.comment)}</span>
+          <span class="flex-none font-semibold text-[#6d6a63]">{Localized.number(row.count)}</span>
+        </li>
+      </ol>
+    </:tab>
+  </.tabbed>
+
+  <div class="mb-4 grid grid-cols-2 gap-4 max-[760px]:grid-cols-1!">
     <.panel
       id="analytics-post-age"
       icon="hero-clock"
@@ -533,25 +542,25 @@ SPDX-License-Identifier: Apache-2.0
     </.panel>
 
     <.panel
-      id="analytics-commenters"
-      icon="hero-user"
-      title={gettext("Top Commenters")}
-      loading={is_nil(@panels.commenters)}
+      id="analytics-comment-status"
+      icon="hero-inbox-stack"
+      title={gettext("Comments")}
+      note={gettext("Written in this period, by status")}
+      loading={is_nil(@panels.comment_status)}
     >
-      <.empty
-        :if={@panels.commenters == []}
-        icon="hero-user"
-        text={gettext("No comment in this period.")}
-      />
-      <ol :if={@panels.commenters not in [nil, []]} class="flex flex-col gap-2">
-        <li
-          :for={row <- @panels.commenters}
-          class="flex items-center justify-between gap-3 text-[12.5px]"
+      <div :if={@panels.comment_status} class="grid grid-cols-2 gap-2.5">
+        <.link
+          :for={{status, count} <- comment_tiles(@panels.comment_status)}
+          id={"analytics-comments-#{status}"}
+          navigate={comments_path(@socket, status)}
+          class="rounded-[12px] border border-[#f0efea] bg-[#fdfdfc] px-3.5 py-3 transition-colors hover:border-[#dcdbf5]"
         >
-          <span class="min-w-0 truncate font-semibold text-[#1b1a18]">{commenter(row.comment)}</span>
-          <span class="flex-none font-semibold text-[#6d6a63]">{Localized.number(row.count)}</span>
-        </li>
-      </ol>
+          <div class="text-[11.5px] font-semibold text-[#8a877f]">{status_word(status)}</div>
+          <div class="mt-1 font-['Space_Grotesk'] text-[20px] font-bold text-[#17161a]">
+            {Localized.number(count)}
+          </div>
+        </.link>
+      </div>
     </.panel>
   </div>
 

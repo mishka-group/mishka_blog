@@ -191,10 +191,8 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
       assert %{name: "Ada", archived?: true} =
                Enum.find(panel(:bloggers, admin), &(&1.id == ids.ada))
 
-      refute ids.ada in (admin
-                         |> Analytics.options()
-                         |> Map.fetch!(:blogger)
-                         |> Enum.map(&elem(&1, 0)))
+      {listed, false} = Analytics.choices(:blogger, admin, [])
+      refute ids.ada in Enum.map(listed, &elem(&1, 1))
 
       assert Index.name_of(%{name: "Ada", archived?: true}) == "Ada (archived)"
     end
@@ -231,6 +229,26 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
              }
     end
 
+    test "a team counts each of its posts' views once, however many members wrote it", %{
+      admin: admin,
+      ids: ids,
+      posts: posts
+    } do
+      second = create_blogger!(site_id: posts.older.site_id)
+      create_post_blogger!(post_id: posts.older.id, blogger_id: second.id)
+      create_team_member!(team_id: ids.team, blogger_id: second.id)
+
+      assert [%{id: team, views: 4, share: 100}] = panel(:teams, admin)
+      assert team == ids.team
+    end
+
+    test "comments are counted by status, and not read without the comment area", %{
+      admin: admin
+    } do
+      assert panel(:comment_status, admin) == %{pending: 2, approved: 0, flagged: 0, spam: 0}
+      assert panel(:comment_status, admin, %{}, false) == nil
+    end
+
     test "commenters count who wrote in the window, and need the comment area", %{admin: admin} do
       assert [%{count: 2, comment: %{guest_name: "Grace"}}] = panel(:commenters, admin)
       assert panel(:commenters, admin, %{}, false) == []
@@ -238,38 +256,46 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
     end
   end
 
-  describe "the filter options" do
-    test "list every tag a master reads, past a page of 100, and leave the archived out" do
+  describe "the filter choices" do
+    test "come a page at a time, searched by name, with the archived left out" do
       site = create_site!()
       master = create_user_with_permissions!(["admin:dashboard:*"])
-      tags = for n <- 1..105, do: create_blog_tag!(site_id: site.id, name: "tag-#{n}")
-      gone = create_blog_tag!(site_id: site.id, name: "gone")
+      n = System.unique_integer([:positive])
+      tags = for i <- 1..25, do: create_blog_tag!(site_id: site.id, name: "zz#{n}-#{i}")
+      gone = create_blog_tag!(site_id: site.id, name: "zz#{n}-gone")
 
       gone
       |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id, authorize?: false)
       |> Ash.destroy!()
 
-      listed = master |> Analytics.options() |> Map.fetch!(:tag) |> Enum.map(&elem(&1, 0))
+      {first, true} = Analytics.choices(:tag, master, search: "zz#{n}")
+      {rest, false} = Analytics.choices(:tag, master, search: "zz#{n}", offset: 20)
+      ids = Enum.map(first ++ rest, &elem(&1, 1))
 
-      assert Enum.all?(tags, &(&1.id in listed))
-      refute gone.id in listed
+      assert length(first) == 20
+      assert Enum.sort(ids) == tags |> Enum.map(& &1.id) |> Enum.sort()
+      refute gone.id in ids
+      assert {[], false} = Analytics.choices(:tag, master, search: "100%_none#{n}")
     end
-  end
 
-  describe "the filter labels" do
-    test "tell repeated names apart by language and site, and leave a unique name alone" do
+    test "tell repeated names apart by language and site, also for the one picked" do
       site_a = create_site!(name: "Site A")
       site_b = create_site!(name: "Site B")
       master = create_user_with_permissions!(["admin:dashboard:*"])
-      a = create_collection!(site_id: site_a.id, name: "Travel", language: "en")
-      b = create_collection!(site_id: site_b.id, name: "Travel", language: "de")
+      name = "Travel #{System.unique_integer([:positive])}"
+      a = create_collection!(site_id: site_a.id, name: name, language: "en")
+      b = create_collection!(site_id: site_b.id, name: name, language: "de")
       solo = create_collection!(site_id: site_a.id, name: "Solo #{System.unique_integer()}")
 
-      labels = master |> Analytics.options() |> Map.fetch!(:category) |> Map.new()
+      {found, false} = Analytics.choices(:category, master, search: name)
+      labels = Map.new(found, fn {label, id} -> {id, label} end)
 
-      assert labels[a.id] == "Travel · en · #{site_a.name}"
-      assert labels[b.id] == "Travel · de · #{site_b.name}"
-      assert labels[solo.id] == solo.name
+      assert labels[a.id] == "#{name} · en · #{site_a.name}"
+      assert labels[b.id] == "#{name} · de · #{site_b.name}"
+      assert {[{label, _id}], false} = Analytics.choices(:category, master, id: a.id)
+      assert label == labels[a.id]
+      assert {[{solo_label, _id}], false} = Analytics.choices(:category, master, id: solo.id)
+      assert solo_label == solo.name
     end
   end
 

@@ -42,7 +42,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
 
   The caller runs this off the render — see `MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index`.
   """
-  import Ecto.Query, only: [from: 2]
+  import Ecto.Query, only: [from: 2, subquery: 1]
 
   require Ash.Query
 
@@ -55,7 +55,19 @@ defmodule MishkaBlog.Dashboard.Analytics do
   @ranges [7, 30, 90]
   @default_days 30
   @filters [:category, :tag, :blogger, :team]
-  @panels [:overview, :categories, :tags, :bloggers, :post_age, :posts, :commenters]
+  @panels [
+    :overview,
+    :categories,
+    :tags,
+    :bloggers,
+    :teams,
+    :post_age,
+    :posts,
+    :commenters,
+    :comment_status
+  ]
+  @statuses [:pending, :approved, :flagged, :spam]
+  @choice_page 20
   @top 5
   @top_posts 10
   @quiet_below 3
@@ -83,6 +95,10 @@ defmodule MishkaBlog.Dashboard.Analytics do
   @doc "What a period can be narrowed by: a category, a tag, a blogger or a team."
   @spec filters() :: [atom()]
   def filters, do: @filters
+
+  @doc "The statuses a comment is counted under, in the order the page shows them."
+  @spec statuses() :: [atom()]
+  def statuses, do: @statuses
 
   @doc "The panels `load/4` reads, each on its own."
   @spec panels() :: [atom()]
@@ -135,23 +151,18 @@ defmodule MishkaBlog.Dashboard.Analytics do
   defp uuid(_value), do: []
 
   @doc """
-  What the filters can be set to, as `user` reads them: `%{category: [{id, label}], tag: …,
-  blogger: …, team: …}`, by name. Every one is listed, however many there are, and an archived one
-  is left out. Names that repeat — a category in several languages or on several sites — are told
-  apart by their language and site: `"Travel · en · site-a"`.
-  """
-  @spec options(map()) :: %{atom() => [{String.t(), String.t()}]}
-  def options(user) do
-    %{
-      category: choices(MishkaBlog.Collection, :name, user),
-      tag: choices(MishkaBlog.Tag, :name, user),
-      blogger: choices(MishkaBlog.Blogger, :display_name, user),
-      team: choices(MishkaBlog.Team, :name, user)
-    }
-  end
+  One page of what the `kind` filter (`:category`, `:tag`, `:blogger` or `:team`) can be set to, as
+  `user` reads them, by name: `{[{label, id}], more?}`, as gervaz's search select takes its options. An archived one is left out. Names that
+  repeat — a category in several languages or on several sites — are told apart by their language
+  and site: `"Travel · en · site-a"`.
 
-  # One read with no page size: a master read pages at 100, which cut a long list short.
-  defp choices(resource, field, user) do
+  `opts` are `:search`, a part of the name to look for, and `:offset`, where the page starts; or
+  `:id` alone, to label one already picked (`{[{label, id}], false}`, or `{[], false}` when the
+  viewer cannot read it).
+  """
+  @spec choices(atom(), map(), keyword()) :: {[{String.t(), String.t()}], boolean()}
+  def choices(kind, user, opts) when kind in @filters do
+    {resource, field} = term_of(kind)
     language? = Ash.Resource.Info.attribute(resource, :language) != nil
 
     rows =
@@ -162,24 +173,64 @@ defmodule MishkaBlog.Dashboard.Analytics do
           join: s in MishkaCmsCore.Runtime.Site,
           on: s.id == r.site_id,
           where: is_nil(r.archived_at),
-          order_by: field(r, ^field),
-          select: %{id: r.id, name: field(r, ^field), site: s.name}
+          windows: [same_name: [partition_by: field(r, ^field)]],
+          order_by: [field(r, ^field), r.id],
+          select: %{
+            id: r.id,
+            name: field(r, ^field),
+            site: s.name,
+            repeats: over(count(r.id), :same_name)
+          }
         )
         |> with_language(language?)
+        |> choose(resource, field, opts)
       end)
 
-    repeated = rows |> Enum.frequencies_by(& &1.name) |> Map.filter(fn {_name, n} -> n > 1 end)
+    picked(rows, opts[:id])
+  end
 
-    Enum.map(rows, fn row ->
-      case Map.has_key?(repeated, row.name) do
-        true ->
-          hint = [row.name, Map.get(row, :language), row.site]
-          {row.id, hint |> Enum.filter(&is_binary/1) |> Enum.join(" · ")}
+  defp picked(rows, nil) do
+    {page, rest} = Enum.split(rows, @choice_page)
 
-        false ->
-          {row.id, row.name}
-      end
-    end)
+    {Enum.map(page, &{choice_label(&1), &1.id}), rest != []}
+  end
+
+  defp picked(rows, id),
+    do: {for(%{id: ^id} = row <- rows, do: {choice_label(row), id}), false}
+
+  defp term_of(:category), do: {MishkaBlog.Collection, :name}
+  defp term_of(:tag), do: {MishkaBlog.Tag, :name}
+  defp term_of(:blogger), do: {MishkaBlog.Blogger, :display_name}
+  defp term_of(:team), do: {MishkaBlog.Team, :name}
+
+  # The one picked is looked for among those of its name, so its label is told apart as in the list.
+  defp choose(query, resource, field, opts) do
+    case Keyword.fetch(opts, :id) do
+      {:ok, id} ->
+        named = from(x in resource, where: x.id == ^id, select: field(x, ^field))
+        from([r] in query, where: field(r, ^field) in subquery(named))
+
+      :error ->
+        query
+        |> search(field, opts[:search])
+        |> from(limit: ^(@choice_page + 1), offset: ^Keyword.get(opts, :offset, 0))
+    end
+  end
+
+  defp search(query, _field, term) when term in [nil, ""], do: query
+
+  defp search(query, field, term) do
+    pattern = "%" <> String.replace(term, ~w(\\ % _), &("\\" <> &1)) <> "%"
+
+    from([r] in query, where: ilike(field(r, ^field), ^pattern))
+  end
+
+  defp choice_label(%{repeats: 1, name: name}), do: name
+
+  defp choice_label(row) do
+    [row.name, Map.get(row, :language), row.site]
+    |> Enum.filter(&is_binary/1)
+    |> Enum.join(" · ")
   end
 
   defp with_language(query, true), do: from([r] in query, select_merge: %{language: r.language})
@@ -194,12 +245,15 @@ defmodule MishkaBlog.Dashboard.Analytics do
       per week (`:weeks`) and the daily comments (`:comments`, `nil` without the comment area);
     * `:categories` — the views of the five categories read most, day by day for a stacked chart
       (`:series`, every other category's under `:other`), and their totals and share (`:top`);
-    * `:tags` and `:bloggers` — the five read most, with their views and share; a blogger also with
-      the posts it published in the window and the comments its posts were given;
+    * `:tags`, `:bloggers` and `:teams` — the five read most, with their views and share; a blogger
+      also with the posts it published in the window and the comments its posts were given; a
+      team counts a post its members co-wrote once;
     * `:post_age` — the views of posts published in the last thirty days and of older ones;
     * `:posts` — the posts read most (`:top`), those that grew most against the window before
       (`:rising`), and published posts almost nobody read (`:quiet`);
-    * `:commenters` — who wrote the most comments in the window (`[]` without the comment area).
+    * `:commenters` — who wrote the most comments in the window (`[]` without the comment area);
+    * `:comment_status` — the window's comments by status (`statuses/0`), `nil` without the comment
+      area.
   """
   @spec load(atom(), map(), period(), boolean()) :: map() | list()
   def load(panel, user, period, comments?) when panel in @panels do
@@ -417,6 +471,50 @@ defmodule MishkaBlog.Dashboard.Analytics do
         |> Enum.map(&Map.put(&1, :change, change(&1.views, &1.previous))),
       quiet: quiet(user, period)
     }
+  end
+
+  # A post two members of one team wrote counts once for that team: each day's row is taken once per
+  # team before it is summed.
+  defp read(:teams, user, period, _comments?) do
+    user
+    |> views(period, period.from)
+    |> grouped(:post_id, period, fn query ->
+      rows =
+        from([r] in query,
+          join: pb in MishkaBlog.PostBlogger,
+          on: pb.post_id == r.post_id,
+          join: tm in MishkaBlog.TeamMember,
+          on: tm.blogger_id == pb.blogger_id,
+          distinct: true,
+          select: %{team_id: tm.team_id, row: r.id, views: r.views}
+        )
+
+      from(x in subquery(rows),
+        join: t in MishkaBlog.Team,
+        on: t.id == x.team_id,
+        group_by: t.id,
+        select:
+          {%{id: t.id, name: t.name, archived?: not is_nil(t.archived_at)},
+           type(sum(x.views), :integer)}
+      )
+    end)
+    |> ranked()
+  end
+
+  defp read(:comment_status, _user, _period, false), do: nil
+
+  defp read(:comment_status, user, period, true) do
+    counted =
+      user
+      |> comments(period, period.from)
+      |> grouped(
+        :post_id,
+        period,
+        &from(c in &1, group_by: c.status, select: {c.status, type(count(), :integer)})
+      )
+      |> Map.new()
+
+    Map.new(@statuses, &{&1, Map.get(counted, &1, 0)})
   end
 
   defp read(:commenters, _user, _period, false), do: []
