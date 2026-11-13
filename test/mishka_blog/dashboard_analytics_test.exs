@@ -15,10 +15,10 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
   import MishkaBlog.Test.Factory
 
   alias MishkaBlog.Dashboard.Analytics
-  alias MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index
+  alias MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Panels
 
   defp window(user, days, comments? \\ true),
-    do: Analytics.load(:overview, user, Analytics.period(%{"days" => to_string(days)}), comments?)
+    do: Analytics.read(:overview, user, Analytics.period(%{"days" => to_string(days)}), comments?)
 
   test "a master counts every site's comments, a site's admin only its own" do
     site_a = create_site!()
@@ -54,7 +54,7 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
       stats = window(admin(site, ["admin:dashboard:blog:post"]), 7, false)
 
       posts =
-        Analytics.load(
+        Analytics.read(
           :posts,
           admin(site, ["admin:dashboard:blog:post"]),
           Analytics.period(%{"days" => "7"}),
@@ -75,7 +75,7 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
       assert stats.comments_window == 1
       assert stats.views_window == 0
       assert stats.views_total == 0
-      assert Analytics.load(:posts, moderator, Analytics.period(%{"days" => "7"}), true).top == []
+      assert Analytics.read(:posts, moderator, Analytics.period(%{"days" => "7"}), true).top == []
       assert stats.engagement_rate == 0
     end
 
@@ -140,7 +140,7 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
 
     defp panel(name, user, params \\ %{}, comments? \\ true),
       do:
-        Analytics.load(name, user, Analytics.period(Map.put_new(params, "days", "7")), comments?)
+        Analytics.read(name, user, Analytics.period(Map.put_new(params, "days", "7")), comments?)
 
     test "the overview adds the days up, the window before and the weekdays", %{admin: admin} do
       stats = panel(:overview, admin)
@@ -191,10 +191,10 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
       assert %{name: "Ada", archived?: true} =
                Enum.find(panel(:bloggers, admin), &(&1.id == ids.ada))
 
-      {listed, false} = Analytics.choices(:blogger, admin, [])
+      {listed, false} = Analytics.choices("blogger", admin, [])
       refute ids.ada in Enum.map(listed, &elem(&1, 1))
 
-      assert Index.name_of(%{name: "Ada", archived?: true}) == "Ada (archived)"
+      assert Panels.name_of(%{name: "Ada", archived?: true}) == "Ada (archived)"
     end
 
     test "post age splits the views at thirty days", %{admin: admin} do
@@ -268,14 +268,14 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
       |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id, authorize?: false)
       |> Ash.destroy!()
 
-      {first, true} = Analytics.choices(:tag, master, search: "zz#{n}")
-      {rest, false} = Analytics.choices(:tag, master, search: "zz#{n}", offset: 20)
+      {first, true} = Analytics.choices("tag", master, search: "zz#{n}")
+      {rest, false} = Analytics.choices("tag", master, search: "zz#{n}", offset: 20)
       ids = Enum.map(first ++ rest, &elem(&1, 1))
 
       assert length(first) == 20
       assert Enum.sort(ids) == tags |> Enum.map(& &1.id) |> Enum.sort()
       refute gone.id in ids
-      assert {[], false} = Analytics.choices(:tag, master, search: "100%_none#{n}")
+      assert {[], false} = Analytics.choices("tag", master, search: "100%_none#{n}")
     end
 
     test "tell repeated names apart by language and site, also for the one picked" do
@@ -287,14 +287,14 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
       b = create_collection!(site_id: site_b.id, name: name, language: "de")
       solo = create_collection!(site_id: site_a.id, name: "Solo #{System.unique_integer()}")
 
-      {found, false} = Analytics.choices(:category, master, search: name)
+      {found, false} = Analytics.choices("category", master, search: name)
       labels = Map.new(found, fn {label, id} -> {id, label} end)
 
       assert labels[a.id] == "#{name} · en · #{site_a.name}"
       assert labels[b.id] == "#{name} · de · #{site_b.name}"
-      assert {[{label, _id}], false} = Analytics.choices(:category, master, id: a.id)
+      assert {[{label, _id}], false} = Analytics.choices("category", master, id: a.id)
       assert label == labels[a.id]
-      assert {[{solo_label, _id}], false} = Analytics.choices(:category, master, id: solo.id)
+      assert {[{solo_label, _id}], false} = Analytics.choices("category", master, id: solo.id)
       assert solo_label == solo.name
 
       twin =
@@ -305,7 +305,7 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
           slug: "twin-#{System.unique_integer([:positive])}"
         )
 
-      {found, false} = Analytics.choices(:category, master, search: name)
+      {found, false} = Analytics.choices("category", master, search: name)
       labels = Map.new(found, fn {label, id} -> {id, label} end)
 
       assert labels[twin.id] == "#{name} · en · #{site_a.name} · #{twin.slug}"
@@ -318,13 +318,25 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
       id = Ecto.UUID.generate()
 
       period =
-        Analytics.period(%{"days" => "90", "tag" => id, "team" => "nope", "compare" => "true"})
+        Analytics.period(
+          %{
+            "days" => "90",
+            "tag" => id,
+            "source" => "plausible",
+            "other" => "x",
+            "compare" => "true"
+          },
+          ["tag", "source"]
+        )
 
       assert period.days == 90
-      assert period.filters == %{tag: id}
+      assert period.filters == %{"tag" => id, "source" => "plausible"}
       assert Date.diff(period.to, period.from) == 89
       assert Date.diff(period.previous_to, period.previous_from) == 89
-      assert Analytics.params(period) == %{"days" => "90", "tag" => id, "compare" => "true"}
+
+      assert Analytics.params(period) ==
+               %{"days" => "90", "tag" => id, "source" => "plausible", "compare" => "true"}
+
       assert Analytics.params(Analytics.period(%{"days" => "12"})) == %{}
     end
   end
@@ -348,7 +360,7 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
           engagement_rate: engagement_rate,
           engagement_previous: engagement_previous
         }
-        |> Index.kpi_cards(30, %{post: true, comment: true})
+        |> Panels.kpi_cards(30, %{post: true, comment: true})
         |> List.last()
       end
 
@@ -360,20 +372,20 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
 
   describe "the page's labels" do
     test "word a count for one or many" do
-      assert Index.counted(:views, 1) == "1 view"
-      assert Index.counted(:views, 3) == "3 views"
-      assert Index.counted(:posts_published, 1) == "1 post published"
-      assert Index.counted(:comments_in_period, 2) == "2 comments in this period"
+      assert Panels.counted(:views, 1) == "1 view"
+      assert Panels.counted(:views, 3) == "3 views"
+      assert Panels.counted(:posts_published, 1) == "1 post published"
+      assert Panels.counted(:comments_in_period, 2) == "2 comments in this period"
     end
 
     test "write the chart's days and a post's publishing day" do
-      assert Index.day_label(~D[2026-07-20]) == "Jul 20"
-      assert Index.day_label(~D[2026-01-03]) == "Jan 3"
+      assert Panels.day_label(~D[2026-07-20]) == "Jul 20"
+      assert Panels.day_label(~D[2026-01-03]) == "Jan 3"
 
-      assert Index.published_label(%{published_at: ~U[2026-07-03 10:00:00Z]}) ==
+      assert Panels.published_label(%{published_at: ~U[2026-07-03 10:00:00Z]}) ==
                "Published Jul 3, 2026"
 
-      assert Index.published_label(%{published_at: nil}) == "Not published"
+      assert Panels.published_label(%{published_at: nil}) == "Not published"
     end
   end
 end

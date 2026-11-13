@@ -29,14 +29,82 @@ Mishka Blog is an extension of [Mishka CMS](https://mishka.tools/cms), an open s
 - Bloggers with a public profile (bio, expertise, social links and a slug). A post can have several authors. Bloggers can be grouped into teams, and each team has its own page.
 - Threaded comments with the moderation states pending, approved, flagged and spam, pinning, and up and down votes.
 - For readers: a 1 to 5 star rating for each post, bookmarks, follows for bloggers and teams, and a count of views and unique readers, kept in memory and written once a minute, one row per post and day.
-- An analytics page with daily views, unique readers and the most-read posts, over a period you choose.
+- An analytics page with daily views, unique readers, rankings, comments and the most-read posts, over a period and filters you choose, every part of which a plugin can change.
 - Seventeen page components (eleven blocks that run their own queries and six smaller pieces they draw with) and nine sample pages: the blog index, a post, a category, a tag, an author, a team, and the lists of categories, tags and people.
 - The sample pages hang on the site's `site-main` layout and draw nothing around themselves. The blog hands the layout its bar (Posts, Categories, Tags and People) and, for a post, a category, a tag, a blogger or a team, the languages that record is written in, each at its own address, which the header's language menu lists.
 - SEO for each record: its own head, `BlogPosting` and breadcrumb JSON-LD, `sitemap.xml` entries for posts, categories, bloggers and teams, and share cards.
 - A notification to the blog's admins when a post is published, and dashboard widgets for recent posts, top posts, drafts and scheduled posts, comments to moderate, and bloggers.
 - A JSON:API for admins at `/api/json/v1/master/admin/mishka-blog/…` and `/api/json/v1/tenant/admin/mishka-blog/…`, and one for readers at `/api/json/v1/user/mishka-blog/…` (published posts, comments, ratings, bookmarks, follows and votes), described in the CMS's OpenAPI spec.
 - Permissions `admin:dashboard:blog:post`, `admin:dashboard:blog:publish` and `admin:dashboard:blog:comment`, with `admin:api:` twins for the API, so a moderator can hold the comments alone. A blogger whose profile is not set to Can Publish Directly saves drafts for an editor to publish, unless they hold `admin:dashboard:blog:publish`.
-- Events for plugins, such as `blog:blog_post:after_publish` and `blog:comment:after_create`. An extension adds buttons to the header of the dashboard on `blog:dashboard:actions`: a plugin answers `%{actions: [...]}` with an `id`, `label`, `icon`, `priority` and a `path:` or a `js:` command (see `MishkaBlog.Dashboard.Actions`). A plugin on `blog:post:can_publish` allows or refuses a publish (see `MishkaBlog.Resources.Validations.PublishDirectly`). A plugin on `blog:post:published` hears every post that becomes published (see `MishkaBlog.Resources.Changes.PublishLifecycle`), one on `blog:post:count_view` decides whether a view counts (see `MishkaBlog.Plugins.PostViewCount`), one on `blog:post:viewed` is handed each minute's views (see `MishkaBlog.Views`), and one on `blog:analytics:panel` may change a panel of the Analytics page before it is drawn (see `MishkaBlog.Dashboard.Analytics`).
+- Events for plugins, such as `blog:blog_post:after_publish` and `blog:comment:after_create`. An extension adds buttons to the header of the dashboard on `blog:dashboard:actions`: a plugin answers `%{actions: [...]}` with an `id`, `label`, `icon`, `priority` and a `path:` or a `js:` command (see `MishkaBlog.Dashboard.Actions`). A plugin on `blog:post:can_publish` allows or refuses a publish (see `MishkaBlog.Resources.Validations.PublishDirectly`). A plugin on `blog:post:published` hears every post that becomes published (see `MishkaBlog.Resources.Changes.PublishLifecycle`), one on `blog:post:count_view` decides whether a view counts (see `MishkaBlog.Plugins.PostViewCount`), one on `blog:post:viewed` is handed each minute's views (see `MishkaBlog.Views`), and the Analytics page is built from three events, shown below.
+
+## 📊 Extending the Analytics page
+
+`/admin/dashboard/blog/analytics` is drawn from two lists a plugin can change, and every panel's data passes one event before it is drawn (see `MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Panels`):
+
+- `blog:analytics:panels` hands the panels, in order, as `%{panels: [...], current_user: user}`. A panel is `%{id:, title:, icon:, size:, tabs: [...]}`, and a tab is `%{id:, label:, note:, needs:, data:, load: {module, function, args}, component: &fun/1}`. Add, remove or reorder panels, or add a tab to one. A tab's `load` is called off the render with `args ++ [user, period, comments?]`, and its `component` gets `@data` once it lands, with `@period`, `@sort`, `@areas` and `@socket`.
+- `blog:analytics:panel` hands each panel's data, the built-in ones included, as `%{panel: data_id, period:, current_user:, data:}`. Answer it with `data` changed to put another source's numbers in its place.
+- `blog:analytics:filters` hands the filter bar, `%{filters: [...], current_user: user}`. A filter is `%{id:, label:, choices: {module, function, args}}`, whose `choices` answer `{[{label, value}], more?}` for `args ++ [user, opts]`. Its value is in the URL and in every panel's `period.filters`.
+
+Views Over Time from Plausible instead of the blog's own count, keeping the rest of the overview:
+
+```elixir
+defmodule MyApp.PlausibleViews do
+  use MishkaInstaller.Event.Hook, event: "blog:analytics:panel"
+
+  @impl true
+  def call(%{panel: :overview, period: period, data: data} = state) do
+    series = MyApp.Plausible.daily_pageviews(period.from, period.to)
+    {:reply, %{state | data: %{data | series: series, views_window: Enum.sum_by(series, & &1.count)}}}
+  end
+
+  def call(state), do: {:reply, state}
+end
+```
+
+A new "Referrers (Plausible)" box, read off the render like the built-in ones, with a Source filter:
+
+```elixir
+defmodule MyApp.PlausibleReferrers do
+  use MishkaInstaller.Event.Hook, event: "blog:analytics:panels"
+  use Phoenix.Component
+
+  @impl true
+  def call(%{panels: panels} = state) do
+    box = %{
+      id: "referrers",
+      title: "Referrers (Plausible)",
+      icon: "hero-globe-alt",
+      size: :half,
+      tabs: [%{id: "referrers", data: :referrers, needs: [:post],
+               load: {__MODULE__, :read, []}, component: &__MODULE__.card/1}]
+    }
+
+    {:reply, %{state | panels: panels ++ [box]}}
+  end
+
+  def read(_user, period, _comments?),
+    do: MyApp.Plausible.referrers(period.from, period.to, period.filters["source"])
+
+  def card(assigns) do
+    ~H"""
+    <ul><li :for={row <- @data}>{row.host} · {row.visits}</li></ul>
+    """
+  end
+end
+
+defmodule MyApp.PlausibleSource do
+  use MishkaInstaller.Event.Hook, event: "blog:analytics:filters"
+
+  @impl true
+  def call(%{filters: filters} = state),
+    do: {:reply, %{state | filters: filters ++ [%{id: "source", label: "Source", choices: {__MODULE__, :sources, []}}]}}
+
+  def sources(_user, _opts), do: {[{"Plausible", "plausible"}, {"Google Analytics", "ga"}], false}
+end
+```
+
+To send the blog's own counts to Google Analytics or Plausible from the server, listen on `blog:post:viewed`: it is handed each minute's views, `%{views: [%{site_id:, post_id:, day:, views:, unique_readers:}]}`, after they are written (see `MishkaBlog.Views`).
 
 ## 🚀 Getting started
 

@@ -382,10 +382,10 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
   end
 
   defp analytics(user),
-    do: Analytics.load(:overview, user, Analytics.period(%{"days" => "7"}), true)
+    do: Analytics.read(:overview, user, Analytics.period(%{"days" => "7"}), true)
 
   defp top_posts(user),
-    do: Analytics.load(:posts, user, Analytics.period(%{"days" => "7"}), true).top
+    do: Analytics.read(:posts, user, Analytics.period(%{"days" => "7"}), true).top
 
   defp empty?(value) when is_integer(value), do: value == 0
   defp empty?(value) when is_list(value), do: value == []

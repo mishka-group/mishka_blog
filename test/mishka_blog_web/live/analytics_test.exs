@@ -77,10 +77,10 @@ defmodule MishkaBlogWeb.Test.AnalyticsTest do
     view = open(ctx, @page, ctx.admin)
 
     assert has_element?(view, "[data-role=analytics-top-categories]", "News")
-    assert has_element?(view, "[data-role=analytics-bottom]", "Counted post")
+    assert has_element?(view, "[data-role=analytics-top-posts]", "Counted post")
     assert has_element?(view, "[data-role=analytics-top-commenters]", "Grace")
-    assert has_element?(view, "[data-role=analytics-chart-categories] svg")
-    assert has_element?(view, "[data-role=analytics-chart-publishing]")
+    assert has_element?(view, "[data-role=analytics-views-categories] svg")
+    assert has_element?(view, "[data-role=analytics-views-publishing]")
 
     assert has_element?(
              view,
@@ -166,8 +166,8 @@ defmodule MishkaBlogWeb.Test.AnalyticsTest do
     other = create_collection!(site_id: ctx.site.id, name: "Empty")
     view = open(ctx, "#{@page}?category=#{other.id}", ctx.admin)
 
-    refute has_element?(view, "[data-role=analytics-bottom]", "Counted post")
-    assert has_element?(view, "[data-role=analytics-bottom]", "No post was opened")
+    refute has_element?(view, "[data-role=analytics-top-posts]", "Counted post")
+    assert has_element?(view, "[data-role=analytics-top-posts]", "No post was opened")
     assert has_element?(view, "[data-role=analytics-quiet]", "No published post matches")
     assert has_element?(view, "[data-role=analytics-weekdays]", "No views recorded")
   end
@@ -186,12 +186,70 @@ defmodule MishkaBlogWeb.Test.AnalyticsTest do
   test "an editor without the comment area sees no comment figure", ctx do
     view = open(ctx, @page, ctx.editor)
 
-    assert has_element?(view, "[data-role=analytics-bottom]", "Counted post")
+    assert has_element?(view, "[data-role=analytics-top-posts]", "Counted post")
     refute has_element?(view, "[data-role=analytics-top-commenters]")
     refute has_element?(view, "[data-role=analytics-comment-status]")
     refute has_element?(view, "[data-role=analytics-comments]")
     refute has_element?(view, "#analytics-sort-comments")
     refute has_element?(view, "#analytics-sort-engagement")
     refute has_element?(view, "[data-role=analytics-kpis]", "Engagement")
+  end
+
+  describe "with plugins on its events" do
+    setup do
+      for {name, event} <- [
+            {MishkaBlog.Test.Plugins.BlogAnalyticsPanelsProbe, "blog:analytics:panels"},
+            {MishkaBlog.Test.Plugins.BlogAnalyticsPanelProbe, "blog:analytics:panel"},
+            {MishkaBlog.Test.Plugins.BlogAnalyticsFiltersProbe, "blog:analytics:filters"}
+          ] do
+        {:ok, _} =
+          MishkaInstaller.Event.Event.write(%{
+            name: name,
+            event: event,
+            extension: :mishka_installer,
+            status: :started
+          })
+
+        :ok = MishkaInstaller.Event.EventHandler.do_compile(event, :start, false)
+        on_exit(fn -> MishkaInstaller.Event.Event.unregister(:name, name, false) end)
+      end
+
+      :ok
+    end
+
+    test "a plugin's panel and tab are drawn once their data lands, and a panel it removes is gone",
+         ctx do
+      view = open(ctx, @page, ctx.admin)
+
+      assert has_element?(view, "[data-role=analytics-referrers]", "Referrers (Probe)")
+
+      assert has_element?(
+               view,
+               "[data-role=analytics-referrers] [data-role=probe-referrer]",
+               "example.org 7 all"
+             )
+
+      assert has_element?(view, "[data-role=analytics-top-probe] [data-role=probe-referrer]")
+      assert has_element?(view, "#analytics-top-tab-probe", "Probe tab")
+      refute has_element?(view, "[data-role=analytics-quiet]")
+    end
+
+    test "a plugin changes a panel's data before it is drawn", ctx do
+      view = open(ctx, @page, ctx.admin)
+
+      assert has_element?(view, "[data-role=analytics-kpis]", "4.2K")
+    end
+
+    test "a plugin's filter is in the bar and the URL and reaches its panel; a removed one is gone",
+         ctx do
+      view = open(ctx, "#{@page}?source=plausible&team=#{Ecto.UUID.generate()}", ctx.admin)
+
+      assert has_element?(view, "#analytics-filter-source")
+      refute has_element?(view, "#analytics-filter-team")
+      assert has_element?(view, "[data-role=analytics-referrers]", "example.org 7 plausible")
+
+      view |> element("#analytics-clear-source") |> render_click()
+      refute assert_patch(view) =~ "source="
+    end
   end
 end

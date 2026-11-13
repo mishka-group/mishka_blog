@@ -6,8 +6,8 @@ defmodule MishkaBlog.Dashboard.Analytics do
   @moduledoc """
   Every number on the blog analytics page (`/admin/dashboard/blog/analytics`), read from the database.
 
-  The page asks for one panel at a time — `load/4` with a panel of `panels/0` — and each panel is
-  one or two `GROUP BY` reads (`MishkaBlog.Dashboard.Scope.grouped/2`), most of them over
+  The page asks for one panel's data at a time — `load/5`, which reads a built-in panel through
+  `read/4` — and each built-in is one or two `GROUP BY` reads (`MishkaBlog.Dashboard.Scope.grouped/2`), most of them over
   `MishkaBlog.PostViewDaily`: one row per post and day with its views and unique readers. Nothing is
   estimated, which is why there is no read time and no bounce rate: nothing observes a reader leaving.
 
@@ -17,10 +17,12 @@ defmodule MishkaBlog.Dashboard.Analytics do
 
   ## The period
 
-  `period/1` reads the page's URL params into the window asked for: `days` (7, 30 or 90 whole days
-  ending today), the same number of days before it to compare against, a `category`, `tag`,
-  `blogger` or `team` id that narrows every figure to that one's posts, and `compare`, which draws
-  the window before beside this one. `params/1` writes it back, so a reload or a shared link keeps it.
+  `period/2` reads the page's URL params into the window asked for: `days` (7, 30 or 90 whole days
+  ending today), the same number of days before it to compare against, the value of each filter the
+  page has — a `category`, `tag`, `blogger` or `team` id narrows every built-in figure to that one's
+  posts, and a filter a plugin adds is handed to its own panels in `period.filters` — and `compare`,
+  which draws the window before beside this one. `params/1` writes it back, so a reload or a shared
+  link keeps it.
 
   ## Who reads what
 
@@ -36,9 +38,11 @@ defmodule MishkaBlog.Dashboard.Analytics do
 
   ## The `blog:analytics:panel` event
 
-  Every panel is handed to the plugins of `"blog:analytics:panel"` before the page draws it, as
-  `%{panel: atom, period: period, current_user: user, data: map}`; a plugin answers the same map,
-  `data` changed or not — to add a figure of its own, or leave out a post it keeps private.
+  Every panel's data, a built-in's or a plugin's, is handed to the plugins of
+  `"blog:analytics:panel"` before the page draws it, as
+  `%{panel: id, period: period, current_user: user, data: term}`; a plugin answers the same map,
+  `data` changed or not — to put another source's numbers in its place, add a figure of its own, or
+  leave out a post it keeps private.
 
   The caller runs this off the render — see `MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index`.
   """
@@ -54,18 +58,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
 
   @ranges [7, 30, 90]
   @default_days 30
-  @filters [:category, :tag, :blogger, :team]
-  @panels [
-    :overview,
-    :categories,
-    :tags,
-    :bloggers,
-    :teams,
-    :post_age,
-    :posts,
-    :commenters,
-    :comment_status
-  ]
+  @filters ~w(category tag blogger team)
   @statuses [:pending, :approved, :flagged, :spam]
   @choice_page 20
   @top 5
@@ -80,7 +73,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
           to: Date.t(),
           previous_from: Date.t(),
           previous_to: Date.t(),
-          filters: %{optional(atom()) => String.t()},
+          filters: %{optional(String.t()) => String.t()},
           compare: boolean()
         }
 
@@ -92,28 +85,24 @@ defmodule MishkaBlog.Dashboard.Analytics do
   @spec default_days() :: pos_integer()
   def default_days, do: @default_days
 
-  @doc "What a period can be narrowed by: a category, a tag, a blogger or a team."
-  @spec filters() :: [atom()]
+  @doc "The filters the blog narrows its own figures by: a category, a tag, a blogger or a team."
+  @spec filters() :: [String.t()]
   def filters, do: @filters
 
   @doc "The statuses a comment is counted under, in the order the page shows them."
   @spec statuses() :: [atom()]
   def statuses, do: @statuses
 
-  @doc "The panels `load/4` reads, each on its own."
-  @spec panels() :: [atom()]
-  def panels, do: @panels
-
   @doc "The event a panel is handed to before the page draws it."
   @spec event() :: String.t()
   def event, do: @event
 
   @doc """
-  The period the URL params `params` ask for, ending today. A `days` the page does not offer is the
-  default, and a filter that is not an id is left out.
+  The period the URL params `params` ask for, ending today, with the value of each filter of
+  `filters` the params name. A `days` the page does not offer is the default.
   """
-  @spec period(map()) :: period()
-  def period(params) do
+  @spec period(map(), [String.t()]) :: period()
+  def period(params, filters \\ @filters) do
     days = Enum.find(@ranges, @default_days, &(to_string(&1) == params["days"]))
     to = Date.utc_today()
     from = Date.add(to, -(days - 1))
@@ -124,7 +113,14 @@ defmodule MishkaBlog.Dashboard.Analytics do
       to: to,
       previous_from: Date.add(from, -days),
       previous_to: Date.add(from, -1),
-      filters: for(key <- @filters, id <- uuid(params[to_string(key)]), into: %{}, do: {key, id}),
+      filters:
+        for(
+          key <- filters,
+          value = params[key],
+          is_binary(value) and value != "" and byte_size(value) <= 200,
+          into: %{},
+          do: {key, value}
+        ),
       compare: params["compare"] == "true"
     }
   end
@@ -133,7 +129,6 @@ defmodule MishkaBlog.Dashboard.Analytics do
   @spec params(period()) :: map()
   def params(period) do
     period.filters
-    |> Map.new(fn {key, id} -> {to_string(key), id} end)
     |> put_param("days", period.days != @default_days && to_string(period.days))
     |> put_param("compare", period.compare && "true")
   end
@@ -141,17 +136,8 @@ defmodule MishkaBlog.Dashboard.Analytics do
   defp put_param(params, _key, false), do: params
   defp put_param(params, key, value), do: Map.put(params, key, value)
 
-  defp uuid(value) when is_binary(value) do
-    case Ecto.UUID.cast(value) do
-      {:ok, id} -> [id]
-      :error -> []
-    end
-  end
-
-  defp uuid(_value), do: []
-
   @doc """
-  One page of what the `kind` filter (`:category`, `:tag`, `:blogger` or `:team`) can be set to, as
+  One page of what the `kind` filter (`"category"`, `"tag"`, `"blogger"` or `"team"`) can be set to, as
   `user` reads them, by name: `{[{label, id}], more?}`, as gervaz's search select takes its options. An archived one is left out. Names that
   repeat — a category in several languages or on several sites — are told apart by their language
   and site, `"Travel · en · site-a"`, and by their slug last when those repeat too.
@@ -162,6 +148,16 @@ defmodule MishkaBlog.Dashboard.Analytics do
   """
   @spec choices(atom(), map(), keyword()) :: {[{String.t(), String.t()}], boolean()}
   def choices(kind, user, opts) when kind in @filters do
+    case Keyword.fetch(opts, :id) do
+      {:ok, id} ->
+        (match?({:ok, _id}, Ecto.UUID.cast(id)) && read_choices(kind, user, opts)) || {[], false}
+
+      :error ->
+        read_choices(kind, user, opts)
+    end
+  end
+
+  defp read_choices(kind, user, opts) do
     {resource, field} = term_of(kind)
     language? = Ash.Resource.Info.attribute(resource, :language) != nil
 
@@ -199,10 +195,10 @@ defmodule MishkaBlog.Dashboard.Analytics do
   defp picked(rows, id),
     do: {for(%{id: ^id} = row <- rows, do: {choice_label(row), id}), false}
 
-  defp term_of(:category), do: {MishkaBlog.Collection, :name}
-  defp term_of(:tag), do: {MishkaBlog.Tag, :name}
-  defp term_of(:blogger), do: {MishkaBlog.Blogger, :display_name}
-  defp term_of(:team), do: {MishkaBlog.Team, :name}
+  defp term_of("category"), do: {MishkaBlog.Collection, :name}
+  defp term_of("tag"), do: {MishkaBlog.Tag, :name}
+  defp term_of("blogger"), do: {MishkaBlog.Blogger, :display_name}
+  defp term_of("team"), do: {MishkaBlog.Team, :name}
 
   # The one picked is looked for among those of its name, so its label is told apart as in the list.
   defp choose(query, resource, field, opts) do
@@ -250,8 +246,29 @@ defmodule MishkaBlog.Dashboard.Analytics do
   end
 
   @doc """
-  Reads `panel` for `period` as `user`, then hands it to the `blog:analytics:panel` plugins.
-  `comments?` says whether the viewer holds the comment area; without it no comment is read.
+  The data `panel` of the page: `load`, a `{module, function, args}`, is called with `user`,
+  `period` and `comments?` after its `args`, and what it returns is handed to the
+  `blog:analytics:panel` plugins as `%{panel: panel, ...}` before the page draws it. A built-in
+  panel's `load` is `{MishkaBlog.Dashboard.Analytics, :read, [panel]}`.
+  """
+  @spec load(term(), {module(), atom(), list()}, map(), period(), boolean()) :: term()
+  def load(panel, {module, function, args}, user, period, comments?) do
+    data = apply(module, function, args ++ [user, period, comments?])
+
+    case MishkaInstaller.Event.Hook.call(@event, %{
+           panel: panel,
+           period: period,
+           current_user: user,
+           data: data
+         }) do
+      %{data: data} -> data
+      _other -> data
+    end
+  end
+
+  @doc """
+  The data of the built-in panel `panel` for `period`, read as `user`. `comments?` says whether the
+  viewer holds the comment area; without it no comment is read.
 
     * `:overview` — the KPI figures, the daily views of the window and of the one before
       (`:series`, `:previous_series`), views per weekday (`:weekdays`), views and posts published
@@ -268,22 +285,10 @@ defmodule MishkaBlog.Dashboard.Analytics do
     * `:comment_status` — the window's comments by status (`statuses/0`), `nil` without the comment
       area.
   """
-  @spec load(atom(), map(), period(), boolean()) :: map() | list()
-  def load(panel, user, period, comments?) when panel in @panels do
-    data = read(panel, user, period, comments?)
+  @spec read(atom(), map(), period(), boolean()) :: term()
+  def read(panel, user, period, comments?)
 
-    case MishkaInstaller.Event.Hook.call(@event, %{
-           panel: panel,
-           period: period,
-           current_user: user,
-           data: data
-         }) do
-      %{data: data} -> data
-      _other -> data
-    end
-  end
-
-  defp read(:overview, user, period, comments?) do
+  def read(:overview, user, period, comments?) do
     by_day =
       user
       |> views(period, period.previous_from)
@@ -322,7 +327,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
     }
   end
 
-  defp read(:categories, user, period, _comments?) do
+  def read(:categories, user, period, _comments?) do
     rows =
       user
       |> views(period, period.from)
@@ -363,7 +368,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
     %{top: top, series: series}
   end
 
-  defp read(:tags, user, period, _comments?) do
+  def read(:tags, user, period, _comments?) do
     user
     |> views(period, period.from)
     |> grouped(
@@ -383,7 +388,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
     |> ranked()
   end
 
-  defp read(:bloggers, user, period, comments?) do
+  def read(:bloggers, user, period, comments?) do
     top =
       user
       |> views(period, period.from)
@@ -420,7 +425,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
     )
   end
 
-  defp read(:post_age, user, period, _comments?) do
+  def read(:post_age, user, period, _comments?) do
     cutoff = Figures.beginning_of_day(Date.add(period.to, -(@fresh_days - 1)))
 
     rows =
@@ -443,7 +448,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
     %{fresh: Map.get(rows, true, 0), older: Map.get(rows, false, 0), fresh_days: @fresh_days}
   end
 
-  defp read(:posts, user, period, comments?) do
+  def read(:posts, user, period, comments?) do
     from = period.from
 
     rows =
@@ -488,7 +493,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
 
   # A post two members of one team wrote counts once for that team: each day's row is taken once per
   # team before it is summed.
-  defp read(:teams, user, period, _comments?) do
+  def read(:teams, user, period, _comments?) do
     user
     |> views(period, period.from)
     |> grouped(:post_id, period, fn query ->
@@ -514,9 +519,9 @@ defmodule MishkaBlog.Dashboard.Analytics do
     |> ranked()
   end
 
-  defp read(:comment_status, _user, _period, false), do: nil
+  def read(:comment_status, _user, _period, false), do: nil
 
-  defp read(:comment_status, user, period, true) do
+  def read(:comment_status, user, period, true) do
     counted =
       user
       |> comments(period, period.from)
@@ -530,9 +535,9 @@ defmodule MishkaBlog.Dashboard.Analytics do
     Map.new(@statuses, &{&1, Map.get(counted, &1, 0)})
   end
 
-  defp read(:commenters, _user, _period, false), do: []
+  def read(:commenters, _user, _period, false), do: []
 
-  defp read(:commenters, user, period, true) do
+  def read(:commenters, user, period, true) do
     counted =
       user
       |> comments(period, period.from)
@@ -622,22 +627,26 @@ defmodule MishkaBlog.Dashboard.Analytics do
   defp grouped(query, column, period, build),
     do: Scope.grouped(query, &(&1 |> narrow(column, period.filters) |> build.()))
 
+  # Only the blog's own filters narrow its figures, each by an id; a plugin's filter is its panels'.
   defp narrow(query, column, filters) do
-    Enum.reduce(filters, query, fn {key, id}, query ->
-      from([x] in query, where: field(x, ^column) in subquery(posts_of(key, id)))
+    Enum.reduce(filters, query, fn {key, value}, query ->
+      case key in @filters and Ecto.UUID.cast(value) do
+        {:ok, id} -> from([x] in query, where: field(x, ^column) in subquery(posts_of(key, id)))
+        _other -> query
+      end
     end)
   end
 
-  defp posts_of(:category, id),
+  defp posts_of("category", id),
     do: from(pc in MishkaBlog.PostCollection, where: pc.collection_id == ^id, select: pc.post_id)
 
-  defp posts_of(:tag, id),
+  defp posts_of("tag", id),
     do: from(pt in MishkaBlog.PostTag, where: pt.tag_id == ^id, select: pt.post_id)
 
-  defp posts_of(:blogger, id),
+  defp posts_of("blogger", id),
     do: from(pb in MishkaBlog.PostBlogger, where: pb.blogger_id == ^id, select: pb.post_id)
 
-  defp posts_of(:team, id) do
+  defp posts_of("team", id) do
     from(pb in MishkaBlog.PostBlogger,
       join: tm in MishkaBlog.TeamMember,
       on: tm.blogger_id == pb.blogger_id,
