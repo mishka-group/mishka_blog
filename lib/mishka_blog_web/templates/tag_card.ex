@@ -87,7 +87,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
         static={@static}
         state={@state}
         myself={@myself}
-        container_class="grid items-start gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))]"
+        container_class="grid items-stretch gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))]"
         data_role="tag-grid"
         empty_label={dgettext("mishka_gervaz", "0 tags")}
         empty_icon="hero-hashtag"
@@ -129,7 +129,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       |> assign(:tint, tint(record))
       |> assign(:accent, LanguageAccent.of(record))
       |> assign(:editions, EditionChips.editions(record))
-      |> assign(:editions_shown, 2)
+      |> assign(:editions_shown, 1)
       |> assign(:posts, count(record, :post_count))
       |> assign(:views, count(record, :view_count))
       |> assign(
@@ -146,7 +146,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       id={@id}
       data-role="tagchip"
       class={[
-        "flex items-start gap-2.5 rounded-[12px] border bg-white px-[13px] py-[11px] shadow-[0_1px_2px_rgba(30,28,24,0.03)] transition-colors",
+        "flex h-full items-start gap-2.5 rounded-[12px] border bg-white px-[13px] py-[11px] shadow-[0_1px_2px_rgba(30,28,24,0.03)] transition-colors",
         (@checked? && "border-[#dcdbf5] ring-1 ring-[#5b57d6]") ||
           "border-[#ecebe6] hover:border-[#dcdbf5]",
         !@checked? && @row_class
@@ -174,10 +174,13 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       </span>
 
       <div class="min-w-0 flex-1">
-        <%!-- The name wraps rather than being cut: a card in the grid is narrow, and the counts beside
-              it would leave a short name only a few letters. Its views sit under it for the same
-              reason. --%>
-        <span class="block break-words text-[12.5px] font-semibold leading-snug text-[#1b1a18]">
+        <%!-- The name wraps between words on up to two lines, and a word too long for the card is cut
+              with the whole name in its title. Its views sit under it, so the counts beside it leave
+              the name its room. --%>
+        <span
+          title={@record.name}
+          class="line-clamp-2 break-normal text-[12.5px] font-semibold leading-snug text-[#1b1a18]"
+        >
           {@record.name}
         </span>
         <span
@@ -195,9 +198,13 @@ defmodule MishkaBlogWeb.Templates.TagCard do
         </span>
 
         <%!-- A translated tag names its languages under its name instead of in the badge at the
-              end: each is the way to that edition. Two are shown and the rest counted, so a tag in
-              many languages keeps the card as short as its neighbours. --%>
-        <div :if={@editions != []} class="mt-1.5 flex items-center gap-[5px]">
+              end: each is the way to that edition. Two chips (its own language and one more) are shown on
+              one line and the rest counted, so a tag in many languages keeps the card as short as its
+              neighbours, and every card of a row is as tall as the tallest. --%>
+        <div
+          :if={@editions != []}
+          class="mt-1.5 flex items-center gap-[5px] [&>span]:flex-nowrap"
+        >
           <EditionChips.inline
             id={"#{@id}-editions"}
             record={@record}
