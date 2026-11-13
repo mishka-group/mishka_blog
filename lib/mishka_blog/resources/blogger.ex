@@ -791,7 +791,7 @@ defmodule MishkaBlog.Blogger do
             description fn ->
               dgettext(
                 "mishka_gervaz",
-                "Enforcing this when a post is published is on our roadmap."
+                "Off: this blogger saves drafts, and an editor publishes them."
               )
             end
           end

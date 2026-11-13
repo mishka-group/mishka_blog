@@ -35,8 +35,8 @@ Mishka Blog is an extension of [Mishka CMS](https://mishka.tools/cms), an open s
 - SEO for each record: its own head, `BlogPosting` and breadcrumb JSON-LD, `sitemap.xml` entries for posts, categories, bloggers and teams, and share cards.
 - A notification to the blog's admins when a post is published, and dashboard widgets for recent posts, top posts, drafts and scheduled posts, comments to moderate, and bloggers.
 - A JSON:API for admins at `/api/json/v1/master/admin/mishka-blog/…` and `/api/json/v1/tenant/admin/mishka-blog/…`, and one for readers at `/api/json/v1/user/mishka-blog/…` (published posts, comments, ratings, bookmarks, follows and votes), described in the CMS's OpenAPI spec.
-- Permissions `admin:dashboard:blog:post` and `admin:dashboard:blog:comment`, with `admin:api:` twins for the API, so a moderator can hold the comments alone.
-- Events for plugins, such as `blog:blog_post:after_publish` and `blog:comment:after_create`. An extension adds buttons to the header of the dashboard on `blog:dashboard:actions`: a plugin answers `%{actions: [...]}` with an `id`, `label`, `icon`, `priority` and a `path:` or a `js:` command (see `MishkaBlog.Dashboard.Actions`).
+- Permissions `admin:dashboard:blog:post`, `admin:dashboard:blog:publish` and `admin:dashboard:blog:comment`, with `admin:api:` twins for the API, so a moderator can hold the comments alone. A blogger whose profile is not set to Can Publish Directly saves drafts for an editor to publish, unless they hold `admin:dashboard:blog:publish`.
+- Events for plugins, such as `blog:blog_post:after_publish` and `blog:comment:after_create`. An extension adds buttons to the header of the dashboard on `blog:dashboard:actions`: a plugin answers `%{actions: [...]}` with an `id`, `label`, `icon`, `priority` and a `path:` or a `js:` command (see `MishkaBlog.Dashboard.Actions`). A plugin on `blog:post:can_publish` allows or refuses a publish (see `MishkaBlog.Resources.Validations.PublishDirectly`).
 
 ## 🚀 Getting started
 

@@ -2673,6 +2673,11 @@ defmodule MishkaBlog.BlogPost do
               read_action: :read_any},
              on: [:create],
              before_action?: true
+
+    # A blogger without Can Publish Directly saves a draft for an editor to publish.
+    validate MishkaBlog.Resources.Validations.PublishDirectly,
+      on: [:create, :update],
+      before_action?: true
   end
 
   # Multi-tenancy configuration - blog posts are always site-specific
