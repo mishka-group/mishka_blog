@@ -588,7 +588,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   end
 
   @doc "Shows the `key` tab of the tabbed card `id` and hides its other `keys`, on the client."
-  @spec show_tab(String.t(), String.t(), [String.t()]) :: %JS{}
+  @spec show_tab(String.t(), String.t(), [String.t()]) :: JS.t()
   def show_tab(id, key, keys) do
     shown =
       JS.set_attribute(JS.show(to: "##{id}-#{key}"), {"aria-selected", "true"},
