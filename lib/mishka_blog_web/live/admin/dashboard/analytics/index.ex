@@ -232,7 +232,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   @spec picker_assigns(String.t(), map(), String.t() | nil) :: map()
   def picker_assigns(kind, picker, value) do
     %{
-      __changed__: %{},
+      __changed__: nil,
       id: "analytics-filter-#{kind}",
       name: "filters[#{kind}]",
       filter_name: kind,
