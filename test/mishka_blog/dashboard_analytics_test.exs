@@ -359,6 +359,13 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
   end
 
   describe "the page's labels" do
+    test "word a count for one or many" do
+      assert Index.counted(:views, 1) == "1 view"
+      assert Index.counted(:views, 3) == "3 views"
+      assert Index.counted(:posts_published, 1) == "1 post published"
+      assert Index.counted(:comments_in_period, 2) == "2 comments in this period"
+    end
+
     test "write the chart's days and a post's publishing day" do
       assert Index.day_label(~D[2026-07-20]) == "Jul 20"
       assert Index.day_label(~D[2026-01-03]) == "Jan 3"

@@ -223,9 +223,7 @@ SPDX-License-Identifier: Apache-2.0
             )}
           </span>
           <span :if={!@period.compare}>
-            {gettext("%{views} views in this period",
-              views: Localized.compact(@panels.overview.views_window)
-            )}
+            {counted(:views_in_period, @panels.overview.views_window)}
           </span>
           <span>{day_label(@period.to)}</span>
         </div>
@@ -283,7 +281,7 @@ SPDX-License-Identifier: Apache-2.0
               :for={week <- @panels.overview.weeks}
               class="flex h-full flex-1 flex-col justify-end"
               title={
-                gettext("%{posts} posts, %{views} views", posts: week.posts, views: week.views)
+                counted(:posts, week.posts) <> ", " <> counted(:views, week.views)
               }
             >
               <div
@@ -331,10 +329,10 @@ SPDX-License-Identifier: Apache-2.0
         >
           <div class="truncate text-[12.5px] font-bold text-[#1b1a18]">{name_of(blogger)}</div>
           <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-semibold text-[#8a877f]">
-            <span>{gettext("%{count} views", count: Localized.compact(blogger.views))}</span>
-            <span>{gettext("%{count} posts published", count: Localized.number(blogger.posts))}</span>
+            <span>{counted(:views, blogger.views)}</span>
+            <span>{counted(:posts_published, blogger.posts)}</span>
             <span :if={Home.holds?(@blog_areas, [:comment])}>
-              {gettext("%{count} comments", count: Localized.number(blogger.comments || 0))}
+              {counted(:comments, blogger.comments || 0)}
             </span>
           </div>
         </li>
@@ -484,9 +482,7 @@ SPDX-License-Identifier: Apache-2.0
           viewBox={view_box()}
           preserveAspectRatio="none"
           role="img"
-          aria-label={
-            gettext("%{count} comments in this period", count: @panels.overview.comments.window)
-          }
+          aria-label={counted(:comments_in_period, @panels.overview.comments.window)}
           class="h-[150px] w-full"
         >
           <path
@@ -528,9 +524,7 @@ SPDX-License-Identifier: Apache-2.0
           :if={@panels.overview.comments.window > 0}
           class="mt-2 text-[11px] font-medium text-[#a8a5a0]"
         >
-          {gettext("%{count} comments in this period",
-            count: Localized.number(@panels.overview.comments.window)
-          )}
+          {counted(:comments_in_period, @panels.overview.comments.window)}
           <span :if={@period.compare}>
             · {gettext("%{count} in the previous %{days} days",
               count: Localized.number(@panels.overview.comments.previous),
@@ -654,7 +648,7 @@ SPDX-License-Identifier: Apache-2.0
         :if={@panels.posts}
         posts={@panels.posts.quiet}
         empty={quiet_empty(@panels.posts)}
-        figure={&gettext("%{count} views", count: Localized.number(&1.views))}
+        figure={&counted(:views, &1.views)}
       />
     </.panel>
   </div>

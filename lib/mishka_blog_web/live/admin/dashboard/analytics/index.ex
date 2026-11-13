@@ -454,6 +454,33 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   def quiet_empty(%{top: [], quiet: []}), do: gettext("No published post matches this period.")
   def quiet_empty(_posts), do: gettext("Every published post was read in this period.")
 
+  @doc """
+  `n` of something, worded for one or many in the reader's language and written with its digits:
+  `counted(:views, 1)` is `"1 view"`, `counted(:views, 1200)` `"1.2K views"`.
+  """
+  @spec counted(atom(), non_neg_integer()) :: String.t()
+  def counted(:views, n), do: ngettext("%{n} view", "%{n} views", n, n: Localized.compact(n))
+
+  def counted(:views_in_period, n),
+    do:
+      ngettext("%{n} view in this period", "%{n} views in this period", n,
+        n: Localized.compact(n)
+      )
+
+  def counted(:posts, n), do: ngettext("%{n} post", "%{n} posts", n, n: Localized.number(n))
+
+  def counted(:posts_published, n),
+    do: ngettext("%{n} post published", "%{n} posts published", n, n: Localized.number(n))
+
+  def counted(:comments, n),
+    do: ngettext("%{n} comment", "%{n} comments", n, n: Localized.number(n))
+
+  def counted(:comments_in_period, n),
+    do:
+      ngettext("%{n} comment in this period", "%{n} comments in this period", n,
+        n: Localized.number(n)
+      )
+
   @doc "A commenter's name as the comments page writes it."
   @spec commenter(map()) :: String.t()
   def commenter(comment), do: MishkaBlogWeb.Templates.CommentCard.author(comment)
