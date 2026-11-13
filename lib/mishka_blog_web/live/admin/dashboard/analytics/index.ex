@@ -606,15 +606,21 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   @spec comment_tiles(map()) :: [{atom(), non_neg_integer()}]
   def comment_tiles(counts), do: Enum.map(Analytics.statuses(), &{&1, Map.fetch!(counts, &1)})
 
-  @doc "The comments list, filtered to `status` — where a Comments tile leads."
-  @spec comments_path(Phoenix.LiveView.Socket.t(), atom()) :: String.t()
-  def comments_path(socket, status),
-    do:
-      path(
-        socket,
-        "/admin/dashboard/blog/comments?" <>
-          URI.encode_query(%{"comments_filter_status" => status})
-      )
+  @doc """
+  The comments list, filtered to `status` and to the comments written in the period — where a
+  Comments tile leads, so the list counts what the tile counts. The written range ends the day after
+  the period: gervaz's date range reads its end as that day's first instant.
+  """
+  @spec comments_path(Phoenix.LiveView.Socket.t(), atom(), Analytics.period()) :: String.t()
+  def comments_path(socket, status, period) do
+    query =
+      URI.encode_query(%{
+        "comments_filter_status" => status,
+        "comments_filter_written" => "#{period.from}~#{Date.add(period.to, 1)}"
+      })
+
+    path(socket, "/admin/dashboard/blog/comments?" <> query)
+  end
 
   @doc "The word a comment status is shown as."
   @spec status_word(atom()) :: String.t()

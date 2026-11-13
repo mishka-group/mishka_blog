@@ -489,6 +489,16 @@ defmodule MishkaBlog.Comment do
             label fn -> dgettext("mishka_gervaz", "Pinned") end
           end
         end
+
+        # The days a comment was written in: the Analytics page's Comments card opens the list on
+        # its period with `comments_filter_written=<from>~<to>`.
+        filter :written, :date_range do
+          source :inserted_at
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Written") end
+          end
+        end
       end
 
       row_actions do

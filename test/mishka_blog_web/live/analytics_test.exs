@@ -123,6 +123,38 @@ defmodule MishkaBlogWeb.Test.AnalyticsTest do
     assert has_element?(reloaded, "[data-role=previous-line]")
   end
 
+  test "a Comments tile opens the list on the period's comments of its status", ctx do
+    view = open(ctx, "#{@page}?days=7", ctx.admin)
+    from = Date.utc_today() |> Date.add(-6) |> Date.to_iso8601()
+    tomorrow = Date.utc_today() |> Date.add(1) |> Date.to_iso8601()
+
+    assert has_element?(
+             view,
+             "#analytics-comments-pending[href*='comments_filter_written=#{from}~#{tomorrow}']",
+             "1"
+           )
+
+    list =
+      open(
+        ctx,
+        "/admin/dashboard/blog/comments?comments_filter_written=#{from}~#{tomorrow}",
+        ctx.admin
+      )
+
+    assert has_element?(list, "[id$=-author]", "Grace")
+
+    later = Date.utc_today() |> Date.add(2) |> Date.to_iso8601()
+
+    none =
+      open(
+        ctx,
+        "/admin/dashboard/blog/comments?comments_filter_written=#{tomorrow}~#{later}",
+        ctx.admin
+      )
+
+    refute has_element?(none, "[id$=-author]", "Grace")
+  end
+
   test "a filter's Clear takes it out of the URL", ctx do
     view = open(ctx, "#{@page}?category=#{ctx.news.id}", ctx.admin)
 

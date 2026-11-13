@@ -552,7 +552,7 @@ SPDX-License-Identifier: Apache-2.0
         <.link
           :for={{status, count} <- comment_tiles(@panels.comment_status)}
           id={"analytics-comments-#{status}"}
-          navigate={comments_path(@socket, status)}
+          navigate={comments_path(@socket, status, @period)}
           class="rounded-[12px] border border-[#f0efea] bg-[#fdfdfc] px-3.5 py-3 transition-colors hover:border-[#dcdbf5]"
         >
           <div class="text-[11.5px] font-semibold text-[#8a877f]">{status_word(status)}</div>
