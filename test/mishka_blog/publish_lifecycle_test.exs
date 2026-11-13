@@ -188,6 +188,22 @@ defmodule MishkaBlog.Test.PublishLifecycleTest do
         assert post.scheduled_publish_at == at
         assert post.published_at == nil
       end
+
+      test "clears the schedule of a scheduled post that becomes published early", %{
+        draft: draft
+      } do
+        {:ok, scheduled} =
+          update(draft, unquote(scope), unquote(update_action), %{
+            status: :scheduled,
+            scheduled_publish_at: DateTime.truncate(future(), :second)
+          })
+
+        assert {:ok, post} =
+                 update(scheduled, unquote(scope), unquote(update_action), %{status: :published})
+
+        assert post.scheduled_publish_at == nil
+        assert seconds_ago(post.published_at) in 0..5
+      end
     end
   end
 end

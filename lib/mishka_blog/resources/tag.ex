@@ -1032,6 +1032,8 @@ defmodule MishkaBlog.Tag do
 
       change {Change, Languages.public_slug(language: :language)}
 
+      change MishkaBlog.Resources.Changes.KeepOldAddress
+
       description "Updates tag for tenant users - requires tenant context, prevents site_id changes"
     end
 
@@ -1053,6 +1055,8 @@ defmodule MishkaBlog.Tag do
                 message: dgettext_noop("errors", "Tag cannot be its own parent.")}
 
       change {Change, Languages.public_slug(language: :language)}
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     read :master_read do
@@ -1429,6 +1433,8 @@ defmodule MishkaBlog.Tag do
               version: MishkaBlog.Tag.Version,
               fields: List.delete(@admin_fields, :site_id),
               label: dgettext_noop("errors", "tag")}
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     action :restore_version_api, :struct do
@@ -1481,6 +1487,8 @@ defmodule MishkaBlog.Tag do
               version: MishkaBlog.Tag.Version,
               fields: List.delete(@admin_fields, :site_id),
               label: dgettext_noop("errors", "tag")}
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     action :master_restore_version_api, :struct do

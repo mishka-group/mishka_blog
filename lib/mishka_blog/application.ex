@@ -58,18 +58,23 @@ defmodule MishkaBlog.Application do
   # Adds the blog's posts, categories, tags, bloggers and teams to each site's sitemap (a
   # `seo:sitemap:urls` plugin), names them as kinds of record a page can show (a
   # `runtime:page:records` plugin), and gives each its own head on the page that shows it (a
-  # `runtime:page:seo` plugin).
+  # `runtime:page:seo` plugin), and sends a post asked for at an address that is not its own to its
+  # own (a `runtime:page:moved` plugin).
   @seo_plugins [
     MishkaBlog.Plugins.SitemapUrls,
     MishkaBlog.Plugins.PageRecords,
-    MishkaBlog.Plugins.PageSeo
+    MishkaBlog.Plugins.PageSeo,
+    MishkaBlog.Plugins.PostMoved
   ]
 
-  # The feed settings under the Blog tab (a `settings:register` plugin) and the feeds named in the
-  # head of a site's pages (a `RootHtml.MetaTags` plugin); see `MishkaBlog.Feeds`.
+  # The blog's settings under the Blog tab (a `settings:register` plugin), the feeds named in the
+  # head of a site's pages (a `RootHtml.MetaTags` plugin, see `MishkaBlog.Feeds`), and the post
+  # page put where a site's Post address setting says, once it is saved (a
+  # `cms_core:setting:after_save` plugin).
   @feed_plugins [
-    MishkaBlog.Plugins.FeedSettings,
-    MishkaBlog.Plugins.FeedLinks
+    MishkaBlog.Plugins.BlogSettings,
+    MishkaBlog.Plugins.FeedLinks,
+    MishkaBlog.Plugins.PostAddress
   ]
 
   # Each record's share card looked at again after the record is saved, on its own
@@ -101,6 +106,12 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.TranslationKeys
   ]
 
+  # The blog's writes an agent receipt can be kept for (an `agent:operations` plugin, see
+  # `MishkaCmsCore.Agent.Operation`).
+  @agent_plugins [
+    MishkaBlog.Plugins.AgentOperations
+  ]
+
   # Each code block of a post being written is lexed in a task of its own under this supervisor — see
   # `MishkaBlog.Resources.Changes.HighlightCode`.
   @highlight_supervisor {Task.Supervisor, name: MishkaBlog.HighlightSupervisor}
@@ -118,7 +129,8 @@ defmodule MishkaBlog.Application do
         @sidebar_menus ++
         @provision_plugins ++
         @seo_plugins ++
-        @feed_plugins ++ @share_card_plugins ++ @runtime_plugins ++ @frame_plugins
+        @feed_plugins ++
+        @share_card_plugins ++ @runtime_plugins ++ @frame_plugins ++ @agent_plugins
 
   @impl true
   def start(_type, _args) do

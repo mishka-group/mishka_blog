@@ -8,8 +8,8 @@ defmodule MishkaBlog.BlogPost do
 
   This resource represents individual blog posts with rich text content and comprehensive metadata.
   Each post belongs to a specific site and can have multiple language variants through the translation
-  system. Posts support various statuses (draft, published, scheduled, archived) with automatic
-  publishing based on scheduled timestamps.
+  system. Posts support various statuses (draft, published, scheduled, archived); a scheduled post is
+  published at its time by `MishkaBlog.Workers.PublishScheduledWorker`.
 
   Blog posts feature full version control through PaperTrail integration, tracking all changes
   with snapshot-based history and the ability to restore previous versions. The resource
@@ -37,7 +37,8 @@ defmodule MishkaBlog.BlogPost do
       Ash.Notifier.PubSub,
       MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
       MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh,
-      MishkaBlog.Resources.Notifiers.FeedRefresh
+      MishkaBlog.Resources.Notifiers.FeedRefresh,
+      MishkaCmsCore.Agent.Notifiers.ReceiptHook
     ]
 
   import Phoenix.Component, only: [sigil_H: 2]
@@ -190,24 +191,6 @@ defmodule MishkaBlog.BlogPost do
         """
 
         down "DROP TRIGGER IF EXISTS prevent_archived_post_updates_trigger ON mishka_blog_posts;"
-      end
-
-      statement :auto_publish_scheduled_posts_function do
-        up """
-        CREATE OR REPLACE FUNCTION auto_publish_scheduled_posts()
-        RETURNS void AS $$
-        BEGIN
-          UPDATE mishka_blog_posts
-          SET status = 'published',
-              published_at = scheduled_publish_at
-          WHERE status = 'scheduled'
-            AND scheduled_publish_at <= timezone('UTC', NOW())
-            AND archived_at IS NULL;
-        END;
-        $$ LANGUAGE plpgsql;
-        """
-
-        down "DROP FUNCTION IF EXISTS auto_publish_scheduled_posts();"
       end
     end
   end
@@ -779,8 +762,9 @@ defmodule MishkaBlog.BlogPost do
           type :update
           action {:master_publish, :publish}
 
-          visible fn _record, state ->
-            state.archive_status == :active and state.template != @table_template
+          visible fn record, state ->
+            record.status in [:draft, :scheduled] and state.archive_status == :active and
+              state.template != @table_template
           end
 
           ui do
@@ -794,8 +778,9 @@ defmodule MishkaBlog.BlogPost do
           type :update
           action {:master_unpublish, :unpublish}
 
-          visible fn _record, state ->
-            state.archive_status == :active and state.template != @table_template
+          visible fn record, state ->
+            record.status in [:published, :scheduled] and state.archive_status == :active and
+              state.template != @table_template
           end
 
           ui do
@@ -1055,7 +1040,7 @@ defmodule MishkaBlog.BlogPost do
             label fn -> dgettext("mishka_gervaz", "Status") end
 
             description fn ->
-              dgettext("mishka_gervaz", "Publishing at the scheduled time is on our roadmap.")
+              dgettext("mishka_gervaz", "A scheduled post is published at its time.")
             end
           end
         end
@@ -1715,6 +1700,8 @@ defmodule MishkaBlog.BlogPost do
       change MishkaBlog.Resources.Changes.HighlightCode
       change MishkaBlog.Resources.Changes.ContentFacts
 
+      change MishkaBlog.Resources.Changes.KeepOldAddress
+
       description "Updates blog post for tenant users - requires tenant context, prevents site_id changes"
     end
 
@@ -1786,6 +1773,8 @@ defmodule MishkaBlog.BlogPost do
       # what the content says: its reading time and the components it names.
       change MishkaBlog.Resources.Changes.HighlightCode
       change MishkaBlog.Resources.Changes.ContentFacts
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     read :published do
@@ -1812,6 +1801,13 @@ defmodule MishkaBlog.BlogPost do
       pagination offset?: true, default_limit: 20, max_page_size: 100, countable: true
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+    end
+
+    read :due_scheduled do
+      description "Reads the scheduled posts of every site whose time has come (the publish job's read)"
+      multitenancy :bypass
+      filter expr(status == :scheduled and scheduled_publish_at <= now() and is_nil(archived_at))
+      pagination keyset?: true, required?: false
     end
 
     read :featured do
@@ -1926,17 +1922,7 @@ defmodule MishkaBlog.BlogPost do
 
       change set_attribute(:status, :published)
 
-      change fn changeset, _context ->
-        if is_nil(changeset.data.published_at) do
-          Ash.Changeset.force_change_attribute(
-            changeset,
-            :published_at,
-            DateTime.utc_now() |> DateTime.truncate(:second)
-          )
-        else
-          changeset
-        end
-      end
+      change MishkaBlog.Resources.Changes.PublishLifecycle
 
       # A post published names its components to its site's stylesheet.
       change MishkaBlog.Resources.Changes.ContentFacts
@@ -1954,17 +1940,7 @@ defmodule MishkaBlog.BlogPost do
 
       change set_attribute(:status, :published)
 
-      change fn changeset, _context ->
-        if is_nil(changeset.data.published_at) do
-          Ash.Changeset.force_change_attribute(
-            changeset,
-            :published_at,
-            DateTime.utc_now() |> DateTime.truncate(:second)
-          )
-        else
-          changeset
-        end
-      end
+      change MishkaBlog.Resources.Changes.PublishLifecycle
 
       # A post published names its components to its site's stylesheet.
       change MishkaBlog.Resources.Changes.ContentFacts
@@ -1978,12 +1954,13 @@ defmodule MishkaBlog.BlogPost do
 
       change set_attribute(:status, :draft)
       change set_attribute(:published_at, nil)
+      change set_attribute(:scheduled_publish_at, nil)
 
-      description "Reverts a published blog post back to draft status"
+      description "Reverts a published or scheduled blog post back to draft status, its schedule cleared"
     end
 
     update :master_unpublish do
-      description "Reverts a published blog post back to draft status (master users)"
+      description "Reverts a published or scheduled blog post back to draft status, its schedule cleared (master users)"
       accept []
       require_atomic? false
       multitenancy :bypass
@@ -1992,6 +1969,7 @@ defmodule MishkaBlog.BlogPost do
 
       change set_attribute(:status, :draft)
       change set_attribute(:published_at, nil)
+      change set_attribute(:scheduled_publish_at, nil)
     end
 
     update :schedule do
@@ -2421,6 +2399,8 @@ defmodule MishkaBlog.BlogPost do
       # says worked out again.
       change MishkaBlog.Resources.Changes.HighlightCode
       change MishkaBlog.Resources.Changes.ContentFacts
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     action :restore_version_api, :struct do
@@ -2497,6 +2477,8 @@ defmodule MishkaBlog.BlogPost do
       # says worked out again.
       change MishkaBlog.Resources.Changes.HighlightCode
       change MishkaBlog.Resources.Changes.ContentFacts
+
+      change MishkaBlog.Resources.Changes.KeepOldAddress
     end
 
     action :master_restore_version_api, :struct do

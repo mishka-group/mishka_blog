@@ -8,6 +8,9 @@ defmodule MishkaBlog.Plugins.PageRecords do
   on the `runtime:page:records` mishka_installer hook, for a page's "This page shows each" choice
   (see `MishkaCmsCore.Runtime.Seo.record_types/1`), each with a few of the site's own to preview a
   page with. Each is labelled as the blog's admin names it, where its Permissions and SEO Tags are set.
+
+  A post `moves: true`: an address that names it by a category, a date or a page that is not its own
+  is answered by `MishkaBlog.Plugins.PostMoved` with a 301 to its own.
   `MishkaBlog.Plugins.PageSeo` answers for the same kinds.
 
   A module because a mishka_installer hook is one. Registered in `MishkaBlog.Application`.
@@ -15,6 +18,8 @@ defmodule MishkaBlog.Plugins.PageRecords do
 
   use Gettext, backend: MishkaCmsCore.Gettext
   use MishkaInstaller.Event.Hook, event: "runtime:page:records", initial: %{priority: 50}
+
+  require Ash.Query
 
   alias MishkaBlog.{Blogger, BlogPost, Collection, Tag, Team}
   alias MishkaCmsCore.Runtime.Languages
@@ -31,7 +36,9 @@ defmodule MishkaBlog.Plugins.PageRecords do
   @spec types(String.t() | nil) :: [map()]
   def types(site_id) do
     [
-      type("blog:post", gettext("Post"), samples(BlogPost, :title, :published_at, site_id)),
+      "blog:post"
+      |> type(gettext("Post"), samples(BlogPost, :title, :published_at, site_id))
+      |> Map.put(:moves, true),
       type(
         "blog:category",
         gettext("Collection"),
@@ -52,11 +59,14 @@ defmodule MishkaBlog.Plugins.PageRecords do
   defp type(id, label, samples),
     do: %{id: id, group: gettext("Blog"), label: label, captures: ["slug"], samples: samples}
 
-  # The latest a guest may open, each with the captures that open it. The hook names no reader, and
-  # a preview is of the page a visitor is served.
+  # The latest a guest may open, in a language the site publishes in, each with the captures that
+  # open it. The hook names no reader, and a preview is of the page a visitor is served.
   defp samples(resource, name, newest, site_id) when is_binary(site_id) do
+    languages = Languages.site(site_id)
+
     resource
     |> Ash.Query.for_read(:public_list, %{}, actor: nil, tenant: site_id)
+    |> Ash.Query.filter(language in ^languages)
     |> Ash.Query.select([name, :slug, :language])
     |> Ash.Query.sort([{newest, :desc}])
     |> Ash.read(page: [limit: @samples])
