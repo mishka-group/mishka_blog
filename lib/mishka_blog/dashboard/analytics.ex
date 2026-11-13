@@ -135,9 +135,10 @@ defmodule MishkaBlog.Dashboard.Analytics do
   defp uuid(_value), do: []
 
   @doc """
-  What the filters can be set to, as `user` reads them: `%{category: [{id, name}], tag: …,
+  What the filters can be set to, as `user` reads them: `%{category: [{id, label}], tag: …,
   blogger: …, team: …}`, by name. Every one is listed, however many there are, and an archived one
-  is left out.
+  is left out. Names that repeat — a category in several languages or on several sites — are told
+  apart by their language and site: `"Travel · en · site-a"`.
   """
   @spec options(map()) :: %{atom() => [{String.t(), String.t()}]}
   def options(user) do
@@ -151,16 +152,38 @@ defmodule MishkaBlog.Dashboard.Analytics do
 
   # One read with no page size: a master read pages at 100, which cut a long list short.
   defp choices(resource, field, user) do
-    resource
-    |> Scope.query(user)
-    |> Scope.grouped(
-      &from(r in &1,
-        where: is_nil(r.archived_at),
-        order_by: field(r, ^field),
-        select: {r.id, field(r, ^field)}
-      )
-    )
+    language? = Ash.Resource.Info.attribute(resource, :language) != nil
+
+    rows =
+      resource
+      |> Scope.query(user)
+      |> Scope.grouped(fn query ->
+        from(r in query,
+          join: s in MishkaCmsCore.Runtime.Site,
+          on: s.id == r.site_id,
+          where: is_nil(r.archived_at),
+          order_by: field(r, ^field),
+          select: %{id: r.id, name: field(r, ^field), site: s.name}
+        )
+        |> with_language(language?)
+      end)
+
+    repeated = rows |> Enum.frequencies_by(& &1.name) |> Map.filter(fn {_name, n} -> n > 1 end)
+
+    Enum.map(rows, fn row ->
+      case Map.has_key?(repeated, row.name) do
+        true ->
+          hint = [row.name, Map.get(row, :language), row.site]
+          {row.id, hint |> Enum.filter(&is_binary/1) |> Enum.join(" · ")}
+
+        false ->
+          {row.id, row.name}
+      end
+    end)
   end
+
+  defp with_language(query, true), do: from([r] in query, select_merge: %{language: r.language})
+  defp with_language(query, false), do: query
 
   defp names(_resource, _field, _user, []), do: []
 

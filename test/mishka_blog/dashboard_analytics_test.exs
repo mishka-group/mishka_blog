@@ -235,6 +235,23 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
     end
   end
 
+  describe "the filter labels" do
+    test "tell repeated names apart by language and site, and leave a unique name alone" do
+      site_a = create_site!(name: "Site A")
+      site_b = create_site!(name: "Site B")
+      master = create_user_with_permissions!(["admin:dashboard:*"])
+      a = create_collection!(site_id: site_a.id, name: "Travel", language: "en")
+      b = create_collection!(site_id: site_b.id, name: "Travel", language: "de")
+      solo = create_collection!(site_id: site_a.id, name: "Solo #{System.unique_integer()}")
+
+      labels = master |> Analytics.options() |> Map.fetch!(:category) |> Map.new()
+
+      assert labels[a.id] == "Travel · en · #{site_a.name}"
+      assert labels[b.id] == "Travel · de · #{site_b.name}"
+      assert labels[solo.id] == solo.name
+    end
+  end
+
   describe "the period" do
     test "reads the URL and writes back only what is not the default" do
       id = Ecto.UUID.generate()
