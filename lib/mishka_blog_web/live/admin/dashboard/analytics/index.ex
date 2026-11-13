@@ -225,6 +225,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
         days: days
       )
 
+  defp engagement_note(0, 0, _days), do: gettext("No data")
+  defp engagement_note(_rate, 0, _days), do: gettext("New")
   defp engagement_note(rate, rate, days), do: gettext("Steady vs prev. %{days}d", days: days)
 
   defp engagement_note(rate, previous, days) when rate > previous,

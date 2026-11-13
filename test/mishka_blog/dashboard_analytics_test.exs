@@ -77,6 +77,35 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
     end
   end
 
+  describe "the engagement rate" do
+    test "is the share of views with a comment, never above all of them" do
+      assert MishkaBlog.Dashboard.Figures.rate(1, 4) == 25
+      assert MishkaBlog.Dashboard.Figures.rate(9, 1) == 100
+      assert MishkaBlog.Dashboard.Figures.rate(3, 0) == 0
+    end
+
+    test "says New, not a delta, when the window before had none" do
+      cards = fn engagement_rate, engagement_previous ->
+        %{
+          views_total: 10,
+          views_window: 10,
+          views_previous: 0,
+          visitors: 1,
+          views_today: 1,
+          views_yesterday: 0,
+          engagement_rate: engagement_rate,
+          engagement_previous: engagement_previous
+        }
+        |> Index.kpi_cards(30, %{post: true, comment: true})
+        |> List.last()
+      end
+
+      assert {"Engagement", _, _, "40%", "New", _} = cards.(40, 0)
+      assert {"Engagement", _, _, "0%", "No data", _} = cards.(0, 0)
+      assert {"Engagement", _, _, "40%", "+10 pts vs prev. 30d", _} = cards.(40, 30)
+    end
+  end
+
   describe "the page's labels" do
     test "write the chart's days and a post's publishing day" do
       assert Index.day_label(~D[2026-07-20]) == "Jul 20"

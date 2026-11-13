@@ -177,7 +177,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       assert length(Index.section_cards(stats, @both)) == 7
       assert length(Index.month_rows(stats, @both)) == 4
 
-      assert {"Engagement", _, _, "0%", "Steady vs prev. 30d", @muted} =
+      assert {"Engagement", _, _, "0%", "No data", @muted} =
                Index.kpi_cards(stats, @both) |> Enum.at(4)
 
       assert {"Analytics", _, _, _, _, [{"Total Views", "0", _}, {"Growth Rate", "No data", _}]} =
@@ -636,7 +636,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       assert {"Today's Views", _, _, "0", "No views yet today", @muted} = Enum.at(cards, 1)
       assert {"New Comments", _, _, "1", "1 pending review", _} = Enum.at(cards, 2)
       assert {"Active Bloggers", _, _, "1", "1 joined this month", @muted} = Enum.at(cards, 3)
-      assert {"Engagement", _, _, "0%", "Steady vs prev. 30d", @muted} = Enum.at(cards, 4)
+      assert {"Engagement", _, _, "0%", "No data", @muted} = Enum.at(cards, 4)
     end
   end
 

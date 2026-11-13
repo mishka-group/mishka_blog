@@ -654,6 +654,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   defp joined_note(0), do: gettext("None joined this month")
   defp joined_note(count), do: gettext("%{count} joined this month", count: count)
 
+  defp points(0, 0), do: gettext("No data")
+  defp points(_rate, 0), do: gettext("New")
   defp points(rate, rate), do: gettext("Steady vs prev. 30d")
 
   defp points(rate, previous) when rate > previous,
