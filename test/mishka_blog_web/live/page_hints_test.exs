@@ -83,7 +83,7 @@ defmodule MishkaBlogWeb.Test.PageHintsTest do
       view = open(ctx, "/admin/dashboard/blog/analytics")
 
       assert has_element?(view, "#analytics-range-30")
-      assert has_element?(view, "[data-role=analytics-chart]")
+      assert has_element?(view, "[data-role=analytics-views]")
     end
   end
 
