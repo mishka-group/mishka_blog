@@ -78,8 +78,8 @@ defmodule MishkaBlog.Dashboard.Scope do
   """
   @spec sum(Ash.Query.t(), atom()) :: non_neg_integer()
   def sum(query, field) do
-    case Ash.sum(query, field) do
-      {:ok, sum} -> sum || 0
+    case Ash.sum(query, field, default: 0) do
+      {:ok, sum} -> sum
       {:error, error} -> no_data(query, error, 0)
     end
   end
