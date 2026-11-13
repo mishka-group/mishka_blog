@@ -30,13 +30,13 @@ defmodule MishkaBlog.MixProject do
         source_url: @source_url
       ],
       # `test/support` is compiled in the test env, where `mix ci` runs dialyzer, and it calls
-      # `ExUnit`, which is not in the default PLT.
-      dialyzer: [plt_add_apps: [:ex_unit]]
+      # `ExUnit` and, from `mix mishka_blog.credence`, Mix and Credence; none is in the default PLT.
+      dialyzer: [plt_add_apps: [:mix, :ex_unit, :credence]]
     ]
   end
 
   def cli do
-    [preferred_envs: [ci: :test]]
+    [preferred_envs: [ci: :test, "mishka_blog.credence": :test]]
   end
 
   # Run "mix help compile.app" to learn about applications.
@@ -98,6 +98,8 @@ defmodule MishkaBlog.MixProject do
       {:jump_credo_checks, "~> 0.6", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
       {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
+      # `mix mishka_blog.credence` (test/support/mix/tasks) runs its pattern rules.
+      {:credence, "~> 0.8.1", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       # `mix hex.publish` builds the docs with it.
       {:ex_doc, "~> 0.40", only: :dev, runtime: false}
@@ -153,6 +155,7 @@ defmodule MishkaBlog.MixProject do
         "compile --warnings-as-errors",
         "format --check-formatted",
         "credo --strict",
+        "mishka_blog.credence",
         "sobelow --config",
         "deps.audit",
         "dialyzer",
