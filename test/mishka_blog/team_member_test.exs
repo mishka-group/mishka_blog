@@ -204,7 +204,7 @@ defmodule MishkaBlog.Test.TeamMemberTest do
 
       members = Ash.read!(TeamMember, authorize?: false)
 
-      assert length(members) >= 2
+      assert [_, _ | _] = members
       member_ids = Enum.map(members, & &1.id)
       assert member1.id in member_ids
       assert member2.id in member_ids

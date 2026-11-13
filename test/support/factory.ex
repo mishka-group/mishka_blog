@@ -163,19 +163,6 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
-  # AutoPosting factory
-  def create_auto_posting!(overrides \\ []) do
-    {site_id, overrides} = Keyword.pop(overrides, :site_id)
-
-    # AutoPosting MUST have a site_id (not global)
-    site_id = site_id || create_site!().id
-    tenant = site_id
-
-    overrides
-    |> auto_posting(tenant)
-    |> generate()
-  end
-
   # PostBlogger factory
   def create_post_blogger!(overrides \\ []) do
     {post_id, overrides} = Keyword.pop(overrides, :post_id)
@@ -306,28 +293,29 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
-  # PostView factory
-  def create_post_view!(overrides \\ []) do
-    {post_id, overrides} = Keyword.pop(overrides, :post_id)
-    {user_id, overrides} = Keyword.pop(overrides, :user_id)
+  # One day's views of a post, written as `MishkaBlog.Views` writes them: `:post` (the post record)
+  # or `:post_id`, `:views` (1), `:unique_readers` (0) and `:day` (today).
+  def create_post_views!(overrides) do
+    post =
+      Keyword.get_lazy(overrides, :post, fn ->
+        Ash.get!(MishkaBlog.BlogPost, Keyword.fetch!(overrides, :post_id),
+          action: :master_get,
+          authorize?: false
+        )
+      end)
 
-    post_id = post_id || create_blog_post!().id
-    # user_id is optional for guest views
-
-    overrides =
-      overrides
-      |> Keyword.put(:post_id, post_id)
-
-    overrides =
-      if user_id do
-        Keyword.put(overrides, :user_id, user_id)
-      else
-        overrides
-      end
-
-    overrides
-    |> post_view()
-    |> generate()
+    Ash.create!(
+      MishkaBlog.PostViewDaily,
+      %{
+        site_id: post.site_id,
+        post_id: post.id,
+        day: Keyword.get(overrides, :day, Date.utc_today()),
+        views: Keyword.get(overrides, :views, 1),
+        unique_readers: Keyword.get(overrides, :unique_readers, 0)
+      },
+      action: :record,
+      authorize?: false
+    )
   end
 
   # Comment factory

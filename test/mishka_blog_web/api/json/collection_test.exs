@@ -1046,7 +1046,7 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
 
         # Verify small collection has 3 posts
         relationship_posts2 = body2["data"]["relationships"]["tenant_posts"]["data"] || []
-        assert length(relationship_posts2) == 3
+        assert [_, _, _] = relationship_posts2
 
         # Verify the posts belong to the small collection
         relationship_post_ids2 = Enum.map(relationship_posts2, & &1["id"])
@@ -1253,7 +1253,7 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
         assert body["data"]["attributes"]["name"] == "Original Name"
 
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert length(sorted_versions) == 4
+        assert [_, _, _, _] = sorted_versions
       end
 
       test "tenant admin can get their collection with versions", %{
@@ -1289,7 +1289,7 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
         assert body["data"]["id"] == collection.id
 
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert length(sorted_versions) == 3
+        assert [_, _, _] = sorted_versions
       end
 
       test "tenant admin cannot get another site's collection with versions", %{
@@ -1386,7 +1386,7 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
         assert body["data"]["attributes"]["version_count"] == 5
 
         recent_versions = body["data"]["attributes"]["recent_versions"]
-        assert length(recent_versions) == 5
+        assert [_, _, _, _, _] = recent_versions
       end
 
       test "recent_versions limits to 10 when more exist", %{master_user: master_user, site: site} do
@@ -1466,7 +1466,7 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
 
         collection_data = List.first(body["data"])
         sorted_versions = collection_data["attributes"]["sorted_versions"]
-        assert length(sorted_versions) == 4
+        assert [_, _, _, _] = sorted_versions
       end
 
       test "tenant admin can list versions for their collection", %{
@@ -1501,7 +1501,7 @@ defmodule MishkaBlogWeb.Api.Json.CollectionTest do
 
         collection_data = List.first(body["data"])
         sorted_versions = collection_data["attributes"]["sorted_versions"]
-        assert length(sorted_versions) == 3
+        assert [_, _, _] = sorted_versions
       end
 
       test "tenant admin cannot list versions from another site's collection", %{

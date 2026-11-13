@@ -87,7 +87,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
         static={@static}
         state={@state}
         myself={@myself}
-        container_class="grid items-start gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))]"
+        container_class="grid items-stretch gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))]"
         data_role="tag-grid"
         empty_label={dgettext("mishka_gervaz", "0 tags")}
         empty_icon="hero-hashtag"
@@ -130,6 +130,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       |> assign(:accent, LanguageAccent.of(record))
       |> assign(:editions, EditionChips.editions(record))
       |> assign(:posts, count(record, :post_count))
+      |> assign(:views, count(record, :view_count))
       |> assign(
         :has_actions?,
         Gervaz.has_user_visible_actions?(
@@ -144,13 +145,13 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       id={@id}
       data-role="tagchip"
       class={[
-        "flex items-center gap-2.5 rounded-[12px] border bg-white px-[13px] py-[11px] shadow-[0_1px_2px_rgba(30,28,24,0.03)] transition-colors",
+        "flex h-full items-start gap-2.5 rounded-[12px] border bg-white px-[13px] py-[11px] shadow-[0_1px_2px_rgba(30,28,24,0.03)] transition-colors",
         (@checked? && "border-[#dcdbf5] ring-1 ring-[#5b57d6]") ||
           "border-[#ecebe6] hover:border-[#dcdbf5]",
         !@checked? && @row_class
       ]}
     >
-      <div :if={@show_checkboxes} class="flex-none">
+      <div :if={@show_checkboxes} class="flex h-6 flex-none items-center">
         <.dynamic_component
           module={@static.ui_adapter}
           function={:checkbox}
@@ -172,31 +173,53 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       </span>
 
       <div class="min-w-0 flex-1">
-        <span class="block truncate text-[12.5px] font-semibold text-[#1b1a18]">
+        <%!-- The name wraps between words on up to two lines, and a word too long for the card is cut
+              with the whole name in its title. Its views sit under it, so the counts beside it leave
+              the name its room. --%>
+        <span
+          title={@record.name}
+          class="line-clamp-2 break-normal text-[12.5px] font-semibold leading-snug text-[#1b1a18]"
+        >
           {@record.name}
+        </span>
+        <span
+          data-role="views"
+          class="mt-0.5 inline-flex items-center gap-[5px] text-[11px] font-semibold text-[#a8a5a0]"
+          title={dgettext("mishka_gervaz", "Views")}
+        >
+          <.dynamic_component
+            module={@static.ui_adapter}
+            function={:icon}
+            name="hero-eye"
+            class="size-[13px]"
+          />
+          {@views}
         </span>
 
         <%!-- A translated tag names its languages under its name instead of in the badge at the
-              end: each is the way to that edition. --%>
-        <div :if={@editions != []} class="mt-1.5">
-          <EditionChips.inline
-            id={"#{@id}-editions"}
-            record={@record}
-            editions={@editions}
-            accent={@accent}
-          />
-        </div>
+              end: each is the way to that edition. Two chips (its own language and one more) and a +N that
+              opens the rest sit on one line, so a tag in many languages keeps the card as short as
+              its neighbours, and every card of a row is as tall as the tallest. --%>
+        <EditionChips.row
+          id={@id}
+          record={@record}
+          editions={@editions}
+          accent={@accent}
+          shown={1}
+          label={false}
+          class="mt-1.5"
+        />
       </div>
 
       <span
         :if={@editions == []}
-        class="flex-none rounded-[5px] bg-[#f2f1ec] px-1.5 py-[2px] text-[8.5px] font-bold uppercase tracking-[0.05em] text-[#8a877f]"
+        class="mt-[5px] flex-none rounded-[5px] bg-[#f2f1ec] px-1.5 py-[2px] text-[8.5px] font-bold uppercase tracking-[0.05em] text-[#8a877f]"
       >
         {String.upcase(@record.language || "")}
       </span>
 
       <span class={[
-        "flex-none text-end font-['Space_Grotesk'] text-[11px] font-bold",
+        "flex-none text-end font-['Space_Grotesk'] text-[11px] font-bold leading-6",
         (@posts > 0 && "text-[#4f4bcc]") || "text-[#c3c0b8]"
       ]}>
         {@posts}
@@ -209,7 +232,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       <div
         :if={@has_actions?}
         data-role="tag-actions"
-        class="flex flex-none items-center [&_[aria-haspopup]]:size-[22px] [&_[aria-haspopup]]:rounded-md"
+        class="flex h-6 flex-none items-center [&_[aria-haspopup]]:size-[22px] [&_[aria-haspopup]]:rounded-md"
       >
         <Gervaz.render_row_actions
           row_actions={@static.row_actions}

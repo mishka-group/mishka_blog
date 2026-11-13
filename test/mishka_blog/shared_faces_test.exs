@@ -125,7 +125,7 @@ defmodule MishkaBlog.SharedFacesTest do
   defp one_colour(lists) do
     assert [colour] = Enum.uniq(lists)
 
-    assert length(colour) == 4,
+    assert [_, _, _, _] = colour,
            "a tint is the four classes of the theme's tokens: #{inspect(colour)}"
 
     colour

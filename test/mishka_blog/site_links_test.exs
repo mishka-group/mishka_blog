@@ -29,7 +29,6 @@ defmodule MishkaBlog.SiteLinksTest do
     PostCollection,
     PostRating,
     PostTag,
-    PostView,
     Tag,
     Team,
     TeamFollower,
@@ -665,30 +664,6 @@ defmodule MishkaBlog.SiteLinksTest do
         assert {:ok, _} =
                  CommentVote
                  |> Ash.Changeset.for_create(:create_for_user, vote.(user), actor: ctx.master)
-                 |> Ash.create()
-      end
-    end
-
-    test "PostView names no other site's user, and counts a master's view", ctx do
-      post = create_blog_post!(site_id: ctx.site_a.id, status: :published)
-      view = fn user, ip -> %{post_id: post.id, user_id: user.id, ip_address: ip} end
-
-      PostView
-      |> Ash.Changeset.for_create(
-        :create,
-        view.(create_user!(site_id: ctx.site_b.id), "10.3.3.1"),
-        authorize?: false
-      )
-      |> Ash.create()
-      |> assert_refused("PostView naming another site's user")
-
-      for {user, ip} <- [
-            {create_user!(site_id: ctx.site_a.id), "10.3.3.2"},
-            {create_user!(), "10.3.3.3"}
-          ] do
-        assert {:ok, _} =
-                 PostView
-                 |> Ash.Changeset.for_create(:create, view.(user, ip), tenant: ctx.site_a.id)
                  |> Ash.create()
       end
     end

@@ -271,7 +271,7 @@ defmodule MishkaBlog.Test.PostRatingTest do
 
         assert rating1.post_id in rating_post_ids
         assert rating2.post_id in rating_post_ids
-        assert length(result) == 2
+        assert [_, _] = result
       end
     end
 
@@ -377,7 +377,7 @@ defmodule MishkaBlog.Test.PostRatingTest do
             r.post_id == post.id and r.user_id == user.id
           end)
 
-        assert length(matching_ratings) == 1
+        assert [_] = matching_ratings
         # Should have the updated rating
         assert List.first(matching_ratings).rating == 5
       end

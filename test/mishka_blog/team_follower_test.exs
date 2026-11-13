@@ -191,7 +191,7 @@ defmodule MishkaBlog.Test.TeamFollowerTest do
         follows = result.results
         team_ids = Enum.map(follows, & &1.team_id) |> Enum.sort()
 
-        assert length(follows) == 2
+        assert [_, _] = follows
         assert Enum.sort([team1.id, team2.id]) == team_ids
       end
 
@@ -258,7 +258,7 @@ defmodule MishkaBlog.Test.TeamFollowerTest do
         follows = result.results
         user_ids = Enum.map(follows, & &1.follower_user_id) |> Enum.sort()
 
-        assert length(follows) == 2
+        assert [_, _] = follows
         assert Enum.sort([user1.id, user2.id]) == user_ids
       end
 

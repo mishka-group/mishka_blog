@@ -5,7 +5,7 @@
 defmodule MishkaBlog.Test.PlainTextFieldsTest do
   @moduledoc """
   The blog's plain-text fields — a post's title and subtitle, a category's, a tag's, a team's and an
-  auto-posting's name and description, a blogger's name, a comment and its guest's name and email —
+  a blogger's name, a comment and its guest's name and email —
   store what was typed, without its markup and with nothing escaped (`MishkaCmsCore.PlainText`).
   Escaping is the page's and the head's job.
   """
@@ -49,9 +49,6 @@ defmodule MishkaBlog.Test.PlainTextFieldsTest do
     test "is one the blog shows as text" do
       assert MapSet.new(plain_text_fields()) ==
                MapSet.new([
-                 {MishkaBlog.AutoPosting, :description},
-                 {MishkaBlog.AutoPosting, :name},
-                 {MishkaBlog.AutoPosting, :plugin},
                  {MishkaBlog.BlogPost, :subtitle},
                  {MishkaBlog.BlogPost, :title},
                  {MishkaBlog.Blogger, :display_name},

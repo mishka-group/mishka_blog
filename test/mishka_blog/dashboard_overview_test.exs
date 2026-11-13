@@ -54,7 +54,6 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
 
       assert added.posts_published == 3
       assert added.posts_drafts == 2
-      assert added.posts_scheduled == 1
       assert added.comments_total == 3
       assert added.bloggers_active == 2
       assert added.collections_total == 2
@@ -69,8 +68,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       create_post_collection!(post_id: post.id, collection_id: collection.id)
       create_blogger!(site_id: site.id, can_publish_directly: true)
       create_team!(site_id: site.id, status: :active)
-      create_auto_posting!(site_id: site.id, is_active: true)
-      create_post_view!(post_id: post.id)
+      create_post_views!(post_id: post.id)
 
       added = added(Overview.load(master()), before)
 
@@ -78,7 +76,6 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       assert added.bloggers_publishers == 1
       assert added.bloggers_new == 1
       assert added.teams_active == 1
-      assert added.automation_rules == 1
       assert added.views_total == 1
       assert added.views_window == 1
       assert added.month_posts == 1
@@ -95,7 +92,6 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
 
       assert a.posts_published == 2
       assert a.posts_drafts == 1
-      assert a.posts_scheduled == 1
       assert a.comments_total == 2
       assert a.bloggers_active == 1
       assert a.collections_total == 1
@@ -103,7 +99,6 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
 
       assert b.posts_published == 1
       assert b.posts_drafts == 1
-      assert b.posts_scheduled == 0
       assert b.comments_total == 1
       assert b.bloggers_active == 1
       assert b.collections_total == 1
@@ -121,9 +116,9 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       team_b = create_team!(site_id: site_b.id, status: :active)
       blogger_b = create_blogger!(site_id: site_b.id)
 
-      create_post_view!(post_id: post_a.id)
-      create_post_view!(post_id: post_a.id)
-      create_post_view!(post_id: post_b.id)
+      create_post_views!(post_id: post_a.id)
+      create_post_views!(post_id: post_a.id)
+      create_post_views!(post_id: post_b.id)
       create_post_bookmark!(post_id: post_a.id)
       create_team_member!(team_id: team_a.id, blogger_id: blogger_a.id)
       create_team_member!(team_id: team_b.id, blogger_id: blogger_b.id)
@@ -159,7 +154,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       site = create_site!()
       other = create_site!()
       create_blog_post!(site_id: other.id, status: :published)
-      create_post_view!(post_id: create_blog_post!(site_id: other.id).id)
+      create_post_views!(post_id: create_blog_post!(site_id: other.id).id)
 
       stats = Overview.load(site_admin(site.id))
 
@@ -171,8 +166,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
 
       assert stats
              |> Map.drop([:activity, :tags_top])
-             |> Map.values()
-             |> Enum.all?(&(&1 == 0))
+             |> Enum.all?(fn {_key, value} -> value == 0 end)
     end
 
     test "renders that empty scope through every presentation function" do
@@ -180,14 +174,14 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       stats = Overview.load(site_admin(site.id))
 
       assert length(Index.kpi_cards(stats, @both)) == 5
-      assert length(Index.section_cards(stats, @both)) == 8
+      assert length(Index.section_cards(stats, @both)) == 7
       assert length(Index.month_rows(stats, @both)) == 4
 
-      assert {"Engagement", _, _, "0%", "Steady vs prev. 30d", @muted} =
+      assert {"Engagement", _, _, "0%", "No data", @muted} =
                Index.kpi_cards(stats, @both) |> Enum.at(4)
 
       assert {"Analytics", _, _, _, _, [{"Total Views", "0", _}, {"Growth Rate", "No data", _}]} =
-               Index.section_cards(stats, @both) |> Enum.at(7)
+               Index.section_cards(stats, @both) |> Enum.at(6)
     end
   end
 
@@ -200,7 +194,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
 
       activity = Overview.load(site_admin(site.id)).activity
 
-      assert length(activity) == 3
+      assert [_, _, _] = activity
 
       for entry <- activity do
         assert %{kind: kind, title: title, at: %DateTime{}} = entry
@@ -544,7 +538,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
     test "give each of the three kinds load/1 emits its own dot" do
       kinds = [:post, :comment, :blogger]
 
-      assert Enum.map(kinds, &Index.activity_tone/1) |> Enum.uniq() |> length() == 3
+      assert kinds |> MapSet.new(&Index.activity_tone/1) |> MapSet.size() == 3
     end
 
     test "word a post from its status so a draft is never announced as published" do
@@ -615,7 +609,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       blank = Index.kpi_cards(nil, @both)
       loaded = Index.kpi_cards(Overview.load(master()), @both)
 
-      assert length(blank) == 5
+      assert [_, _, _, _, _] = blank
       assert length(loaded) == length(blank)
 
       for {label, icon, tone, value, note, note_tone} <- blank do
@@ -642,7 +636,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       assert {"Today's Views", _, _, "0", "No views yet today", @muted} = Enum.at(cards, 1)
       assert {"New Comments", _, _, "1", "1 pending review", _} = Enum.at(cards, 2)
       assert {"Active Bloggers", _, _, "1", "1 joined this month", @muted} = Enum.at(cards, 3)
-      assert {"Engagement", _, _, "0%", "Steady vs prev. 30d", @muted} = Enum.at(cards, 4)
+      assert {"Engagement", _, _, "0%", "No data", @muted} = Enum.at(cards, 4)
     end
   end
 
@@ -651,7 +645,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       blank = Index.section_cards(nil, @both)
       loaded = Index.section_cards(Overview.load(master()), @both)
 
-      assert length(blank) == 8
+      assert length(blank) == 7
       assert length(loaded) == length(blank)
 
       for {title, description, link, icon, tone, rows} <- blank do
@@ -675,7 +669,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
 
       assert [{"Total Tags", "0", _}, {"Most Used", "—", _}] =
                Index.section_cards(Overview.load(site_admin(site.id)), @both)
-               |> Enum.at(6)
+               |> Enum.at(5)
                |> elem(5)
     end
 
@@ -701,7 +695,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       blank = Index.month_rows(nil, @both)
       loaded = Index.month_rows(Overview.load(master()), @both)
 
-      assert length(blank) == 4
+      assert [_, _, _, _] = blank
       assert length(loaded) == length(blank)
       assert Enum.map(blank, &elem(&1, 0)) == Enum.map(loaded, &elem(&1, 0))
       assert Enum.all?(blank, &match?({_, "—", @waiting}, &1))
@@ -728,7 +722,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
     test "lists four admin destinations with exactly one primary" do
       actions = Index.quick_actions(@both)
 
-      assert length(actions) == 4
+      assert [_, _, _, _] = actions
       assert Enum.count(actions, fn {_, _, _, primary?} -> primary? end) == 1
 
       for {label, icon, path, primary?} <- actions do
@@ -748,7 +742,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
       create_blog_post!(site_id: site.id, status: :draft)
       create_comment!(site_id: site.id, post_id: post.id, status: :pending)
       create_blogger!(site_id: site.id)
-      create_post_view!(post_id: post.id)
+      create_post_views!(post_id: post.id)
 
       %{site: site}
     end
@@ -792,7 +786,10 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
     test "a holder of neither reads nothing", %{site: site} do
       stats = Overview.load(site_admin(site.id, ["admin:dashboard:runtime:page"]))
 
-      assert stats |> Map.drop([:activity, :tags_top]) |> Map.values() |> Enum.all?(&(&1 == 0))
+      assert stats
+             |> Map.drop([:activity, :tags_top])
+             |> Enum.all?(fn {_key, value} -> value == 0 end)
+
       assert stats.activity == []
     end
   end
@@ -815,7 +812,7 @@ defmodule MishkaBlog.Dashboard.OverviewTest do
                ["Today's Posts", "Today's Views", "Active Bloggers"]
 
       assert "Comments" not in labels(Index.section_cards(nil, @editor))
-      assert length(Index.section_cards(nil, @editor)) == 7
+      assert length(Index.section_cards(nil, @editor)) == 6
       assert labels(Index.month_rows(nil, @editor)) == ["Posts Published", "Total Views"]
 
       assert labels(Index.quick_actions(@editor)) ==

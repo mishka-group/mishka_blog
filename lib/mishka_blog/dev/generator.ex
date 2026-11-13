@@ -100,8 +100,6 @@ defmodule MishkaBlog.Dev.Generator do
     "documentation coverage"
   ]
 
-  @auto_posting_plugins ["twitter", "linkedin", "mastodon", "bluesky", "rss_feed"]
-
   @user_agents [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -279,24 +277,6 @@ defmodule MishkaBlog.Dev.Generator do
     )
   end
 
-  def auto_posting(opts \\ [], tenant \\ nil) do
-    changeset_generator(
-      MishkaBlog.AutoPosting,
-      :create,
-      authorize?: false,
-      defaults: [
-        name: sequence(:name, &"Test Auto Posting #{&1}"),
-        plugin: sequence(:plugin, &"test_plugin_#{&1}"),
-        description: sequence(:description, &"Test auto posting description #{&1}"),
-        is_active: false,
-        config: %{},
-        site_id: nil
-      ],
-      overrides: opts,
-      tenant: tenant
-    )
-  end
-
   def post_blogger(opts \\ []) do
     changeset_generator(
       MishkaBlog.PostBlogger,
@@ -382,22 +362,6 @@ defmodule MishkaBlog.Dev.Generator do
       defaults: [
         post_id: nil,
         tag_id: nil
-      ],
-      overrides: opts
-    )
-  end
-
-  def post_view(opts \\ []) do
-    changeset_generator(
-      MishkaBlog.PostView,
-      :create,
-      authorize?: false,
-      defaults: [
-        post_id: nil,
-        user_id: nil,
-        ip_address: sequence(:ip_address, &"192.168.1.#{rem(&1, 255)}"),
-        user_agent: "Mozilla/5.0 Test Browser",
-        referer: nil
       ],
       overrides: opts
     )
@@ -701,34 +665,8 @@ defmodule MishkaBlog.Dev.Generator do
     )
   end
 
-  def dev_auto_posting(opts \\ [], tenant \\ nil) do
-    changeset_generator(
-      MishkaBlog.AutoPosting,
-      :create,
-      authorize?: false,
-      uses: %{
-        seq: sequence(:dev_auto_posting_seq, & &1),
-        is_active: StreamData.boolean()
-      },
-      defaults: fn %{seq: seq, is_active: is_active} ->
-        plugin = Enum.at(@auto_posting_plugins, rem(seq, length(@auto_posting_plugins)))
-
-        [
-          name: "#{String.capitalize(plugin)} Auto Posting #{seq}",
-          plugin: plugin,
-          description: "Automatically share new posts to #{String.capitalize(plugin)}",
-          is_active: is_active,
-          config: %{"schedule" => "daily", "max_posts" => 5},
-          site_id: nil
-        ]
-      end,
-      overrides: opts,
-      tenant: tenant
-    )
-  end
-
   @doc """
-  A plausible browser user agent, used by the seeds when writing post-view rows.
+  A plausible browser user agent, for the sender data the seeds write.
   """
   def user_agent, do: Enum.random(@user_agents)
 

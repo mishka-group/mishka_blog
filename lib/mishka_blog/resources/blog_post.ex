@@ -1045,6 +1045,25 @@ defmodule MishkaBlog.BlogPost do
           end
         end
 
+        # Asked for only while the status is Scheduled: the time a scheduled post goes out.
+        field :scheduled_publish_at, :datetime do
+          visible fn
+            %{form: %Phoenix.HTML.Form{} = form} ->
+              to_string(Phoenix.HTML.Form.input_value(form, :status)) == "scheduled"
+
+            _no_form ->
+              false
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Publish At") end
+
+            description fn ->
+              dgettext("mishka_gervaz", "When the post is published, in UTC.")
+            end
+          end
+        end
+
         field :language, :combobox do
           options fn ->
             case Ecto.Adapters.SQL.query(
@@ -1357,6 +1376,7 @@ defmodule MishkaBlog.BlogPost do
             :title,
             :slug,
             :status,
+            :scheduled_publish_at,
             :language,
             :site_id,
             :language_group_id,
@@ -1443,8 +1463,7 @@ defmodule MishkaBlog.BlogPost do
     field :published_at, :utc_datetime,
       derives: "validate(optional=[utc_datetime, past_datetime])"
 
-    field :scheduled_publish_at, :utc_datetime,
-      derives: "validate(optional=[utc_datetime, future_datetime])"
+    field :scheduled_publish_at, :utc_datetime, derives: "validate(optional=[utc_datetime])"
 
     field :schema, {:array, :map}, derives: "validate(list)"
     field :seo_tags, {:array, :map}, derives: "validate(list)"
@@ -2673,6 +2692,16 @@ defmodule MishkaBlog.BlogPost do
               read_action: :read_any},
              on: [:create],
              before_action?: true
+
+    # A scheduled time still to come, said with the form's own label for the field.
+    validate compare(:scheduled_publish_at, greater_than_or_equal_to: &DateTime.utc_now/0),
+      where: [present(:scheduled_publish_at), changing(:scheduled_publish_at)],
+      message: dgettext_noop("errors", "Publish At must be in the future.")
+
+    # A blogger without Can Publish Directly saves a draft for an editor to publish.
+    validate MishkaBlog.Resources.Validations.PublishDirectly,
+      on: [:create, :update],
+      before_action?: true
   end
 
   # Multi-tenancy configuration - blog posts are always site-specific
@@ -3031,10 +3060,10 @@ defmodule MishkaBlog.BlogPost do
       description "User ratings for this blog post (for schema.org structured data)"
     end
 
-    has_many :views, MishkaBlog.PostView do
+    has_many :views, MishkaBlog.PostViewDaily do
       public? true
       destination_attribute :post_id
-      description "Page views for this blog post"
+      description "This post's views, one row per day"
     end
 
     # VERSION MANAGEMENT - sorted_versions relationship for loading version history
@@ -3058,10 +3087,15 @@ defmodule MishkaBlog.BlogPost do
     calculate :listed_at,
               :utc_datetime_usec,
               expr(
-                if status == :scheduled and not is_nil(scheduled_publish_at) do
-                  scheduled_publish_at
-                else
-                  if is_nil(published_at), do: inserted_at, else: published_at
+                cond do
+                  status == :scheduled and not is_nil(scheduled_publish_at) ->
+                    scheduled_publish_at
+
+                  is_nil(published_at) ->
+                    inserted_at
+
+                  true ->
+                    published_at
                 end
               )
 
@@ -3141,8 +3175,9 @@ defmodule MishkaBlog.BlogPost do
       description "Total number of bloggers/authors for this post"
     end
 
-    count :view_count, :views do
+    sum :view_count, :views, :views do
       public? true
+      default 0
     end
 
     avg :rating_average, :ratings, :rating do

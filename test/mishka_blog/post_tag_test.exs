@@ -270,7 +270,7 @@ defmodule MishkaBlog.Test.PostTagTest do
         all_assignments = Ash.read!(PostTag, authorize?: false)
         post_tags = Enum.filter(all_assignments, fn a -> a.post_id == post.id end)
 
-        assert length(post_tags) == 3
+        assert [_, _, _] = post_tags
       end
 
       test "tag can be used across multiple posts" do
@@ -290,7 +290,7 @@ defmodule MishkaBlog.Test.PostTagTest do
         all_assignments = Ash.read!(PostTag, authorize?: false)
         tag_posts = Enum.filter(all_assignments, fn a -> a.tag_id == tag.id end)
 
-        assert length(tag_posts) >= 3
+        assert [_, _, _ | _] = tag_posts
       end
     end
 
@@ -314,7 +314,7 @@ defmodule MishkaBlog.Test.PostTagTest do
             a.post_id == post.id and a.tag_id == tag.id
           end)
 
-        assert length(matching_assignments) == 1
+        assert [_] = matching_assignments
       end
     end
   end

@@ -53,12 +53,40 @@ defmodule MishkaBlog.Workers.PublishScheduledWorkerTest do
     %{status: status, published_at: published_at, scheduled_publish_at: scheduled_publish_at}
   end
 
+  defp register_published_probe do
+    probe = MishkaBlog.Test.Plugins.BlogPostPublishedProbe
+
+    {:ok, _} =
+      MishkaInstaller.Event.Event.write(%{
+        name: probe,
+        event: "blog:post:published",
+        extension: :mishka_installer,
+        status: :started
+      })
+
+    :ok = MishkaInstaller.Event.EventHandler.do_compile("blog:post:published", :start, false)
+    on_exit(fn -> MishkaInstaller.Event.Event.unregister(:name, probe, false) end)
+  end
+
   defp run!, do: assert(:ok = PublishScheduledWorker.perform(%Oban.Job{args: %{}}))
 
   defp same_second?(%NaiveDateTime{} = naive, %DateTime{} = at),
     do: NaiveDateTime.compare(naive, DateTime.to_naive(at)) == :eq
 
   describe "a run" do
+    test "fires blog:post:published for the post it publishes" do
+      Process.register(self(), :__blog_hook_probe__)
+      register_published_probe()
+      site = create_site!()
+      due = with_schedule_check_off(fn -> scheduled!(site, -5) end)
+
+      run!()
+
+      due_id = due.id
+      site_id = site.id
+      assert_receive {:blog_post_published, ^due_id, ^site_id}
+    end
+
     test "publishes a due post at its scheduled time and clears its schedule" do
       site = create_site!()
       due = with_schedule_check_off(fn -> scheduled!(site, -5) end)

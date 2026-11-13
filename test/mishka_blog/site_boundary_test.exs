@@ -17,7 +17,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
   alias MishkaBlog.Resources.Changes.RestoreVersion
 
   alias MishkaBlog.{
-    AutoPosting,
     Blogger,
     BlogPost,
     Collection,
@@ -28,7 +27,7 @@ defmodule MishkaBlog.SiteBoundaryTest do
     PostCollection,
     PostRating,
     PostTag,
-    PostView,
+    PostViewDaily,
     Tag,
     Team,
     TeamFollower,
@@ -97,7 +96,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
       case record do
         %Blogger{} -> %{slug: "aside-#{unique}", user_id: create_user!().id}
         %Team{} -> %{slug: "aside-#{unique}"}
-        %AutoPosting{} -> %{plugin: "aside_#{unique}"}
         _with_language_group -> %{slug: "aside-#{unique}", language: "de"}
       end
 
@@ -480,32 +478,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
 
       assert updated.author_id == user_a.id
     end
-
-    test "PostView :create refuses another site's user as the viewer", ctx do
-      post_a = create_blog_post!(site_id: ctx.site_a.id, status: :published)
-      user_b = create_user!(site_id: ctx.site_b.id)
-      user_a = create_user!(site_id: ctx.site_a.id)
-
-      refused =
-        PostView
-        |> Ash.Changeset.for_create(
-          :create,
-          %{post_id: post_a.id, user_id: user_b.id, ip_address: "10.2.2.2"},
-          tenant: ctx.site_a.id
-        )
-        |> Ash.create()
-
-      assert {:error, _} = refused
-
-      assert {:ok, _} =
-               PostView
-               |> Ash.Changeset.for_create(
-                 :create,
-                 %{post_id: post_a.id, user_id: user_a.id, ip_address: "10.2.2.3"},
-                 tenant: ctx.site_a.id
-               )
-               |> Ash.create()
-    end
   end
 
   describe "a site admin keeps its own site's rows whatever state their parent is in" do
@@ -526,7 +498,7 @@ defmodule MishkaBlog.SiteBoundaryTest do
         PostCollection => create_post_collection!(post_id: post.id, collection_id: collection.id),
         TeamPermission => create_team_permission!(team_id: team.id),
         TeamMember => create_team_member!(team_id: team.id, blogger_id: blogger.id),
-        PostView => create_post_view!(post_id: post.id),
+        PostViewDaily => create_post_views!(post: post),
         TeamFollower => create_team_follower!(team_id: team.id, actor: visitor),
         PostBookmark => create_post_bookmark!(post_id: post.id, actor: visitor),
         PostRating => create_post_rating!(post_id: post.id, actor: visitor),
@@ -568,7 +540,7 @@ defmodule MishkaBlog.SiteBoundaryTest do
                "#{inspect(resource)} hid a site admin's own row once its parent was archived"
       end
 
-      for {resource, row} <- ctx.own_rows, resource != PostView do
+      for {resource, row} <- ctx.own_rows, resource != PostViewDaily do
         assert :ok = Ash.destroy(row, opts),
                "#{inspect(resource)} refused a site admin its own row once its parent was archived"
       end
@@ -672,7 +644,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
       comment_b = create_comment!(site_id: b, post_id: ctx.post_b.id)
 
       records = %{
-        AutoPosting => create_auto_posting!(site_id: b),
         BlogPost => create_blog_post!(site_id: b, status: :draft),
         Blogger => ctx.blogger_b,
         Collection => create_collection!(site_id: b),
@@ -707,7 +678,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
       b = ctx.site_b.id
 
       records = %{
-        AutoPosting => create_auto_posting!(site_id: b),
         BlogPost => create_blog_post!(site_id: b, status: :draft),
         Blogger => ctx.blogger_b,
         Collection => create_collection!(site_id: b),
@@ -755,7 +725,7 @@ defmodule MishkaBlog.SiteBoundaryTest do
           create_post_collection!(post_id: post_b.id, collection_id: collection_b.id),
         TeamPermission => create_team_permission!(team_id: team_b.id),
         TeamMember => create_team_member!(team_id: team_b.id, blogger_id: blogger_b.id),
-        PostView => create_post_view!(post_id: post_b.id, ip_address: "10.9.8.7"),
+        PostViewDaily => create_post_views!(post: post_b),
         TeamFollower => create_team_follower!(team_id: team_b.id, actor: user_b),
         PostBookmark => create_post_bookmark!(post_id: post_b.id, actor: user_b),
         PostRating => create_post_rating!(post_id: post_b.id, actor: user_b),
@@ -800,7 +770,7 @@ defmodule MishkaBlog.SiteBoundaryTest do
     end
 
     test "a site user holding * destroys none of another site's rows", ctx do
-      for {resource, row_b} <- ctx.rows_b, resource != PostView do
+      for {resource, row_b} <- ctx.rows_b, resource != PostViewDaily do
         assert {:error, _} = Ash.destroy(row_b, actor: ctx.admin_a),
                "#{inspect(resource)} let a site user destroy another site's row"
       end
@@ -820,7 +790,8 @@ defmodule MishkaBlog.SiteBoundaryTest do
          %{team_id: ctx.team_b.id, permission_id: create_permission!().id}},
         {TeamMember, :assign, %{team_id: ctx.team_a.id, blogger_id: ctx.blogger_b.id}},
         {TeamMember, :assign, %{team_id: ctx.team_b.id, blogger_id: ctx.blogger_a.id}},
-        {PostView, :create, %{post_id: ctx.post_b.id, ip_address: "10.1.1.1"}}
+        {PostViewDaily, :record,
+         %{site_id: ctx.site_b.id, post_id: ctx.post_b.id, day: Date.utc_today(), views: 1}}
       ]
 
       for {resource, action, params} <- writes do
@@ -882,7 +853,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
           {Collection, Collection.Version, :create_collection!, :name},
           {Blogger, Blogger.Version, :create_blogger!, :display_name},
           {Team, Team.Version, :create_team!, :name},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :name},
           {BlogPost, BlogPost.Version, :create_blog_post!, :title}
         ] do
       test "#{inspect(resource)}: a site user cannot restore another site's version", ctx do
@@ -956,8 +926,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
           {Collection, Collection.Version, :create_collection!, :name, {:read, :collection_id}},
           {Blogger, Blogger.Version, :create_blogger!, :display_name, {:action, :blogger_id}},
           {Team, Team.Version, :create_team!, :name, {:action, :team_id}},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :name,
-           {:action, :auto_posting_id}},
           {BlogPost, BlogPost.Version, :create_blog_post!, :title, {:action, :post_id}}
         ] do
       test "#{inspect(resource)}: a site user naming another site cannot preview its version",
@@ -1095,8 +1063,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
           {Collection, Collection.Version, :create_collection!, :name, {:read, :collection_id}},
           {Blogger, Blogger.Version, :create_blogger!, :display_name, {:action, :blogger_id}},
           {Team, Team.Version, :create_team!, :name, {:action, :team_id}},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :name,
-           {:action, :auto_posting_id}},
           {BlogPost, BlogPost.Version, :create_blog_post!, :title, {:action, :post_id}}
         ] do
       test "#{inspect(resource)}: its preview shows the record as it is and its restore changes nothing",
@@ -1207,7 +1173,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
     for {resource, version, factory, field, record_argument} <- [
           {Blogger, Blogger.Version, :create_blogger!, :display_name, :blogger_id},
           {Team, Team.Version, :create_team!, :name, :team_id},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :name, :auto_posting_id},
           {BlogPost, BlogPost.Version, :create_blog_post!, :title, :post_id}
         ],
         {action, scope} <- [
@@ -1284,7 +1249,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
     for {resource, version, factory, record_argument} <- [
           {Blogger, Blogger.Version, :create_blogger!, :blogger_id},
           {Team, Team.Version, :create_team!, :team_id},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :auto_posting_id},
           {BlogPost, BlogPost.Version, :create_blog_post!, :post_id}
         ] do
       test "#{inspect(resource)}: a user without the blog permission gets no preview", ctx do
@@ -1344,8 +1308,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
            "collection"},
           {Blogger, Blogger.Version, :create_blogger!, {:action, :blogger_id}, "blogger profile"},
           {Team, Team.Version, :create_team!, {:action, :team_id}, "team"},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, {:action, :auto_posting_id},
-           "auto-posting configuration"},
           {BlogPost, BlogPost.Version, :create_blog_post!, {:action, :post_id}, "blog post"}
         ] do
       test "#{inspect(resource)}: a restore through the API and a preview name the record", ctx do
@@ -1473,7 +1435,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
           {Collection.Version, :create_collection!},
           {Blogger.Version, :create_blogger!},
           {Team.Version, :create_team!},
-          {AutoPosting.Version, :create_auto_posting!},
           {BlogPost.Version, :create_blog_post!}
         ] do
       test "#{inspect(version)}: a site user reads its own site's versions only", ctx do
@@ -1516,7 +1477,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
           {Collection, Collection.Version, :create_collection!},
           {Blogger, Blogger.Version, :create_blogger!},
           {Team, Team.Version, :create_team!},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!},
           {BlogPost, BlogPost.Version, :create_blog_post!}
         ] do
       test "#{inspect(resource)}: a site admin and a master read a record's own history", ctx do
@@ -1547,7 +1507,6 @@ defmodule MishkaBlog.SiteBoundaryTest do
           {Collection, Collection.Version, :create_collection!, :collection_id},
           {Blogger, Blogger.Version, :create_blogger!, :blogger_id},
           {Team, Team.Version, :create_team!, :team_id},
-          {AutoPosting, AutoPosting.Version, :create_auto_posting!, :auto_posting_id},
           {BlogPost, BlogPost.Version, :create_blog_post!, :post_id}
         ] do
       test "#{inspect(resource)}: a site admin and a master list a record's own history", ctx do

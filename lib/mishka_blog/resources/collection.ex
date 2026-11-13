@@ -235,7 +235,7 @@ defmodule MishkaBlog.Collection do
         # list read, and a single-row re-read — which is what selecting a card does — would come back
         # without them, so the card's language row would vanish the moment it was ticked.
         preload do
-          always [:site, :version_count, :post_count]
+          always [:site, :version_count, :post_count, :view_count]
           tenant [:parent_collection, :language_variants]
 
           master master_parent_collection: :parent_collection,
@@ -395,6 +395,7 @@ defmodule MishkaBlog.Collection do
             :status,
             :archived_at,
             :post_count,
+            :view_count,
             :version_count,
             :language,
             :language_group_id,
@@ -416,6 +417,7 @@ defmodule MishkaBlog.Collection do
             assigns = %{
               record: record,
               post_count: record.post_count || 0,
+              view_count: record.view_count || 0,
               version_count: record.version_count || 0,
               language: record.language,
               featured: record.featured,
@@ -425,6 +427,10 @@ defmodule MishkaBlog.Collection do
 
             ~H"""
             <div class="flex flex-wrap items-center gap-x-[11px] gap-y-1.5 text-[11.5px] font-semibold text-[#8a877f]">
+              <span class="inline-flex items-center gap-[5px]" title={dgettext("mishka_gervaz", "Views")}>
+                <.icon name="hero-eye" class="size-[13px] text-[#c3c0b8]" />
+                {@view_count}
+              </span>
               <span class="inline-flex items-center gap-[5px]" title={gettext("Posts")}>
                 <.icon name="hero-document-text" class="size-[13px] text-[#c3c0b8]" />
                 {@post_count}
@@ -2182,6 +2188,15 @@ defmodule MishkaBlog.Collection do
   end
 
   aggregates do
+    # Every view of every post it holds, the sum of their days (`MishkaBlog.PostViewDaily`): read with
+    # the page of rows it is shown on, in the same query.
+    sum :view_count, [:tenant_posts, :views], :views do
+      public? true
+      multitenancy :bypass
+      default 0
+      description "How many times its posts were read"
+    end
+
     count :post_count, :tenant_posts do
       public? true
       multitenancy :bypass

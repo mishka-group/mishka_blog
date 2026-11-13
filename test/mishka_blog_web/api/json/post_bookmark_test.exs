@@ -443,7 +443,7 @@ defmodule MishkaBlogWeb.Api.Json.PostBookmarkTest do
 
         # Verify we got bookmarks (ordering may vary based on default sort)
         bookmark_ids = Enum.map(body["data"], & &1["id"])
-        assert length(bookmark_ids) == 2
+        assert [_, _] = bookmark_ids
       end
     end
 

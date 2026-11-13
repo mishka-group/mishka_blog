@@ -113,7 +113,7 @@ defmodule MishkaBlog.Test.TeamTest do
         team_ids = Enum.map(teams, & &1.id) |> Enum.sort()
 
         # Should only return active teams
-        assert length(teams) == 2
+        assert [_, _] = teams
         assert Enum.sort([active1.id, active2.id]) == team_ids
       end
 
@@ -161,7 +161,7 @@ defmodule MishkaBlog.Test.TeamTest do
         teams = result.results
 
         # Should only see site1 teams
-        assert length(teams) == 1
+        assert [_] = teams
         assert Enum.at(teams, 0).id == site1_team.id
       end
 
@@ -611,7 +611,7 @@ defmodule MishkaBlog.Test.TeamTest do
           |> Ash.Query.set_tenant(site1.id)
           |> Ash.read!(authorize?: false)
 
-        assert length(teams) == 1
+        assert [_] = teams
         assert Enum.at(teams, 0).id == team1.id
       end
 
@@ -628,7 +628,7 @@ defmodule MishkaBlog.Test.TeamTest do
           |> Ash.read!(page: [limit: 100])
 
         teams = result.results
-        assert length(teams) >= 2
+        assert [_, _ | _] = teams
       end
 
       test "master_get retrieves team by ID bypassing tenant" do
@@ -897,7 +897,7 @@ defmodule MishkaBlog.Test.TeamTest do
         permission_ids = Enum.map(team_with_perms.permissions, & &1.id)
         assert permission1.id in permission_ids
         assert permission2.id in permission_ids
-        assert length(permission_ids) == 2
+        assert [_, _] = permission_ids
       end
 
       test "updates team permissions" do
@@ -928,7 +928,7 @@ defmodule MishkaBlog.Test.TeamTest do
         assert permission2.id in permission_ids
         assert permission3.id in permission_ids
         assert permission1.id not in permission_ids
-        assert length(permission_ids) == 2
+        assert [_, _] = permission_ids
       end
 
       test "removes all permissions when empty array provided" do
@@ -1041,7 +1041,7 @@ defmodule MishkaBlog.Test.TeamTest do
         member_ids = Enum.map(team_with_members.members.results, & &1.id)
         assert blogger1.id in member_ids
         assert blogger2.id in member_ids
-        assert length(member_ids) == 2
+        assert [_, _] = member_ids
       end
 
       test "updates team members" do
@@ -1080,7 +1080,7 @@ defmodule MishkaBlog.Test.TeamTest do
         assert blogger2.id in member_ids
         assert blogger3.id in member_ids
         assert blogger1.id not in member_ids
-        assert length(member_ids) == 2
+        assert [_, _] = member_ids
       end
 
       test "removes all members when empty array provided" do
@@ -1180,7 +1180,7 @@ defmodule MishkaBlog.Test.TeamTest do
         assert blogger2.id in member_ids
         assert blogger3.id in member_ids
         assert blogger1.id not in member_ids
-        assert length(member_ids) == 2
+        assert [_, _] = member_ids
       end
 
       test "can add both permissions and members in same operation" do
@@ -1336,7 +1336,7 @@ defmodule MishkaBlog.Test.TeamTest do
           |> Ash.read!()
 
         teams = result.results
-        assert length(teams) == 1
+        assert [_] = teams
 
         first_team = List.first(teams)
         assert first_team.id == team.id
@@ -1381,7 +1381,7 @@ defmodule MishkaBlog.Test.TeamTest do
           |> Ash.read!(authorize?: false)
 
         teams = result.results
-        assert length(teams) == 1
+        assert [_] = teams
 
         first_team = List.first(teams)
         assert first_team.id == team.id

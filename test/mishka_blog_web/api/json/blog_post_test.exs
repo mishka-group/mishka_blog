@@ -2106,7 +2106,7 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
 
         # Verify each relationship respects its own pagination limit
-        assert length(collection_records) == 5
+        assert [_, _, _, _, _] = collection_records
         assert length(tag_records) == 8
         assert length(comment_records) == 12
         assert length(user_records) == 12
@@ -2708,7 +2708,7 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         assert post_en.id in ids
         assert post_es.id in ids
         # Should only contain posts from same language group
-        assert length(ids) == 2
+        assert [_, _] = ids
       end
 
       test "master admin can list language variants across all sites", %{
@@ -3149,7 +3149,7 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         # Check sorted_versions in attributes
         sorted_versions = body["data"]["attributes"]["sorted_versions"]
-        assert length(sorted_versions) >= 3
+        assert [_, _, _ | _] = sorted_versions
       end
 
       test "tenant admin cannot get post with versions from another site", %{
@@ -3230,7 +3230,7 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         assert response1.status == 200
         body1 = Jason.decode!(response1.resp_body)
         sorted_versions1 = body1["data"]["attributes"]["sorted_versions"]
-        assert length(sorted_versions1) >= 2
+        assert [_, _ | _] = sorted_versions1
 
         # Get site2 post with versions
         response2 =
@@ -3321,7 +3321,7 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         # Check recent_versions calculation (should return up to 10)
         recent_versions = body["data"]["attributes"]["recent_versions"]
-        assert length(recent_versions) >= 5
+        assert [_, _, _, _, _ | _] = recent_versions
 
         # Verify they're sorted descending (newest first)
         contents = Enum.map(recent_versions, & &1["changes"]["content"])
@@ -3382,7 +3382,7 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         assert latest["changes"]["content"] == "V3"
 
         recent = body["data"]["attributes"]["recent_versions"]
-        assert length(recent) >= 3
+        assert [_, _, _ | _] = recent
       end
 
       test "recent_versions limits to 10 versions when more exist", %{
@@ -3495,7 +3495,7 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
         # Check the versions inside the post
         post_data = List.first(body["data"])
         sorted_versions = post_data["attributes"]["sorted_versions"]
-        assert length(sorted_versions) >= 4
+        assert [_, _, _, _ | _] = sorted_versions
       end
 
       test "tenant admin cannot list versions for post from another site", %{
@@ -3567,7 +3567,7 @@ defmodule MishkaBlogWeb.Api.Json.BlogPostTest do
 
         post_data = List.first(body["data"])
         sorted_versions = post_data["attributes"]["sorted_versions"]
-        assert length(sorted_versions) >= 2
+        assert [_, _ | _] = sorted_versions
       end
     end
 

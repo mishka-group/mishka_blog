@@ -131,7 +131,7 @@ defmodule MishkaBlog.Test.BloggerFollowerTest do
             f.blogger_id == blogger.id and f.follower_user_id == user.id
           end)
 
-        assert length(matching_follows) == 1
+        assert [_] = matching_follows
       end
 
       test "requires blogger_id and follower_user_id" do
@@ -178,7 +178,7 @@ defmodule MishkaBlog.Test.BloggerFollowerTest do
 
         all_follows = Ash.read!(BloggerFollower, authorize?: false)
 
-        assert length(all_follows) >= 2
+        assert [_, _ | _] = all_follows
         assert Enum.any?(all_follows, fn f -> f.id == follow1.id end)
         assert Enum.any?(all_follows, fn f -> f.id == follow2.id end)
       end
@@ -206,7 +206,7 @@ defmodule MishkaBlog.Test.BloggerFollowerTest do
         user_follows = result.results
         user_follow_ids = Enum.map(user_follows, & &1.id)
 
-        assert length(user_follows) == 2
+        assert [_, _] = user_follows
         assert follow1.id in user_follow_ids
         assert follow2.id in user_follow_ids
       end
@@ -233,7 +233,7 @@ defmodule MishkaBlog.Test.BloggerFollowerTest do
         blogger_followers = result.results
         follower_ids = Enum.map(blogger_followers, & &1.id)
 
-        assert length(blogger_followers) == 2
+        assert [_, _] = blogger_followers
         assert follow1.id in follower_ids
         assert follow2.id in follower_ids
       end
@@ -260,7 +260,7 @@ defmodule MishkaBlog.Test.BloggerFollowerTest do
         follower_ids = Enum.map(followers, & &1.id)
 
         # Verify we have exactly 3 followers
-        assert length(followers) == 3
+        assert [_, _, _] = followers
         assert follow1.id in follower_ids
         assert follow2.id in follower_ids
         assert follow3.id in follower_ids
@@ -444,7 +444,7 @@ defmodule MishkaBlog.Test.BloggerFollowerTest do
             f.blogger_id == blogger.id and f.follower_user_id == user.id
           end)
 
-        assert length(matching_follows) == 1
+        assert [_] = matching_follows
       end
     end
 

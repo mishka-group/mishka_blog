@@ -2773,7 +2773,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
         |> Enum.map(&(&1 |> LazyHTML.attribute("id")))
         |> List.flatten()
 
-      assert length(marked) == 1
+      assert [_] = marked
     end
   end
 
@@ -3694,7 +3694,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       assert squished(view, ~s([data-role="blog-list-featured"])) == ["★ Featured"]
 
       links = hrefs(view, ~s([data-role="blog-list-item"] a))
-      assert length(links) == 3, "a card holds more than the one link over it"
+      assert [_, _, _] = links, "a card holds more than the one link over it"
       assert hd(links) == "/blog/#{post.slug}"
     end
 
@@ -4165,7 +4165,7 @@ defmodule MishkaBlog.LiveComponentsRenderTest do
       head =
         tint.(own_page, ~s([data-role="blog-author-card"] [data-role="blog-profile-initial"]))
 
-      assert length(card) == 4, "the tint is not the four classes of the theme's tokens"
+      assert [_, _, _, _] = card, "the tint is not the four classes of the theme's tokens"
       assert card == faces
       assert card == head
     end

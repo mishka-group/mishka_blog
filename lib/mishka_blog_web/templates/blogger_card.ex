@@ -148,6 +148,7 @@ defmodule MishkaBlogWeb.Templates.BloggerCard do
       |> assign(:expertise, Enum.take(expertise, @expertise_shown))
       |> assign(:expertise_rest, length(expertise) - @expertise_shown)
       |> assign(:posts, count(record, :post_count))
+      |> assign(:views, count(record, :view_count))
       |> assign(:followers, count(record, :follower_count))
       |> assign(:site, CardRecord.site_name(record, state))
       |> assign(
@@ -245,6 +246,20 @@ defmodule MishkaBlogWeb.Templates.BloggerCard do
             the footer to the card's bottom so every card in the track shares a baseline. --%>
       <div class="mt-auto flex items-center gap-2 border-t border-[#f4f3ee] pt-3.5">
         <div class="flex min-w-0 items-center gap-4">
+          <span
+            data-role="views"
+            class="inline-flex flex-none items-center gap-[5px] text-[11px] font-semibold text-[#a8a5a0]"
+            title={dgettext("mishka_gervaz", "Views")}
+          >
+            <.dynamic_component
+              module={@static.ui_adapter}
+              function={:icon}
+              name="hero-eye"
+              class="size-[13px]"
+            />
+            {@views}
+          </span>
+
           <span class="inline-flex items-center gap-[5px] text-[11px] font-semibold text-[#a8a5a0]">
             <.dynamic_component
               module={@static.ui_adapter}

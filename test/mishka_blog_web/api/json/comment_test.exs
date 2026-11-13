@@ -935,7 +935,7 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
         body = Jason.decode!(response.resp_body)
 
         user_records = Enum.filter(body["included"], fn inc -> inc["type"] == "user" end)
-        assert length(user_records) == 1
+        assert [_] = user_records
 
         # An admin still gets the account, as the moderation screens need it.
         assert hd(user_records)["attributes"]["email"] == to_string(regular_user.email)
@@ -1167,7 +1167,7 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
 
         # Verify parent is included
         comment_records = Enum.filter(body["included"], fn inc -> inc["type"] == "comment" end)
-        assert length(comment_records) == 1
+        assert [_] = comment_records
 
         parent_record = Enum.at(comment_records, 0)
         assert parent_record["id"] == parent.id
@@ -1219,7 +1219,7 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
 
         # Verify replies are included
         reply_records = Enum.filter(body["included"], fn inc -> inc["type"] == "comment" end)
-        assert length(reply_records) == 5
+        assert [_, _, _, _, _] = reply_records
 
         included_reply_ids = Enum.map(reply_records, & &1["id"])
         Enum.each(reply_ids, fn id -> assert id in included_reply_ids end)
@@ -1271,12 +1271,12 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
 
         # Verify replies are included
         comment_records = Enum.filter(body["included"], fn inc -> inc["type"] == "comment" end)
-        assert length(comment_records) == 3
+        assert [_, _, _] = comment_records
 
         # Reply IDs should match
         included_reply_ids = Enum.map(comment_records, & &1["id"])
         # Each of our created users should have a reply
-        assert length(included_reply_ids) == 3
+        assert [_, _, _] = included_reply_ids
       end
     end
 
@@ -1468,7 +1468,7 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
             comment["attributes"]["status"] == "approved"
           end)
 
-        assert length(approved_comments) >= 5
+        assert [_, _, _, _, _ | _] = approved_comments
       end
 
       test "public only sees approved comments", %{site: site} do
@@ -1533,7 +1533,7 @@ defmodule MishkaBlogWeb.Api.Json.CommentTest do
             comment["attributes"]["is_pinned"] == true
           end)
 
-        assert length(pinned_comments) >= 3
+        assert [_, _, _ | _] = pinned_comments
       end
     end
   end

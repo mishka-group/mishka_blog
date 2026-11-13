@@ -241,7 +241,7 @@ defmodule MishkaBlog.Team do
 
       source do
         preload do
-          always [:site, :version_count, :member_count, :follower_count]
+          always [:site, :version_count, :member_count, :follower_count, :view_count]
           tenant tenant_members: :members
           master master_members: :members
         end
@@ -382,7 +382,7 @@ defmodule MishkaBlog.Team do
 
         column :stats_info do
           static true
-          requires [:member_count, :follower_count, :version_count]
+          requires [:member_count, :view_count, :follower_count, :version_count]
           label fn -> dgettext("mishka_gervaz", "Stats") end
           visible fn state -> state.template.name() == :table end
 
@@ -393,12 +393,17 @@ defmodule MishkaBlog.Team do
           render fn record ->
             assigns = %{
               member_count: record.member_count || 0,
+              view_count: record.view_count || 0,
               follower_count: record.follower_count || 0,
               version_count: record.version_count || 0
             }
 
             ~H"""
             <div class="flex flex-wrap items-center gap-x-[11px] gap-y-1.5 text-[11.5px] font-semibold text-[#8a877f]">
+              <span class="inline-flex items-center gap-[5px]" title={dgettext("mishka_gervaz", "Views")}>
+                <.icon name="hero-eye" class="size-[13px] text-[#c3c0b8]" />
+                {@view_count}
+              </span>
               <span class="inline-flex items-center gap-[5px]" title={gettext("Members")}>
                 <.icon name="hero-user-group" class="size-[13px] text-[#c3c0b8]" />
                 {@member_count}
@@ -1843,6 +1848,21 @@ defmodule MishkaBlog.Team do
   end
 
   calculations do
+    # Every view of every post its members wrote, the sum of their days (`MishkaBlog.PostViewDaily`),
+    # each post once however many members co-wrote it: an aggregate through members and their posts
+    # walks a post once per member. Read with the page of rows it is shown on, in the same query.
+    calculate :view_count,
+              :integer,
+              expr(
+                fragment(
+                  "(SELECT COALESCE(SUM(v.views), 0) FROM mishka_blog_post_views_daily v JOIN mishka_blog_posts p ON p.id = v.post_id AND p.archived_at IS NULL WHERE v.post_id IN (SELECT pb.post_id FROM mishka_blog_post_bloggers pb JOIN mishka_blog_team_members tm ON tm.blogger_id = pb.blogger_id WHERE tm.team_id = ?))",
+                  id
+                )
+              ) do
+      public? true
+      description "How many times its posts were read"
+    end
+
     calculate :latest_version, :struct do
       public? true
       constraints instance_of: MishkaBlog.Team.Version

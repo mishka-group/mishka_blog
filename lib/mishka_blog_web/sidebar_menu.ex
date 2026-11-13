@@ -10,9 +10,9 @@ defmodule MishkaBlogWeb.SidebarMenu do
   Only `blog` is a link; it lands in the core's **Plugins** section. The core never names the blog,
   so removing this extension removes its entry and nothing in `MishkaCmsCore.Sidebar` changes.
 
-  The other eight are `nav: false` — pages, not links. They are declared because they do NOT share
+  The other seven are `nav: false` — pages, not links. They are declared because they do NOT share
   one answer to "who may open this": Comments needs `admin:dashboard:blog:comment`, and Posts,
-  Collections, Tags, Bloggers, Teams, Auto Posting and Analytics need `admin:dashboard:blog:post`.
+  Collections, Tags, Bloggers, Teams and Analytics need `admin:dashboard:blog:post`.
   A moderator who holds only the former must not reach the latter. The
   link and the blog's Home carry both, since holding either is reason enough to be shown the
   section. Each page's data asks for the same area.
@@ -101,15 +101,6 @@ defmodule MishkaBlogWeb.SidebarMenu do
                label: gettext_noop("Teams"),
                path: "/admin/dashboard/blog/teams",
                module: MishkaBlogWeb.Live.Admin.Dashboard.Team.Index,
-               nav: false,
-               permissions: @editorial
-             },
-             %{
-               extension: :mishka_blog,
-               key: "blog.auto_posting",
-               label: gettext_noop("Auto Posting"),
-               path: "/admin/dashboard/blog/auto-posting",
-               module: MishkaBlogWeb.Live.Admin.Dashboard.AutoPosting.Index,
                nav: false,
                permissions: @editorial
              },

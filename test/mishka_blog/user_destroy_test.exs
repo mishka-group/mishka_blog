@@ -6,7 +6,7 @@ defmodule MishkaBlog.Test.UserDestroyTest do
   @moduledoc """
   Deleting an account that has edited a blog record.
 
-  The version trail of a post, tag, collection, team, blogger and auto-posting keeps the id of the
+  The version trail of a post, tag, collection, team and blogger keeps the id of the
   account that made each change. Deleting that account leaves every version in place with
   `user_id` nil, so the trail outlives its author instead of refusing the delete with a raw
   `Ecto.ConstraintError`.
@@ -27,8 +27,7 @@ defmodule MishkaBlog.Test.UserDestroyTest do
     {MishkaBlog.Tag, :create_blog_tag!, :name},
     {MishkaBlog.Collection, :create_collection!, :name},
     {MishkaBlog.Team, :create_team!, :name},
-    {MishkaBlog.Blogger, :create_blogger!, :display_name},
-    {MishkaBlog.AutoPosting, :create_auto_posting!, :name}
+    {MishkaBlog.Blogger, :create_blogger!, :display_name}
   ]
 
   setup do

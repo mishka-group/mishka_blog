@@ -6,7 +6,7 @@ defmodule MishkaBlog.Dashboard.Overview do
   @moduledoc """
   Every number on the blog admin overview page (`/admin/dashboard/blog`), read from the database.
 
-  `load/1` gathers the whole page in one pass — the five KPI cards, the eight section cards, the
+  `load/1` gathers the whole page in one pass — the five KPI cards, the seven section cards, the
   "This Month" panel and the recent-activity list — and `calendar/2` reads one month of the editorial
   calendar. Both are pure reads returning plain numbers and records; every label, delta and
   abbreviation is the page's business, not this module's.
@@ -14,15 +14,19 @@ defmodule MishkaBlog.Dashboard.Overview do
   Every figure is read as `user` through `MishkaBlog.Dashboard.Scope`: a master (a user whose
   `site_id` is nil) through each resource's master read, counting every site, and a site user
   through the tenant read under its own site, counting only that one. The resources' policies decide
-  what the viewer reads. The two join resources — `MishkaBlog.PostView` and `MishkaBlog.TeamMember`
-  — have no master read and carry no `site_id`; both viewers read them through `:read`, which their
-  policies keep to the viewer's site, joined to the post or team they belong to
-  (`not is_nil(post.id)`), so a row of an archived post or team is not counted by anybody.
+  what the viewer reads. `MishkaBlog.TeamMember` has no master read and carries no `site_id`; both
+  viewers read it through `:read`, which its policies keep to the viewer's site, joined to its team
+  (`not is_nil(team.id)`), so a member of an archived team is not counted by anybody.
+
+  Views are summed from `MishkaBlog.PostViewDaily`, one row per post and day, each figure one
+  `SUM` over the days it covers (`Scope.sum/2`), joined to its post so the views of an archived
+  post are not counted. A view is counted in memory and written within a
+  minute (`MishkaBlog.Views`), so the figures run up to a minute behind.
 
   ## What a viewer's figures are read from
 
   Each figure is read only from the blog area the viewer holds (`areas/1`): posts, views, bloggers,
-  collections, tags, teams and auto posting from `admin:dashboard:blog:post`, comments from
+  collections, tags and teams from `admin:dashboard:blog:post`, comments from
   `admin:dashboard:blog:comment` — the permissions those resources' policies ask for. A read of an
   area the viewer does not hold is refused and counted as no data, so its counts are zero, its rows
   are missing from `:activity`, and an engagement rate — comments over views — is zero unless both
@@ -37,14 +41,13 @@ defmodule MishkaBlog.Dashboard.Overview do
   """
   require Ash.Query
 
-  alias MishkaBlog.AutoPosting
   alias MishkaBlog.Blogger
   alias MishkaBlog.BlogPost
   alias MishkaBlog.Collection
   alias MishkaBlog.Comment
   alias MishkaBlog.Dashboard.Figures
   alias MishkaBlog.Dashboard.Scope
-  alias MishkaBlog.PostView
+  alias MishkaBlog.PostViewDaily
   alias MishkaBlog.Tag
   alias MishkaBlog.Team
   alias MishkaBlog.TeamMember
@@ -92,16 +95,19 @@ defmodule MishkaBlog.Dashboard.Overview do
     comments = Scope.query(Comment, user)
     views = views_base(user)
 
-    views_window = count(between(views, window_start, now))
-    views_previous = count(between(views, previous_start, window_start))
-    month_views = count(since(views, month_start))
+    views_window = views(views, Date.add(today, -(@window_days - 1)), today)
+
+    views_previous =
+      views(views, Date.add(today, -(2 * @window_days - 1)), Date.add(today, -@window_days))
+
+    month_views = views(views, Date.beginning_of_month(today), today)
     month_comments = count(since(comments, month_start))
 
     %{
       posts_today: count(on_day(posts, today)),
       posts_yesterday: count(on_day(posts, Date.add(today, -1))),
-      views_today: count(on_day(views, today)),
-      views_yesterday: count(on_day(views, Date.add(today, -1))),
+      views_today: views(views, today, today),
+      views_yesterday: views(views, Date.add(today, -1), Date.add(today, -1)),
       comments_recent: count(since(comments, DateTime.add(now, -@recent_days, :day))),
       comments_pending: count(pending(comments)),
       comments_total: count(comments),
@@ -115,13 +121,11 @@ defmodule MishkaBlog.Dashboard.Overview do
       posts_organised: count(in_a_collection(posts)),
       posts_published: count(with_status(posts, :published)),
       posts_drafts: count(with_status(posts, :draft)),
-      posts_scheduled: count(with_status(posts, :scheduled)),
       teams_active: count(active_teams(user)),
       team_members: count(members_base(user)),
-      automation_rules: count(active_rules(user)),
       tags_total: count(Scope.query(Tag, user)),
       tags_top: top_tag(user),
-      views_total: count(views),
+      views_total: Scope.sum(views, :views),
       views_window: views_window,
       views_previous: views_previous,
       month_posts: count(published_since(with_status(posts, :published), month_start)),
@@ -256,16 +260,13 @@ defmodule MishkaBlog.Dashboard.Overview do
   defp tag_name(nil), do: nil
 
   defp views_base(user),
-    do: PostView |> Scope.query(user, :read) |> Ash.Query.filter(not is_nil(post.id))
+    do: PostViewDaily |> Scope.query(user) |> Ash.Query.filter(not is_nil(post.id))
 
   defp members_base(user),
     do: TeamMember |> Scope.query(user, :read) |> Ash.Query.filter(not is_nil(team.id))
 
   defp active_teams(user),
     do: Team |> Scope.query(user) |> Ash.Query.filter(status == :active)
-
-  defp active_rules(user),
-    do: AutoPosting |> Scope.query(user) |> Ash.Query.filter(is_active == true)
 
   defp with_status(query, status), do: Ash.Query.filter(query, status == ^status)
   defp pending(query), do: Ash.Query.filter(query, status == :pending)
@@ -282,4 +283,7 @@ defmodule MishkaBlog.Dashboard.Overview do
   end
 
   defp count(query), do: Scope.count(query)
+
+  defp views(query, from, to),
+    do: query |> Ash.Query.filter(day >= ^from and day <= ^to) |> Scope.sum(:views)
 end

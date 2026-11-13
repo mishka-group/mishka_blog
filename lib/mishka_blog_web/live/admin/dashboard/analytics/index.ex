@@ -4,37 +4,39 @@
 
 defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   @moduledoc """
-  The blog analytics page: five KPI tiles, a daily views chart, the most-read posts, where their
-  readers came from and whether they were signed in — every figure read from the view log by
-  `MishkaBlog.Dashboard.Analytics`.
+  The blog analytics page: KPI tiles; a views chart with Total, By category and Publishing tabs; a
+  Top card with Bloggers, Categories, Tags, Teams and Commenters tabs; post age and weekday charts;
+  comments over time and by status; and three post tables — every figure read from the daily view
+  counts (`MishkaBlog.PostViewDaily`) and the comments by `MishkaBlog.Dashboard.Analytics`.
 
-  The page shows only what `MishkaBlog.PostView` records. There is no average read time and no bounce
-  rate here because nothing in the schema observes a reader leaving a post, and a tile that cannot be
-  measured is worse than a tile that is missing.
+  The page shows only what is counted. There is no average read time, no bounce rate and no
+  referrer here because nothing observes a reader leaving a post or keeps where they came from, and
+  a tile that cannot be measured is worse than a tile that is missing. Unique Readers says it is
+  approximate: each node of a site tells its readers apart on its own.
 
-  The read runs off the render in a `start_async/3` and is repeated whenever the period changes, so
-  every figure and every panel describes the same window. A result is only assigned while its `days`
-  is still the selected one, so clicking through the periods quickly cannot land an older read on top
-  of a newer one. Until the first one lands each figure is an em dash: `kpi_cards/3` has a `nil`
-  clause over the same metadata as the real one, so there is no second skeleton to keep in step.
+  ## The URL
 
-  The chart is inline SVG built from the series — `line_path/2` and `area_path/2` project the daily
-  counts onto a fixed viewBox, and `vector-effect="non-scaling-stroke"` keeps the stroke even once
-  the box has been stretched to the card's width.
+  The period (7, 30 or 90 days), the Category, Tag, Blogger and Team filters, "Compare with previous
+  period" and the Top Posts sort all live in the URL (`handle_params/3`), so a reload or a shared link
+  opens the same view. The range buttons and the sort headers are patch links; a filter is gervaz's
+  search select, whose pick patches the URL, its options read a page at a time, searched as they are
+  typed (`MishkaBlog.Dashboard.Analytics.choices/3`).
 
-  Number formatting is `MishkaBlogWeb.Live.Admin.Dashboard.Home.Index`'s — `growth/2`, `percent/2`,
-  `move_tone/2`, `delta/2` and `status_tone/1` — so the overview and this page colour and word the
-  same figures identically rather than drifting apart; counts, dates and percentages are written in
-  the reader's language by `MishkaCmsCore.Localized`.
+  ## Loading
 
-  The page opens on a notice (`#analytics-roadmap`) that Analytics is on the roadmap: nothing records
-  a view yet, so every figure here is empty or sample data.
+  The panels and the filters are lists (`MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Panels`), handed
+  to the `blog:analytics:panels` and `blog:analytics:filters` plugins when the page opens. The page
+  draws first, every card as a skeleton, then each data its tabs name is read once in its own
+  `start_async/3` (`MishkaBlog.Dashboard.Analytics.load/5`) and drawn when it lands, the hidden tabs'
+  too, so switching a tab (on the client) never waits. A
+  changed period starts them all again; a result is only assigned while its period is still the one
+  shown, so clicking through quickly cannot land an older read on top of a newer one. A new sort
+  only reorders the posts already read.
 
   The page is a holder's of the blog's `admin:dashboard:blog:post` (`MishkaBlogWeb.SidebarMenu`).
-  The Engagement tile divides comments by views, so it is drawn only for a viewer who also holds
-  `admin:dashboard:blog:comment`.
-
-  See `MishkaBlog.Dashboard.Analytics` for the queries.
+  Every comment figure — the Engagement tile, the comments chart and card, the Commenters tab, a
+  blogger's comments and a post's comments and engagement — is drawn only for a viewer who also
+  holds `admin:dashboard:blog:comment`, and is not read for any other.
   """
   use MishkaCmsCore.ExtensionLiveView
 
@@ -42,228 +44,302 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
 
   alias MishkaBlog.Dashboard.Analytics
   alias MishkaBlog.Dashboard.Overview
+  alias MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Panels
   alias MishkaBlogWeb.Live.Admin.Dashboard.Home.Index, as: Home
-  alias MishkaCmsCore.Localized
 
-  @chart_width 720
-  @chart_height 180
-  @gridlines [0, 45, 90, 135, 180]
-
-  @muted "text-[#8a877f]"
-  @waiting "text-[#a8a5a0]"
-
-  @kpis [
-    {gettext_noop("Total Views"), "hero-eye", "bg-[#eaf1fb] text-[#3a6cb5]", [:post]},
-    {gettext_noop("Views in Period"), "hero-arrow-trending-up", "bg-[#eaf6ee] text-[#1f9d6b]",
-     [:post]},
-    {gettext_noop("Unique Readers"), "hero-users", "bg-[#f1edfb] text-[#7a5bd0]", [:post]},
-    {gettext_noop("Views Today"), "hero-calendar-days", "bg-[#fbf1e5] text-[#c07a2a]", [:post]},
-    {gettext_noop("Engagement"), "hero-chat-bubble-left-right", "bg-[#eef1fc] text-[#4f4bcc]",
-     [:post, :comment]}
-  ]
+  @sorts [:views, :readers, :comments, :engagement, :change]
+  @closed_picker %{
+    open?: false,
+    search: "",
+    options: [],
+    more?: false,
+    loading?: false,
+    picked: nil
+  }
+  @panels_event "blog:analytics:panels"
+  @filters_event "blog:analytics:filters"
 
   @impl true
   def mount(_params, _session, socket) do
+    user = socket.assigns[:current_user]
+    areas = Overview.areas(user)
+    filters = asked(@filters_event, :filters, Panels.filters(), user)
+
     socket =
       socket
-      |> assign(page_title: gettext("Blog Analytics"), days: Analytics.default_days(), stats: nil)
-      |> assign(:blog_areas, Overview.areas(socket.assigns[:current_user]))
-      |> load_stats()
+      |> assign(page_title: gettext("Blog Analytics"), period: nil, sort: :views, data: %{})
+      |> assign(blog_areas: areas, filters: filters)
+      |> assign(
+        :panels,
+        @panels_event |> asked(:panels, Panels.built_in(), user) |> Panels.visible(areas)
+      )
+      |> assign(:pickers, Map.new(filters, &{&1.id, @closed_picker}))
 
     {:ok, socket}
   end
 
-  @impl true
-  def handle_event("select_range", %{"days" => days}, socket) do
-    {:noreply, select_range(socket, Enum.find(Analytics.ranges(), &(to_string(&1) == days)))}
+  @doc "The event the page's panels are handed to when it opens."
+  @spec panels_event() :: String.t()
+  def panels_event, do: @panels_event
+
+  @doc "The event the page's filters are handed to when it opens."
+  @spec filters_event() :: String.t()
+  def filters_event, do: @filters_event
+
+  # A plugin answers the map it was handed, its list changed or not; anything else keeps the list.
+  defp asked(event, key, list, user) do
+    case MishkaInstaller.Event.Hook.call(event, %{key => list, current_user: user}) do
+      %{^key => list} when is_list(list) -> list
+      _other -> list
+    end
   end
 
   @impl true
-  def handle_async(:stats, {:ok, %{days: days} = stats}, socket) do
-    {:noreply, (days == socket.assigns.days && assign(socket, :stats, stats)) || socket}
+  def handle_params(params, _uri, socket) do
+    period = Analytics.period(params, Enum.map(socket.assigns.filters, & &1.id))
+    sort = Enum.find(@sorts, :views, &(to_string(&1) == params["sort"]))
+    socket = assign(socket, :sort, sort)
+
+    socket =
+      case period == socket.assigns.period do
+        true -> socket
+        false -> socket |> load_panels(period) |> label_picked(period)
+      end
+
+    {:noreply, socket}
+  end
+
+  # The four filters are gervaz's search select (`search_select/1` of the blog's gervaz UI adapter),
+  # whose events — `relation_*` — come to this page: their options are read a page at a time, off the
+  # render, as they are opened, searched and scrolled.
+  @impl true
+  def handle_event("relation_focus", %{"filter" => name}, socket) do
+    with_picker(socket, name, fn kind, picker ->
+      socket = socket |> close_others(kind) |> put_picker(kind, %{picker | open?: true})
+
+      case picker.options == [] and not picker.loading? do
+        true -> load_choices(socket, kind, picker.search, 0)
+        false -> socket
+      end
+    end)
+  end
+
+  # A keyup that leaves the search as it was, such as the Escape that closed the list, changes
+  # nothing, as gervaz's own relation filters do; only a new search opens and reads the list.
+  def handle_event("relation_search", %{"filter" => name} = params, socket) do
+    with_picker(socket, name, fn kind, picker ->
+      term = String.trim(params["value"] || "")
+      term = (String.length(term) >= 2 && term) || ""
+
+      case term == picker.search do
+        true -> socket
+        false -> socket |> close_others(kind) |> load_choices(kind, term, 0)
+      end
+    end)
+  end
+
+  def handle_event("relation_load_more", %{"filter" => name}, socket) do
+    with_picker(socket, name, fn kind, picker ->
+      load_choices(socket, kind, picker.search, length(picker.options))
+    end)
+  end
+
+  def handle_event("relation_select", %{"filter" => name, "id" => id} = params, socket) do
+    with_picker(socket, name, fn kind, picker ->
+      period = socket.assigns.period
+      period = %{period | filters: Map.put(period.filters, kind, id)}
+
+      socket
+      |> put_picker(kind, %{
+        picker
+        | open?: false,
+          search: "",
+          options: [],
+          picked: {params["label"] || id, id}
+      })
+      |> push_patch(to: Panels.page_path(socket, period, socket.assigns.sort))
+    end)
+  end
+
+  def handle_event("relation_close_dropdown", %{"filter" => name}, socket) do
+    with_picker(socket, name, fn kind, picker ->
+      put_picker(socket, kind, %{picker | open?: false})
+    end)
+  end
+
+  def handle_event("clear_filter", %{"filter" => name}, socket) do
+    with_picker(socket, name, fn kind, _picker ->
+      period = socket.assigns.period
+      period = %{period | filters: Map.delete(period.filters, kind)}
+
+      push_patch(socket, to: Panels.page_path(socket, period, socket.assigns.sort))
+    end)
+  end
+
+  def handle_event("compare", params, socket) do
+    period = %{socket.assigns.period | compare: params["compare"] == "true"}
+
+    {:noreply, push_patch(socket, to: Panels.page_path(socket, period, socket.assigns.sort))}
+  end
+
+  @impl true
+  def handle_async({:data, id}, {:ok, {period, data}}, socket) do
+    socket =
+      (period == socket.assigns.period &&
+         assign(socket, :data, Map.put(socket.assigns.data, id, data))) || socket
+
+    {:noreply, socket}
+  end
+
+  def handle_async({:choices, kind, term, offset}, {:ok, {options, more?}}, socket) do
+    picker = socket.assigns.pickers[kind]
+
+    socket =
+      case picker.search == term do
+        true ->
+          options = (offset == 0 && options) || picker.options ++ options
+          put_picker(socket, kind, %{picker | options: options, more?: more?, loading?: false})
+
+        false ->
+          socket
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_async({:picked, kind, id}, {:ok, {options, _more?}}, socket) do
+    picker = socket.assigns.pickers[kind]
+
+    socket =
+      case {socket.assigns.period.filters[kind], options} do
+        {^id, [{label, ^id}]} -> put_picker(socket, kind, %{picker | picked: {label, id}})
+        _gone -> socket
+      end
+
+    {:noreply, socket}
   end
 
   def handle_async(name, {:exit, reason}, socket) do
-    Logger.error("blog analytics #{name} failed: #{inspect(reason)}")
+    Logger.error("blog analytics #{inspect(name)} failed: #{inspect(reason)}")
 
     {:noreply, socket}
   end
 
   @doc """
-  The KPI tiles `areas` (`MishkaBlog.Dashboard.Overview.areas/1`) may see, as
-  `{label, icon, icon_tone, value, note, note_tone}`.
-
-  The `nil` clause is what the page renders until `MishkaBlog.Dashboard.Analytics.load/2` returns.
+  The assigns of the `kind` filter's search select, as gervaz's `search_select/1` takes them:
+  `picker` is the page's state of that filter, and `value` the value the URL picked.
   """
-  @spec kpi_cards(map() | nil, pos_integer(), Overview.areas()) ::
-          [{String.t(), String.t(), String.t(), String.t(), String.t(), String.t()}]
-  def kpi_cards(stats, days, areas) do
-    for {label, icon, tone, needs} <- @kpis, Home.holds?(areas, needs) do
-      {value, note, note_tone} = kpi(label, stats, days)
-      {Gettext.gettext(MishkaCmsCore.Gettext, label), icon, tone, value, note, note_tone}
+  @spec picker_assigns(String.t(), map(), String.t() | nil) :: map()
+  def picker_assigns(kind, picker, value) do
+    %{
+      __changed__: nil,
+      id: "analytics-filter-#{kind}",
+      name: "filters[#{kind}]",
+      filter_name: kind,
+      table_id: "analytics",
+      options: picker.options,
+      value: value || "",
+      selected_options: (picker.picked && value && [picker.picked]) || [],
+      placeholder: gettext("All"),
+      icon: "hero-magnifying-glass",
+      search: true,
+      has_more?: picker.more?,
+      loading?: picker.loading?,
+      dropdown_open?: picker.open?,
+      search_term: picker.search,
+      min_chars: 2,
+      debounce: 300
+    }
+  end
+
+  @doc "The search select of the blog's gervaz UI adapter, drawn from `picker_assigns/3`."
+  @spec search_select(map()) :: Phoenix.LiveView.Rendered.t()
+  def search_select(assigns),
+    do: MishkaGervaz.Domain.Info.Table.ui_adapter(MishkaBlog).search_select(assigns)
+
+  defp with_picker(socket, name, fun) do
+    case socket.assigns.pickers do
+      %{^name => picker} -> {:noreply, fun.(name, picker)}
+      _unknown -> {:noreply, socket}
     end
   end
 
-  defp kpi(_label, nil, _days), do: {nil, nil, @waiting}
+  defp choices(socket, kind, opts) do
+    user = socket.assigns.current_user
+    {module, function, args} = Enum.find(socket.assigns.filters, &(&1.id == kind)).choices
 
-  defp kpi("Total Views", stats, _days),
-    do: {Localized.compact(stats.views_total), all_time_note(stats.views_total), @muted}
+    fn -> apply(module, function, args ++ [user, opts]) end
+  end
 
-  defp kpi("Views in Period", stats, days),
-    do:
-      {Localized.compact(stats.views_window),
-       trend(stats.views_window, stats.views_previous, days),
-       Home.move_tone(stats.views_window, stats.views_previous)}
+  # One list is open at a time: opening one shuts the others, whatever reached them first.
+  defp close_others(socket, kind) do
+    pickers =
+      Map.new(socket.assigns.pickers, fn
+        {^kind, picker} -> {kind, picker}
+        {other, picker} -> {other, %{picker | open?: false}}
+      end)
 
-  defp kpi("Unique Readers", stats, _days),
-    do: {Localized.compact(stats.visitors), readers_note(stats.visitors), @muted}
+    assign(socket, :pickers, pickers)
+  end
 
-  defp kpi("Views Today", stats, _days),
-    do:
-      {Localized.compact(stats.views_today), Home.delta(stats.views_today, stats.views_yesterday),
-       Home.move_tone(stats.views_today, stats.views_yesterday)}
+  defp put_picker(socket, kind, picker),
+    do: assign(socket, :pickers, Map.put(socket.assigns.pickers, kind, picker))
 
-  defp kpi("Engagement", stats, days),
-    do:
-      {Home.percent(stats.engagement_rate),
-       engagement_note(stats.engagement_rate, stats.engagement_previous, days),
-       Home.move_tone(stats.engagement_rate, stats.engagement_previous)}
+  defp load_choices(socket, kind, term, offset) do
+    picker = socket.assigns.pickers[kind]
+    picker = %{picker | search: term, loading?: true, open?: true}
+    picker = (offset == 0 && %{picker | options: []}) || picker
 
-  @doc "The horizontal rules the chart is read against, as y positions in the viewBox."
-  @spec gridlines() :: [non_neg_integer()]
-  def gridlines, do: @gridlines
-
-  @doc "The viewBox the chart is drawn in — a fixed box the card stretches to its own width."
-  @spec view_box() :: String.t()
-  def view_box, do: "0 0 #{@chart_width} #{@chart_height}"
-
-  @doc "How wide that box is, so a rule can be drawn right across it."
-  @spec chart_width() :: pos_integer()
-  def chart_width, do: @chart_width
-
-  @doc "The line through the daily view counts, as an SVG path."
-  @spec line_path([map()], non_neg_integer()) :: String.t()
-  def line_path(series, peak), do: series |> points(peak) |> polyline()
-
-  @doc "The same line closed down to the baseline, so the area beneath it can be filled."
-  @spec area_path([map()], non_neg_integer()) :: String.t()
-  def area_path(series, peak), do: series |> points(peak) |> enclose()
-
-  @doc "What the chart says for a screen reader, in one sentence."
-  @spec chart_label(map()) :: String.t()
-  def chart_label(stats) do
-    gettext("Daily views from %{from} to %{to}, %{total} in total, peaking at %{peak}",
-      from: day_label(stats.from),
-      to: day_label(stats.to),
-      total: stats.views_window,
-      peak: stats.peak.count
+    socket
+    |> put_picker(kind, picker)
+    |> MishkaGervaz.Messages.start_async(
+      {:choices, kind, term, offset},
+      choices(socket, kind, search: term, offset: offset)
     )
   end
 
-  @doc "Month and day, e.g. `\"Jul 20\"` — the chart's axis ends and the peak marker."
-  @spec day_label(Date.t()) :: String.t()
-  def day_label(date), do: Localized.date(date, :MMMd)
-
-  @doc "A referrer as the page shows it: the `Direct` bucket in the reader's language, a host as it is."
-  @spec referrer_label(String.t()) :: String.t()
-  def referrer_label(label), do: Gettext.gettext(MishkaCmsCore.Gettext, label)
-
-  @doc "When a top-performing post went out, or that it has not."
-  @spec published_label(map()) :: String.t()
-  def published_label(%{published_at: %DateTime{} = at}),
-    do: gettext("Published %{date}", date: Localized.date(at, :yMMMd))
-
-  def published_label(_post), do: gettext("Not published")
-
-  @doc """
-  A count's share of the period's views, as a whole percentage.
-
-  A source with views but under half a percent reads `<1%` rather than `0%`, which would say it
-  brought nobody.
-  """
-  @spec share(non_neg_integer(), non_neg_integer()) :: String.t()
-  def share(0, _total), do: Home.percent(0)
-  def share(_count, 0), do: Home.percent(0)
-  def share(count, total), do: percentage(round(count * 100 / total))
-
-  @doc "The bar width for a share, floored so a small but real source still draws as a bar."
-  @spec share_width(non_neg_integer(), non_neg_integer()) :: String.t()
-  def share_width(0, _total), do: "width: 0%"
-  def share_width(_count, 0), do: "width: 0%"
-  def share_width(count, total), do: "width: #{max(round(count * 100 / total), 2)}%"
-
-  defp select_range(socket, nil), do: socket
-
-  defp select_range(socket, days) do
-    socket
-    |> assign(days: days, stats: nil)
-    |> load_stats()
-  end
-
-  defp load_stats(socket) do
-    user = socket.assigns.current_user
-    days = socket.assigns.days
-
-    (connected?(socket) &&
-       MishkaGervaz.Messages.start_async(socket, :stats, fn -> Analytics.load(user, days) end)) ||
-      socket
-  end
-
-  defp points(series, peak) do
-    last = max(length(series) - 1, 1)
-    top = max(peak, 1)
-
-    series
-    |> Enum.with_index()
-    |> Enum.map(fn {%{count: count}, index} ->
-      {round(index * @chart_width / last), round(@chart_height - count * @chart_height / top)}
+  # A filter the URL names is labelled off the render, as the list it was picked from labels it.
+  defp label_picked(socket, period) do
+    Enum.reduce(socket.assigns.filters, socket, fn %{id: kind}, socket ->
+      label_one(socket, kind, period.filters[kind], socket.assigns.pickers[kind])
     end)
   end
 
-  defp polyline(points) do
-    points
-    |> Enum.map_join(" ", fn {x, y} -> "L#{x},#{y}" end)
-    |> String.replace_prefix("L", "M")
+  defp label_one(socket, kind, nil, picker), do: put_picker(socket, kind, %{picker | picked: nil})
+  defp label_one(socket, _kind, id, %{picked: {_label, id}}), do: socket
+
+  defp label_one(socket, kind, id, _picker) do
+    (connected?(socket) &&
+       MishkaGervaz.Messages.start_async(
+         socket,
+         {:picked, kind, id},
+         choices(socket, kind, id: id)
+       )) ||
+      socket
   end
 
-  defp enclose([{first_x, _first_y} | _rest] = points) do
-    {last_x, _last_y} = List.last(points)
+  # Every data the drawn tabs name is read once, in its own task, off the render.
+  defp load_panels(socket, period) do
+    socket = assign(socket, period: period, data: %{})
 
-    polyline(points) <> " L#{last_x},#{@chart_height} L#{first_x},#{@chart_height} Z"
+    case connected?(socket) do
+      true ->
+        socket.assigns.panels
+        |> Enum.flat_map(& &1.tabs)
+        |> Enum.uniq_by(& &1.data)
+        |> Enum.reduce(socket, &start_data(&2, &1, period))
+
+      false ->
+        socket
+    end
   end
 
-  defp all_time_note(0), do: gettext("No views recorded yet")
-  defp all_time_note(_total), do: gettext("All time")
+  defp start_data(socket, %{data: id, load: load}, period) do
+    user = socket.assigns.current_user
+    comments? = Home.holds?(socket.assigns.blog_areas, [:comment])
 
-  defp readers_note(0), do: gettext("No readers in this period")
-  defp readers_note(_visitors), do: gettext("By account, by IP for guests")
-
-  defp trend(0, 0, days), do: gettext("Nothing in the last %{days} days", days: days)
-  defp trend(_current, 0, _days), do: gettext("First views in this period")
-
-  defp trend(current, previous, days),
-    do:
-      gettext("%{growth} vs previous %{days} days",
-        growth: Home.growth(current, previous),
-        days: days
-      )
-
-  defp engagement_note(rate, rate, days), do: gettext("Steady vs prev. %{days}d", days: days)
-
-  defp engagement_note(rate, previous, days) when rate > previous,
-    do:
-      gettext("+%{points} pts vs prev. %{days}d",
-        points: Localized.number(rate - previous),
-        days: days
-      )
-
-  defp engagement_note(rate, previous, days),
-    do:
-      gettext("−%{points} pts vs prev. %{days}d",
-        points: Localized.number(previous - rate),
-        days: days
-      )
-
-  defp percentage(0), do: "<" <> Home.percent(1)
-  defp percentage(value), do: Home.percent(value)
+    MishkaGervaz.Messages.start_async(socket, {:data, id}, fn ->
+      {period, Analytics.load(id, load, user, period, comments?)}
+    end)
+  end
 end

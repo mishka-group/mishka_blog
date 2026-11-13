@@ -18,7 +18,6 @@ defmodule MishkaBlog.Test.AreaPermissionsTest do
   require Ash.Query
 
   alias MishkaBlog.{
-    AutoPosting,
     Blogger,
     BlogPost,
     Collection,
@@ -29,7 +28,7 @@ defmodule MishkaBlog.Test.AreaPermissionsTest do
     PostCollection,
     PostRating,
     PostTag,
-    PostView,
+    PostViewDaily,
     Tag,
     Team,
     TeamFollower,
@@ -87,8 +86,7 @@ defmodule MishkaBlog.Test.AreaPermissionsTest do
           {Collection, create_collection!(site_id: site.id)},
           {Tag, tag},
           {Blogger, blogger},
-          {Team, team},
-          {AutoPosting, create_auto_posting!(site_id: site.id)}
+          {Team, team}
         ],
         joins: [
           {PostTag, create_post_tag!(post_id: post.id, tag_id: tag.id)},
@@ -102,7 +100,7 @@ defmodule MishkaBlog.Test.AreaPermissionsTest do
           {TeamPermission, create_team_permission!(team_id: team.id)}
         ],
         engagement: [
-          {PostView, create_post_view!(post_id: post.id)},
+          {PostViewDaily, create_post_views!(post: post)},
           {PostRating, create_post_rating!(post_id: post.id)},
           {PostBookmark, create_post_bookmark!(post_id: post.id)},
           {TeamFollower, create_team_follower!(team_id: team.id)}
@@ -202,7 +200,7 @@ defmodule MishkaBlog.Test.AreaPermissionsTest do
                "#{inspect(resource)} hid its admin fields from an editor"
 
         for actor <- [ctx.moderator, ctx.outsider] do
-          assert seen.(actor) |> Map.values() |> Enum.all?(&forbidden?/1),
+          assert Enum.all?(seen.(actor), fn {_field, value} -> forbidden?(value) end),
                  "#{inspect(resource)} showed its admin fields to #{actor_name(ctx, actor)}"
         end
       end

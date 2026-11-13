@@ -35,7 +35,7 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
 
     before = %{
       overview: Overview.load(master),
-      analytics: Analytics.load(master, 7)
+      analytics: analytics(master)
     }
 
     site_a = create_site!()
@@ -56,13 +56,13 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
     read_b = create_blog_post!(site_id: site_b.id, title: "B Read", status: :published)
     create_blog_post!(site_id: site_b.id, title: "B Draft", status: :draft)
 
-    create_post_view!(post_id: read_a.id, referer: "https://news.example.com/item")
-    create_post_view!(post_id: read_a.id)
-    create_post_view!(post_id: read_b.id, referer: "https://other.example.org/")
+    create_post_views!(post_id: read_a.id, unique_readers: 1)
+    create_post_views!(post_id: read_a.id, unique_readers: 1)
+    create_post_views!(post_id: read_b.id, unique_readers: 1)
 
     # A view of a post that is archived since is no longer counted, by anybody.
     gone_a = create_blog_post!(site_id: site_a.id, title: "A Gone", status: :published)
-    create_post_view!(post_id: gone_a.id)
+    create_post_views!(post_id: gone_a.id)
 
     gone_a
     |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site_a.id, authorize?: false)
@@ -132,6 +132,7 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
       assert Scope.count(query) == 0
       assert Scope.list(query) == []
       assert Scope.list(query, 5) == []
+      assert Scope.grouped(query, &Ecto.Query.from(p in &1, select: count())) == []
     end
   end
 
@@ -141,7 +142,6 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
 
       assert added.posts_published == 3
       assert added.posts_drafts == 2
-      assert added.posts_scheduled == 1
       assert added.comments_total == 3
       assert added.comments_pending == 3
       assert added.views_total == 3
@@ -152,11 +152,11 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
       a = Overview.load(admin_a)
       b = Overview.load(admin_b)
 
-      assert {a.posts_published, a.posts_drafts, a.posts_scheduled} == {2, 1, 1}
+      assert {a.posts_published, a.posts_drafts} == {2, 1}
       assert {a.comments_total, a.views_total, a.bloggers_active} == {2, 2, 1}
       assert a.engagement_rate == 100
 
-      assert {b.posts_published, b.posts_drafts, b.posts_scheduled} == {1, 1, 0}
+      assert {b.posts_published, b.posts_drafts} == {1, 1}
       assert {b.comments_total, b.views_total, b.bloggers_active} == {1, 1, 1}
 
       assert a.activity |> Enum.map(& &1.title) |> Enum.all?(&String.starts_with?(&1, "A "))
@@ -198,7 +198,10 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
       test "#{actor} holds no blog area and reads nothing", context do
         stats = Overview.load(context[unquote(actor)])
 
-        assert stats |> Map.drop([:activity, :tags_top]) |> Map.values() |> Enum.all?(&(&1 == 0))
+        assert stats
+               |> Map.drop([:activity, :tags_top])
+               |> Enum.all?(fn {_key, value} -> value == 0 end)
+
         assert stats.activity == []
         assert stats.tags_top == nil
         assert calendar_titles(context[unquote(actor)]) == []
@@ -208,7 +211,7 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
 
   describe "the analytics page" do
     test "a master counts both sites", %{master: master, before: before} do
-      stats = Analytics.load(master, 7)
+      stats = analytics(master)
 
       assert stats.views_window - before.analytics.views_window == 3
       assert stats.views_total - before.analytics.views_total == 3
@@ -219,37 +222,32 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
       admin_a: admin_a,
       admin_b: admin_b
     } do
-      a = Analytics.load(admin_a, 7)
-      b = Analytics.load(admin_b, 7)
+      a = analytics(admin_a)
+      b = analytics(admin_b)
 
       assert {a.views_total, a.views_window, a.views_today, a.comments_window} == {2, 2, 2, 2}
-      assert a.audience == %{members: 0, guests: 2}
-      assert Enum.map(a.top_posts, &{&1.title, &1.views}) == [{"A Read", 2}]
-      assert a.referrers |> Enum.map(& &1.label) |> Enum.sort() == ["Direct", "news.example.com"]
-      assert Enum.sum(Enum.map(a.series, & &1.count)) == 2
+      assert Enum.map(top_posts(admin_a), &{&1.title, &1.views}) == [{"A Read", 2}]
+      assert Enum.sum_by(a.series, & &1.count) == 2
+      assert a.visitors == 2
 
       assert {b.views_total, b.views_window, b.comments_window} == {1, 1, 1}
-      assert Enum.map(b.top_posts, &{&1.title, &1.views}) == [{"B Read", 1}]
-      assert Enum.map(b.referrers, & &1.label) == ["other.example.org"]
+      assert Enum.map(top_posts(admin_b), &{&1.title, &1.views}) == [{"B Read", 1}]
     end
 
     test "a moderator reads the comments alone", %{moderator_a: moderator} do
-      stats = Analytics.load(moderator, 7)
+      stats = analytics(moderator)
 
       assert {stats.views_total, stats.views_window, stats.visitors} == {0, 0, 0}
       assert stats.comments_window == 2
-      assert stats.top_posts == []
-      assert stats.referrers == []
+      assert top_posts(moderator) == []
     end
 
     for actor <- [:nobody_a, :bare_master, :page_master] do
       test "#{actor} holds no blog area and reads nothing", context do
-        stats = Analytics.load(context[unquote(actor)], 7)
+        stats = analytics(context[unquote(actor)])
 
-        assert {stats.views_total, stats.views_window, stats.comments_window} == {0, 0, 0}
-        assert stats.top_posts == []
-        assert stats.referrers == []
-        assert stats.audience == %{members: 0, guests: 0}
+        assert {stats.views_total, stats.views_window, stats.comments_window || 0} == {0, 0, 0}
+        assert top_posts(context[unquote(actor)]) == []
       end
     end
   end
@@ -340,7 +338,7 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
         user = context[unquote(actor)]
         data = unquote(module).load(user)
 
-        assert data |> Map.delete(:count) |> Map.values() |> Enum.all?(&empty?/1)
+        assert data |> Map.delete(:count) |> Enum.all?(fn {_key, value} -> empty?(value) end)
 
         html =
           render_component(&Widget.card/1,
@@ -383,9 +381,15 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
     |> Enum.sort()
   end
 
+  defp analytics(user),
+    do: Analytics.read(:overview, user, Analytics.period(%{"days" => "7"}), true)
+
+  defp top_posts(user),
+    do: Analytics.read(:posts, user, Analytics.period(%{"days" => "7"}), true).top
+
   defp empty?(value) when is_integer(value), do: value == 0
   defp empty?(value) when is_list(value), do: value == []
-  defp empty?(%{} = map), do: map |> Map.values() |> Enum.all?(&empty?/1)
+  defp empty?(%{} = map), do: Enum.all?(map, fn {_key, value} -> empty?(value) end)
 
   defp added(after_load, before_load) do
     for {key, value} <- after_load, is_integer(value), into: %{} do

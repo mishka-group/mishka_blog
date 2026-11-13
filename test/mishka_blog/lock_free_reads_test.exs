@@ -443,7 +443,7 @@ defmodule MishkaBlog.LockFreeReadsTest do
       assert Enum.any?(paths, &String.ends_with?(&1, kept.slug))
       assert Enum.any?(paths, &String.ends_with?(&1, open.slug))
       refute Enum.any?(paths, &String.ends_with?(&1, members.slug))
-      assert length(paths) == 2
+      assert [_, _] = paths
     end
 
     test "a site that locks a post, a category and a tag costs a reader what it costs the system",

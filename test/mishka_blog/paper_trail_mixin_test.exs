@@ -10,7 +10,6 @@ defmodule MishkaBlog.Test.PaperTrailMixinTest do
   use ExUnit.Case, async: true
 
   @versions [
-    {MishkaBlog.AutoPosting.Version, "mishka_blog_auto_posting_versions"},
     {MishkaBlog.BlogPost.Version, "mishka_blog_post_versions"},
     {MishkaBlog.Blogger.Version, "mishka_blog_blogger_versions"},
     {MishkaBlog.Collection.Version, "mishka_blog_collection_versions"},
@@ -44,7 +43,7 @@ defmodule MishkaBlog.Test.PaperTrailMixinTest do
       test "keeps its versions to an admin of the record's site" do
         policies = Ash.Policy.Info.policies(unquote(version))
 
-        assert length(policies) == 2
+        assert [_, _] = policies
       end
     end
   end

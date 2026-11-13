@@ -292,7 +292,6 @@ defmodule MishkaBlogWeb.Test.DashboardTest do
           {:tag, "/admin/dashboard/blog/tags", @editor},
           {:blogger, "/admin/dashboard/blog/bloggers", @editor},
           {:team, "/admin/dashboard/blog/teams", @editor},
-          {:auto_posting, "/admin/dashboard/blog/auto-posting", @editor},
           {:comment, "/admin/dashboard/blog/comments", @moderator}
         ],
         {who, master?} <- [{"a master", true}, {"a site admin", false}] do
@@ -340,7 +339,6 @@ defmodule MishkaBlogWeb.Test.DashboardTest do
   defp make(:tag, site), do: create_blog_tag!(site_id: site.id)
   defp make(:blogger, site), do: create_blogger!(site_id: site.id)
   defp make(:team, site), do: create_team!(site_id: site.id)
-  defp make(:auto_posting, site), do: create_auto_posting!(site_id: site.id)
   defp make(:comment, site), do: create_comment!(site_id: site.id)
 
   # WHAT EACH AREA IS SHOWN on the blog's Home and Analytics: a post holder the editorial side, a
@@ -508,20 +506,5 @@ defmodule MishkaBlogWeb.Test.DashboardTest do
       assert uri.path == "/admin/dashboard/blog/comments"
       assert URI.decode_query(uri.query) == %{"comments_filter_post_id" => "abc&x=1"}
     end
-
-    test "Auto Posting subscribes once the socket is connected, not for the static render",
-         %{conn: conn} do
-      topic = "auto_posting:created"
-      conn = log_in(conn, create_admin("autopostsub@example.com"))
-
-      get(conn, "/admin/dashboard/blog/auto-posting")
-      refute self() in subscribers(topic)
-
-      {:ok, view, _html} = live(conn, "/admin/dashboard/blog/auto-posting")
-      assert view.pid in subscribers(topic)
-    end
-
-    defp subscribers(topic),
-      do: MishkaCmsCore.PubSub |> Registry.lookup(topic) |> Enum.map(&elem(&1, 0))
   end
 end

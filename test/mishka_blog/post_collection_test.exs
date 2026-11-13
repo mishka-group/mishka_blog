@@ -276,7 +276,7 @@ defmodule MishkaBlog.Test.PostCollectionTest do
             a.post_id == post.id and a.collection_id == collection.id
           end)
 
-        assert length(matching_assignments) == 1
+        assert [_] = matching_assignments
       end
     end
   end

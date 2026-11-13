@@ -145,6 +145,7 @@ defmodule MishkaBlogWeb.Templates.CollectionCard do
       |> assign(:editions, EditionChips.editions(record))
       |> assign(:editions_shown, @editions_shown)
       |> assign(:posts, count(record, :post_count))
+      |> assign(:views, count(record, :view_count))
       |> assign(:versions, count(record, :version_count))
       |> assign(:site, site_name(record))
       |> assign(
@@ -228,6 +229,19 @@ defmodule MishkaBlogWeb.Templates.CollectionCard do
       <%!-- One line, always: the counts give up width first and the site name truncates, rather than
             the badges dropping to a second row and stretching every card in the track. --%>
       <div class="mt-auto flex items-center gap-2 border-t border-[#f4f3ee] pt-3.5">
+        <span
+          data-role="views"
+          class="inline-flex flex-none items-center gap-[5px] text-[11px] font-semibold text-[#a8a5a0]"
+          title={dgettext("mishka_gervaz", "Views")}
+        >
+          <.dynamic_component
+            module={@static.ui_adapter}
+            function={:icon}
+            name="hero-eye"
+            class="size-[13px]"
+          />
+          {@views}
+        </span>
         <span class="min-w-0 shrink truncate text-[11px] font-semibold text-[#a8a5a0]">
           {dgettext("mishka_gervaz", "%{posts} posts · %{versions} versions",
             posts: @posts,

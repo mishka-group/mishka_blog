@@ -259,8 +259,9 @@ defmodule MishkaBlog.Test.CommentPropertyTest do
 
           # Create a thread of comments
           comments =
-            Enum.reduce(1..thread_depth, [], fn level, acc ->
-              parent_id = if level == 1, do: nil, else: List.last(acc).id
+            1..thread_depth
+            |> Enum.reduce([], fn level, acc ->
+              parent_id = if level == 1, do: nil, else: hd(acc).id
 
               comment =
                 create_comment!(
@@ -269,8 +270,9 @@ defmodule MishkaBlog.Test.CommentPropertyTest do
                   content: "Comment at level #{level}"
                 )
 
-              acc ++ [comment]
+              [comment | acc]
             end)
+            |> Enum.reverse()
 
           # Verify the chain
           Enum.each(Enum.with_index(comments, 1), fn {comment, level} ->

@@ -32,7 +32,6 @@ defmodule MishkaBlog.MissingIndexesTest do
     mishka_blog_collection_versions
     mishka_blog_blogger_versions
     mishka_blog_team_versions
-    mishka_blog_auto_posting_versions
   )
 
   for {table, column} <- @join_tables do
