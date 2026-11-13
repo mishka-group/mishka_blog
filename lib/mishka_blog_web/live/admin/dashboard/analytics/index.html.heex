@@ -42,8 +42,8 @@ SPDX-License-Identifier: Apache-2.0
     </:actions>
   </.header>
 
-  <%!-- KPI tiles, in the overview page's shape: two per row on a phone rather than three, where
-        "Unique Readers" and its note both wrap. --%>
+  <%!-- KPI tiles, in the overview page's shape: two per row on a phone rather than three. A note
+        wraps rather than being cut, since a phone's tile is narrower than its sentence. --%>
   <div
     data-role="analytics-kpis"
     class="mb-5 grid grid-cols-5 gap-4 max-[1180px]:grid-cols-3! max-[980px]:grid-cols-2!"
@@ -68,7 +68,7 @@ SPDX-License-Identifier: Apache-2.0
           </div>
         </div>
       </div>
-      <div :if={@stats} class={["mt-[11px] truncate text-[11px] font-semibold", note_tone]}>
+      <div :if={@stats} class={["mt-[11px] text-[11px] font-semibold leading-snug", note_tone]}>
         {note}
       </div>
       <div :if={!@stats} class="mt-[13px] h-2.5 w-[44%] animate-pulse rounded bg-[#f2f1ee]"></div>

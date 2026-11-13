@@ -213,7 +213,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   defp all_time_note(_total), do: gettext("All time")
 
   defp readers_note(0), do: gettext("No readers in this period")
-  defp readers_note(_visitors), do: gettext("Approximate when the site runs on several servers")
+  defp readers_note(_visitors), do: gettext("Approximate across servers")
 
   defp trend(0, 0, days), do: gettext("Nothing in the last %{days} days", days: days)
   defp trend(_current, 0, _days), do: gettext("First views in this period")
