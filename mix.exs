@@ -69,6 +69,7 @@ defmodule MishkaBlog.MixProject do
       {:ash_paper_trail, "~> 0.8"},
       {:ash_archival, "~> 2.0"},
       {:ash_postgres, "~> 2.15"},
+      {:ash_oban, "~> 0.10.3"},
       {:ash_json_api, "~> 1.7"},
       {:ash_phoenix, "~> 2.3"},
       {:ash, "~> 3.37"},

@@ -3036,10 +3036,10 @@ defmodule MishkaBlog.BlogPost do
       description "User ratings for this blog post (for schema.org structured data)"
     end
 
-    has_many :views, MishkaBlog.PostView do
+    has_many :views, MishkaBlog.PostViewDaily do
       public? true
       destination_attribute :post_id
-      description "Page views for this blog post"
+      description "This post's views, one row per day"
     end
 
     # VERSION MANAGEMENT - sorted_versions relationship for loading version history
@@ -3146,8 +3146,9 @@ defmodule MishkaBlog.BlogPost do
       description "Total number of bloggers/authors for this post"
     end
 
-    count :view_count, :views do
+    sum :view_count, :views, :views do
       public? true
+      default 0
     end
 
     avg :rating_average, :ratings, :rating do

@@ -10,6 +10,8 @@ defmodule MishkaBlog.Plugins.BlogSettings do
     * a **Feeds** group, each with a global default a site may override (`scope: :both`):
       `blog.feeds.enabled`, `blog.feeds.items` and `blog.feeds.full_content`, which
       `MishkaBlog.Feeds` reads;
+    * a **Views** group: the global `blog.views.retention_days`, how long
+      `MishkaBlog.PostViewDaily` keeps a day's views;
     * an **Addresses** group: a site's `blog.post_address`, which
       `MishkaBlog.Plugins.PostAddress` defines and acts on.
 
@@ -63,6 +65,18 @@ defmodule MishkaBlog.Plugins.BlogSettings do
           gettext_noop(
             "Off lists only each post's title and summary, so a reader visits the site to read it."
           )
+      ),
+      Settings.define("blog.views.retention_days", :integer,
+        default: 730,
+        min: 1,
+        max: 3650,
+        category: "blog",
+        group: gettext_noop("Views"),
+        scope: :global,
+        source: :plugin,
+        label: gettext_noop("Keep daily views for (days)"),
+        description:
+          gettext_noop("Each night, the daily view counts older than this are deleted.")
       )
     ]
   end

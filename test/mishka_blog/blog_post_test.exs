@@ -1251,11 +1251,8 @@ defmodule MishkaBlog.Test.BlogPostTest do
         site = create_site!()
         post = create_blog_post!(site_id: site.id)
 
-        # Create 10 views
-        for _ <- 1..10 do
-          user = create_user!()
-          create_post_view!(post_id: post.id, user_id: user.id)
-        end
+        create_post_views!(post: post, views: 7, day: Date.add(Date.utc_today(), -1))
+        create_post_views!(post: post, views: 3)
 
         loaded_post = Ash.load!(post, [:view_count], tenant: site.id, authorize?: false)
         assert loaded_post.view_count == 10
@@ -1403,11 +1400,7 @@ defmodule MishkaBlog.Test.BlogPostTest do
         site = create_site!()
         post = create_blog_post!(site_id: site.id)
 
-        # Create views
-        for _ <- 1..5 do
-          user = create_user!()
-          create_post_view!(post_id: post.id, user_id: user.id)
-        end
+        create_post_views!(post: post, views: 5)
 
         # Create ratings
         create_post_rating!(post_id: post.id, rating: 5)

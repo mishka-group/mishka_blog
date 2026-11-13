@@ -28,7 +28,7 @@ Mishka Blog is an extension of [Mishka CMS](https://mishka.tools/cms), an open s
 - Version history with restore for posts, collections, tags, bloggers and teams.
 - Bloggers with a public profile (bio, expertise, social links and a slug). A post can have several authors. Bloggers can be grouped into teams, and each team has its own page.
 - Threaded comments with the moderation states pending, approved, flagged and spam, pinning, and up and down votes.
-- For readers: a 1 to 5 star rating for each post, bookmarks, follows for bloggers and teams, and a count of unique views.
+- For readers: a 1 to 5 star rating for each post, bookmarks, follows for bloggers and teams, and a count of views and unique readers, kept in memory and written once a minute, one row per post and day.
 - An analytics page with daily views, the most-read posts, where readers came from and whether they were signed in, over a period you choose.
 - Seventeen page components (eleven blocks that run their own queries and six smaller pieces they draw with) and nine sample pages: the blog index, a post, a category, a tag, an author, a team, and the lists of categories, tags and people.
 - The sample pages hang on the site's `site-main` layout and draw nothing around themselves. The blog hands the layout its bar (Posts, Categories, Tags and People) and, for a post, a category, a tag, a blogger or a team, the languages that record is written in, each at its own address, which the header's language menu lists.
@@ -36,7 +36,7 @@ Mishka Blog is an extension of [Mishka CMS](https://mishka.tools/cms), an open s
 - A notification to the blog's admins when a post is published, and dashboard widgets for recent posts, top posts, drafts and scheduled posts, comments to moderate, and bloggers.
 - A JSON:API for admins at `/api/json/v1/master/admin/mishka-blog/…` and `/api/json/v1/tenant/admin/mishka-blog/…`, and one for readers at `/api/json/v1/user/mishka-blog/…` (published posts, comments, ratings, bookmarks, follows and votes), described in the CMS's OpenAPI spec.
 - Permissions `admin:dashboard:blog:post`, `admin:dashboard:blog:publish` and `admin:dashboard:blog:comment`, with `admin:api:` twins for the API, so a moderator can hold the comments alone. A blogger whose profile is not set to Can Publish Directly saves drafts for an editor to publish, unless they hold `admin:dashboard:blog:publish`.
-- Events for plugins, such as `blog:blog_post:after_publish` and `blog:comment:after_create`. An extension adds buttons to the header of the dashboard on `blog:dashboard:actions`: a plugin answers `%{actions: [...]}` with an `id`, `label`, `icon`, `priority` and a `path:` or a `js:` command (see `MishkaBlog.Dashboard.Actions`). A plugin on `blog:post:can_publish` allows or refuses a publish (see `MishkaBlog.Resources.Validations.PublishDirectly`).
+- Events for plugins, such as `blog:blog_post:after_publish` and `blog:comment:after_create`. An extension adds buttons to the header of the dashboard on `blog:dashboard:actions`: a plugin answers `%{actions: [...]}` with an `id`, `label`, `icon`, `priority` and a `path:` or a `js:` command (see `MishkaBlog.Dashboard.Actions`). A plugin on `blog:post:can_publish` allows or refuses a publish (see `MishkaBlog.Resources.Validations.PublishDirectly`). A plugin on `blog:post:count_view` decides whether a view counts (see `MishkaBlog.Plugins.PostViewCount`), and one on `blog:post:viewed` is handed each minute's views (see `MishkaBlog.Views`).
 
 ## 🚀 Getting started
 

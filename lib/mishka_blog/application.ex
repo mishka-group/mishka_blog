@@ -6,8 +6,8 @@ defmodule MishkaBlog.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
   @moduledoc """
-  The blog's OTP application. It supervises the task supervisor that highlights a post's code blocks
-  and every mishka_installer plugin the extension ships (`plugins/0`): the dashboard widgets, the
+  The blog's OTP application. It supervises the task supervisor that highlights a post's code blocks,
+  the post view counter (`MishkaBlog.Views`) and every mishka_installer plugin the extension ships (`plugins/0`): the dashboard widgets, the
   notification producers, the settings, sidebar, install, SEO, share card, stylesheet and page
   plugins. A plugin registers on the event it listens on once it is supervised here.
   """
@@ -106,6 +106,14 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.TranslationKeys
   ]
 
+  # Counts a post's views: who reads, kept on the connected mount (a `RuntimeLive.OnMount.AfterCompile`
+  # plugin), and the view, counted when the post's page is shown (a
+  # `RuntimeLive.HandleParams.AfterCompile` plugin) into `MishkaBlog.Views`.
+  @view_plugins [
+    MishkaBlog.Plugins.PostViewReader,
+    MishkaBlog.Plugins.PostViewCount
+  ]
+
   # The blog's writes an agent receipt can be kept for (an `agent:operations` plugin, see
   # `MishkaCmsCore.Agent.Operation`).
   @agent_plugins [
@@ -130,11 +138,12 @@ defmodule MishkaBlog.Application do
         @provision_plugins ++
         @seo_plugins ++
         @feed_plugins ++
-        @share_card_plugins ++ @runtime_plugins ++ @frame_plugins ++ @agent_plugins
+        @share_card_plugins ++
+        @runtime_plugins ++ @frame_plugins ++ @view_plugins ++ @agent_plugins
 
   @impl true
   def start(_type, _args) do
     opts = [strategy: :one_for_one, name: MishkaBlog.Supervisor]
-    Supervisor.start_link([@highlight_supervisor | plugins()], opts)
+    Supervisor.start_link([@highlight_supervisor, MishkaBlog.Views | plugins()], opts)
   end
 end

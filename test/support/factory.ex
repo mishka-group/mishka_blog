@@ -330,6 +330,25 @@ defmodule MishkaBlog.Test.Factory do
     |> generate()
   end
 
+  # One day's views of a post, written as `MishkaBlog.Views` writes them: `:post` (the post record),
+  # `:views`, `:unique_readers` and `:day` (today).
+  def create_post_views!(overrides) do
+    post = Keyword.fetch!(overrides, :post)
+
+    Ash.create!(
+      MishkaBlog.PostViewDaily,
+      %{
+        site_id: post.site_id,
+        post_id: post.id,
+        day: Keyword.get(overrides, :day, Date.utc_today()),
+        views: Keyword.get(overrides, :views, 1),
+        unique_readers: Keyword.get(overrides, :unique_readers, 0)
+      },
+      action: :record,
+      authorize?: false
+    )
+  end
+
   # Comment factory
   def create_comment!(overrides \\ []) do
     {site_id, overrides} = Keyword.pop(overrides, :site_id)
