@@ -325,8 +325,11 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   @spec commenter(map()) :: String.t()
   def commenter(comment), do: MishkaBlogWeb.Templates.CommentCard.author(comment)
 
-  @doc "A ranked row's name, or a word for one the viewer cannot read."
+  @doc "A ranked row's name, marked when it is archived; a word for one with no name."
   @spec name_of(map()) :: String.t()
+  def name_of(%{name: name, archived?: true}) when is_binary(name),
+    do: gettext("%{name} (archived)", name: name)
+
   def name_of(%{name: name}) when is_binary(name), do: name
   def name_of(_row), do: gettext("Unnamed")
 

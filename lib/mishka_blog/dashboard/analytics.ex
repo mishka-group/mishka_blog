@@ -185,17 +185,6 @@ defmodule MishkaBlog.Dashboard.Analytics do
   defp with_language(query, true), do: from([r] in query, select_merge: %{language: r.language})
   defp with_language(query, false), do: query
 
-  defp names(_resource, _field, _user, []), do: []
-
-  defp names(resource, field, user, ids) do
-    resource
-    |> Scope.query(user)
-    |> Ash.Query.filter(id in ^ids)
-    |> Ash.Query.select([:id, field])
-    |> Scope.list(length(ids))
-    |> Enum.map(&{&1.id, Map.fetch!(&1, field)})
-  end
-
   @doc """
   Reads `panel` for `period` as `user`, then hands it to the `blog:analytics:panel` plugins.
   `comments?` says whether the viewer holds the comment area; without it no comment is read.
@@ -276,23 +265,27 @@ defmodule MishkaBlog.Dashboard.Analytics do
         &from([r] in &1,
           left_join: pc in MishkaBlog.PostCollection,
           on: pc.post_id == r.post_id,
-          group_by: [r.day, pc.collection_id],
-          select: {r.day, pc.collection_id, type(sum(r.views), :integer)}
+          left_join: c in MishkaBlog.Collection,
+          on: c.id == pc.collection_id,
+          group_by: [r.day, c.id],
+          select:
+            {r.day, %{id: c.id, name: c.name, archived?: not is_nil(c.archived_at)},
+             type(sum(r.views), :integer)}
         )
       )
 
     top =
       rows
       |> Enum.group_by(&elem(&1, 1), &elem(&1, 2))
-      |> Enum.map(fn {id, views} -> {id, Enum.sum(views)} end)
-      |> ranked(MishkaBlog.Collection, :name, user)
+      |> Enum.map(fn {term, views} -> {term, Enum.sum(views)} end)
+      |> ranked()
 
     shown = MapSet.new(top, & &1.id)
 
     series =
       Enum.map(days(period.from, period.to), fn date ->
         counts =
-          for {^date, id, views} <- rows, reduce: %{} do
+          for {^date, %{id: id}, views} <- rows, reduce: %{} do
             acc ->
               Map.update(acc, (MapSet.member?(shown, id) && id) || :other, views, &(&1 + views))
           end
@@ -312,11 +305,15 @@ defmodule MishkaBlog.Dashboard.Analytics do
       &from([r] in &1,
         join: pt in MishkaBlog.PostTag,
         on: pt.post_id == r.post_id,
-        group_by: pt.tag_id,
-        select: {pt.tag_id, type(sum(r.views), :integer)}
+        join: t in MishkaBlog.Tag,
+        on: t.id == pt.tag_id,
+        group_by: t.id,
+        select:
+          {%{id: t.id, name: t.name, archived?: not is_nil(t.archived_at)},
+           type(sum(r.views), :integer)}
       )
     )
-    |> ranked(MishkaBlog.Tag, :name, user)
+    |> ranked()
   end
 
   defp read(:bloggers, user, period, comments?) do
@@ -329,11 +326,15 @@ defmodule MishkaBlog.Dashboard.Analytics do
         &from([r] in &1,
           join: pb in MishkaBlog.PostBlogger,
           on: pb.post_id == r.post_id,
-          group_by: pb.blogger_id,
-          select: {pb.blogger_id, type(sum(r.views), :integer)}
+          join: b in MishkaBlog.Blogger,
+          on: b.id == pb.blogger_id,
+          group_by: b.id,
+          select:
+            {%{id: b.id, name: b.display_name, archived?: not is_nil(b.archived_at)},
+             type(sum(r.views), :integer)}
         )
       )
-      |> ranked(MishkaBlog.Blogger, :display_name, user)
+      |> ranked()
 
     ids = Enum.map(top, & &1.id)
     published = user |> published(period) |> by_blogger(:id, period, ids)
@@ -467,21 +468,17 @@ defmodule MishkaBlog.Dashboard.Analytics do
   defp change(_views, 0), do: nil
   defp change(views, previous), do: round((views - previous) * 100 / previous)
 
-  # The five most read of `counted` (`{id, views}`), named as `user` reads them, with their share of
-  # every view counted. A row the viewer cannot read the name of keeps its place, unnamed.
-  defp ranked(counted, resource, field, user) do
+  # The five most read of `counted` (`{%{id, name, archived?}, views}`), with their share of every
+  # view counted. The name is joined in the same read, so an archived one is still named.
+  defp ranked(counted) do
     total = Enum.sum_by(counted, &elem(&1, 1))
 
-    top =
-      counted
-      |> Enum.reject(&is_nil(elem(&1, 0)))
-      |> Enum.sort_by(&(-elem(&1, 1)))
-      |> Enum.take(@top)
-
-    named = Map.new(names(resource, field, user, Enum.map(top, &elem(&1, 0))))
-
-    Enum.map(top, fn {id, views} ->
-      %{id: id, name: Map.get(named, id), views: views, share: Figures.rate(views, total)}
+    counted
+    |> Enum.reject(fn {term, _views} -> is_nil(term.id) end)
+    |> Enum.sort_by(fn {term, views} -> {-views, term.name} end)
+    |> Enum.take(@top)
+    |> Enum.map(fn {term, views} ->
+      Map.merge(term, %{views: views, share: Figures.rate(views, total)})
     end)
   end
 

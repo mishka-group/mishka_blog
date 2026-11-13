@@ -178,6 +178,27 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
                panel(:bloggers, admin)
     end
 
+    test "an archived blogger keeps its name in the panels and leaves the filter", %{
+      admin: admin,
+      ids: ids
+    } do
+      ada = Ash.get!(MishkaBlog.Blogger, ids.ada, action: :master_get, authorize?: false)
+
+      ada
+      |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: ada.site_id, authorize?: false)
+      |> Ash.destroy!()
+
+      assert %{name: "Ada", archived?: true} =
+               Enum.find(panel(:bloggers, admin), &(&1.id == ids.ada))
+
+      refute ids.ada in (admin
+                         |> Analytics.options()
+                         |> Map.fetch!(:blogger)
+                         |> Enum.map(&elem(&1, 0)))
+
+      assert Index.name_of(%{name: "Ada", archived?: true}) == "Ada (archived)"
+    end
+
     test "post age splits the views at thirty days", %{admin: admin} do
       assert %{fresh: 8, older: 5} = panel(:post_age, admin)
     end
