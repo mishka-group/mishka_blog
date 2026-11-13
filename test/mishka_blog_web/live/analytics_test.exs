@@ -169,6 +169,20 @@ defmodule MishkaBlogWeb.Test.AnalyticsTest do
     refute has_element?(view, "#search-select-analytics-blogger-list")
   end
 
+  test "the filter bar is four across only on a wide screen, and Compare wraps to its own row",
+       ctx do
+    view = open(ctx, @page, ctx.admin)
+
+    assert has_element?(view, "#analytics-filters.grid-cols-1.sm\\:grid-cols-2")
+
+    assert has_element?(
+             view,
+             "#analytics-filters[class*='xl:grid-cols-[repeat(4,minmax(0,1fr))_auto]']"
+           )
+
+    assert has_element?(view, "#analytics-compare-form.col-span-full.xl\\:col-span-1")
+  end
+
   test "a filter's Clear takes it out of the URL", ctx do
     view = open(ctx, "#{@page}?category=#{ctx.news.id}", ctx.admin)
 

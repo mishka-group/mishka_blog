@@ -41,10 +41,12 @@ SPDX-License-Identifier: Apache-2.0
   </.header>
 
   <%!-- The filter bar: a pick or a clear patches the URL, so the page reads again and a reload keeps
-        it. Each filter is gervaz's search select, its options read a page at a time as it opens. --%>
+        it. Each filter is gervaz's search select, its options read a page at a time as it opens.
+        Four across from 1280px, two from 640px, one on a phone; Compare takes its own row until
+        the four fit. --%>
   <div
     id="analytics-filters"
-    class="mb-5 grid grid-cols-[repeat(4,minmax(0,1fr))_auto] items-end gap-3 rounded-[16px] border border-[#ecebe6] bg-white p-3 shadow-[0_1px_2px_rgba(30,28,24,0.04)] max-[980px]:grid-cols-2! max-[560px]:grid-cols-1!"
+    class="mb-5 grid grid-cols-1 items-end gap-3 rounded-[16px] border border-[#ecebe6] bg-white p-3 shadow-[0_1px_2px_rgba(30,28,24,0.04)] sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto]"
   >
     <div :for={%{id: key, label: label} <- @filters} class="flex min-w-0 flex-col gap-1">
       <div class="flex items-center justify-between gap-2">
@@ -67,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0
       </div>
       {search_select(picker_assigns(key, @pickers[key], @period.filters[key]))}
     </div>
-    <form id="analytics-compare-form" phx-change="compare">
+    <form id="analytics-compare-form" class="col-span-full xl:col-span-1" phx-change="compare">
       <label class="flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap px-1 text-[12px] font-semibold text-[#6d6a63]">
         <input type="hidden" name="compare" value="false" />
         <input
