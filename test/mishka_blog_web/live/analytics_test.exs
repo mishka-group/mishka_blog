@@ -155,6 +155,20 @@ defmodule MishkaBlogWeb.Test.AnalyticsTest do
     refute has_element?(none, "[id$=-author]", "Grace")
   end
 
+  test "opening one filter's list shuts the one open before it", ctx do
+    view = open(ctx, @page, ctx.admin)
+
+    view |> element("#analytics-filter-blogger") |> render_focus()
+    render_async(view, @await)
+    assert has_element?(view, "#analytics-filter-blogger[aria-expanded=true]")
+
+    view |> element("#analytics-filter-team") |> render_focus()
+    render_async(view, @await)
+    assert has_element?(view, "#analytics-filter-team[aria-expanded=true]")
+    assert has_element?(view, "#analytics-filter-blogger[aria-expanded=false]")
+    refute has_element?(view, "#search-select-analytics-blogger-list")
+  end
+
   test "a filter's Clear takes it out of the URL", ctx do
     view = open(ctx, "#{@page}?category=#{ctx.news.id}", ctx.admin)
 

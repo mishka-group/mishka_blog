@@ -115,7 +115,7 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   @impl true
   def handle_event("relation_focus", %{"filter" => name}, socket) do
     with_picker(socket, name, fn kind, picker ->
-      socket = put_picker(socket, kind, %{picker | open?: true})
+      socket = socket |> close_others(kind) |> put_picker(kind, %{picker | open?: true})
 
       case picker.options == [] and not picker.loading? do
         true -> load_choices(socket, kind, picker.search, 0)
@@ -128,6 +128,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
     with_picker(socket, name, fn kind, picker ->
       term = String.trim(params["value"] || "")
       term = (String.length(term) >= 2 && term) || ""
+
+      socket = close_others(socket, kind)
 
       case term == picker.search and picker.options != [] do
         true -> put_picker(socket, kind, %{picker | open?: true})
@@ -267,6 +269,17 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
     {module, function, args} = Enum.find(socket.assigns.filters, &(&1.id == kind)).choices
 
     fn -> apply(module, function, args ++ [user, opts]) end
+  end
+
+  # One list is open at a time: opening one shuts the others, whatever reached them first.
+  defp close_others(socket, kind) do
+    pickers =
+      Map.new(socket.assigns.pickers, fn
+        {^kind, picker} -> {kind, picker}
+        {other, picker} -> {other, %{picker | open?: false}}
+      end)
+
+    assign(socket, :pickers, pickers)
   end
 
   defp put_picker(socket, kind, picker),
