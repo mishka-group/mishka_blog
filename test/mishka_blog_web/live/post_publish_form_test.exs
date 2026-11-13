@@ -6,7 +6,8 @@ defmodule MishkaBlogWeb.Test.PostPublishFormTest do
   @moduledoc """
   A site's admin publishes and schedules a post from the posts page's form: Published stamps the
   post with the time it went live, and Scheduled, which the form gives no time to, is refused on the
-  scheduled time instead of saving a post that never goes live.
+  scheduled time instead of saving a post that never goes live. Publish At can't be in the past
+  on a new post, and is free on an edit.
   """
   use MishkaBlog.ConnCase
 
@@ -83,6 +84,38 @@ defmodule MishkaBlogWeb.Test.PostPublishFormTest do
     view
   end
 
+  defp open_picker(view) do
+    view |> form(@form, %{"form" => %{"status" => "scheduled"}}) |> render_change()
+
+    view
+    |> element("#{@form} button[aria-haspopup=dialog][id*=scheduled_publish_at]")
+    |> render_click()
+
+    view |> element("#{@form} button[aria-label='Previous month']") |> render_click()
+    view
+  end
+
+  defp first_of_month_before(%Date{} = day),
+    do: day |> Date.beginning_of_month() |> Date.add(-1) |> Date.beginning_of_month()
+
+  defp day_button(day), do: "#{@form} button[id$='-day-#{Date.to_iso8601(day)}']"
+
+  defp yesterday_at_noon do
+    Date.utc_today()
+    |> Date.add(-1)
+    |> NaiveDateTime.new!(~T[12:00:00])
+    |> NaiveDateTime.to_iso8601()
+  end
+
+  defp edit(view, post) do
+    view
+    |> element(~s([phx-click*="#{post.id}"][phx-click*='"event":"edit"']))
+    |> render_click()
+
+    render_async(view, @await)
+    view
+  end
+
   defp saved_post(ctx) do
     BlogPost
     |> Ash.Query.filter(slug == ^"publish-#{ctx.n}")
@@ -106,6 +139,59 @@ defmodule MishkaBlogWeb.Test.PostPublishFormTest do
     assert has_element?(view, "#{@form} .hero-exclamation-circle")
   end
 
+  test "Add Post greys out the days before today and refuses a Publish At in the past", ctx do
+    view = open_posts(ctx)
+    view |> element("#add-post-btn") |> render_click()
+    render_async(view, @await)
+
+    view = open_picker(view)
+    assert has_element?(view, day_button(first_of_month_before(Date.utc_today())) <> "[disabled]")
+
+    view
+    |> element(@form)
+    |> render_submit(%{
+      "form" => %{
+        "title" => "Publish #{ctx.n}",
+        "slug" => "publish-#{ctx.n}",
+        "content" => "<p>Body</p>",
+        "language" => "en",
+        "status" => "scheduled",
+        "scheduled_publish_at" => yesterday_at_noon()
+      }
+    })
+
+    render_async(view, @await)
+
+    assert saved_post(ctx) == nil
+    assert render(view) =~ "is too early"
+  end
+
+  test "Edit of a scheduled post leaves Publish At free of a lower bound", ctx do
+    at = DateTime.utc_now() |> DateTime.add(86_400, :second) |> DateTime.truncate(:second)
+
+    post =
+      create_blog_post!(
+        site_id: ctx.site.id,
+        status: :scheduled,
+        scheduled_publish_at: at,
+        slug: "publish-#{ctx.n}"
+      )
+
+    view = ctx |> open_posts() |> edit(post) |> open_picker()
+
+    shown = first_of_month_before(DateTime.to_date(at))
+    assert has_element?(view, day_button(shown))
+    refute has_element?(view, day_button(shown) <> "[disabled]")
+
+    view
+    |> element(@form)
+    |> render_change(%{
+      "form" => %{"status" => "scheduled", "scheduled_publish_at" => yesterday_at_noon()}
+    })
+
+    refute render(view) =~ "is too early"
+  end
+
   test "Add Post saved as Draft stays unpublished", ctx do
     submit_new_post(ctx, "draft")
 
@@ -117,13 +203,7 @@ defmodule MishkaBlogWeb.Test.PostPublishFormTest do
 
   test "Edit of a draft saved as Published stamps it, and a later save keeps the time", ctx do
     draft = create_blog_post!(site_id: ctx.site.id, status: :draft, slug: "publish-#{ctx.n}")
-    view = open_posts(ctx)
-
-    view
-    |> element(~s([phx-click*="#{draft.id}"][phx-click*='"event":"edit"']))
-    |> render_click()
-
-    render_async(view, @await)
+    view = ctx |> open_posts() |> edit(draft)
 
     view |> form(@form, %{"form" => %{"status" => "published"}}) |> render_submit()
     render_async(view, @await)

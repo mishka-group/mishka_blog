@@ -119,13 +119,13 @@ defmodule MishkaBlogWeb.Test.BloggerMasterProfileLiveTest do
   defp option(field, id), do: "#{field} button[phx-value-id='#{id}']"
 
   defp choose_site(view, site, field \\ @site_field) do
-    view |> element("#{field} input[name='_search_site_id']") |> render_focus()
+    view |> element(field) |> render_hook("relation_focus", %{"filter" => "site_id"})
     view |> element(option(field, site.id)) |> render_click()
     render_async(view, @await)
   end
 
   defp open_accounts(view) do
-    view |> element("#{@user_field} input[name='_search_user_id']") |> render_focus()
+    view |> element(@user_field) |> render_hook("relation_focus", %{"filter" => "user_id"})
     view
   end
 
@@ -138,7 +138,7 @@ defmodule MishkaBlogWeb.Test.BloggerMasterProfileLiveTest do
   end
 
   defp open_authors(view) do
-    view |> element("#{@authors_field} input[name='_search_blogger_ids']") |> render_focus()
+    view |> element(@authors_field) |> render_hook("relation_focus", %{"filter" => "blogger_ids"})
     view
   end
 

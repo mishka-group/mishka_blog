@@ -131,8 +131,8 @@ defmodule MishkaBlogWeb.Test.CollectionPostsLinkTest do
 
     html =
       view
-      |> element("input[name='_search_collection_id']")
-      |> render_focus()
+      |> element("#search-select-posts-table-collection_id")
+      |> render_hook("relation_focus", %{"filter" => "collection_id"})
 
     labels =
       Regex.scan(~r/phx-value-label="([^"]*)"/, html)

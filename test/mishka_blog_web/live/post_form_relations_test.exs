@@ -158,8 +158,8 @@ defmodule MishkaBlogWeb.Test.PostFormRelationsTest do
     view = ctx |> edit_post() |> change_title("Renamed #{ctx.n}")
 
     view
-    |> element("#multi-select-post_form-tag_ids input[name=_search_tag_ids]")
-    |> render_focus()
+    |> element("#multi-select-post_form-tag_ids")
+    |> render_hook("relation_focus", %{"filter" => "tag_ids"})
 
     render_async(view, @await)
 

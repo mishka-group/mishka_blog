@@ -1047,6 +1047,11 @@ defmodule MishkaBlog.BlogPost do
 
         # Asked for only while the status is Scheduled: the time a scheduled post goes out.
         field :scheduled_publish_at, :datetime do
+          min fn
+            %{mode: :create} -> DateTime.utc_now()
+            _state -> nil
+          end
+
           visible fn
             %{form: %Phoenix.HTML.Form{} = form} ->
               to_string(Phoenix.HTML.Form.input_value(form, :status)) == "scheduled"
