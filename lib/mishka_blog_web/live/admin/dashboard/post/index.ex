@@ -21,6 +21,9 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Post.Index do
   """
   use MishkaCmsCore.ExtensionLiveView
 
+  # Tells an agent receipt this page received the broadcast of the post it is about.
+  on_mount MishkaCmsCore.Agent.UiObserver
+
   import MishkaBlogWeb.Live.Admin.Dashboard.VersionsModal, only: [open_modal: 2, close_modal: 2]
 
   alias MishkaBlog.BlogPost

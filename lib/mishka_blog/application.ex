@@ -106,6 +106,12 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.TranslationKeys
   ]
 
+  # The blog's writes an agent receipt can be kept for (an `agent:operations` plugin, see
+  # `MishkaCmsCore.Agent.Operation`).
+  @agent_plugins [
+    MishkaBlog.Plugins.AgentOperations
+  ]
+
   # Each code block of a post being written is lexed in a task of its own under this supervisor — see
   # `MishkaBlog.Resources.Changes.HighlightCode`.
   @highlight_supervisor {Task.Supervisor, name: MishkaBlog.HighlightSupervisor}
@@ -123,7 +129,8 @@ defmodule MishkaBlog.Application do
         @sidebar_menus ++
         @provision_plugins ++
         @seo_plugins ++
-        @feed_plugins ++ @share_card_plugins ++ @runtime_plugins ++ @frame_plugins
+        @feed_plugins ++
+        @share_card_plugins ++ @runtime_plugins ++ @frame_plugins ++ @agent_plugins
 
   @impl true
   def start(_type, _args) do

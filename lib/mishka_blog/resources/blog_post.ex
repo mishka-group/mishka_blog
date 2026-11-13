@@ -37,7 +37,8 @@ defmodule MishkaBlog.BlogPost do
       Ash.Notifier.PubSub,
       MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
       MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh,
-      MishkaBlog.Resources.Notifiers.FeedRefresh
+      MishkaBlog.Resources.Notifiers.FeedRefresh,
+      MishkaCmsCore.Agent.Notifiers.ReceiptHook
     ]
 
   import Phoenix.Component, only: [sigil_H: 2]
