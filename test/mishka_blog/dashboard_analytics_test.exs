@@ -296,6 +296,20 @@ defmodule MishkaBlog.Dashboard.AnalyticsTest do
       assert label == labels[a.id]
       assert {[{solo_label, _id}], false} = Analytics.choices(:category, master, id: solo.id)
       assert solo_label == solo.name
+
+      twin =
+        create_collection!(
+          site_id: site_a.id,
+          name: name,
+          language: "en",
+          slug: "twin-#{System.unique_integer([:positive])}"
+        )
+
+      {found, false} = Analytics.choices(:category, master, search: name)
+      labels = Map.new(found, fn {label, id} -> {id, label} end)
+
+      assert labels[twin.id] == "#{name} · en · #{site_a.name} · #{twin.slug}"
+      assert labels[b.id] == "#{name} · de · #{site_b.name}"
     end
   end
 

@@ -154,7 +154,7 @@ defmodule MishkaBlog.Dashboard.Analytics do
   One page of what the `kind` filter (`:category`, `:tag`, `:blogger` or `:team`) can be set to, as
   `user` reads them, by name: `{[{label, id}], more?}`, as gervaz's search select takes its options. An archived one is left out. Names that
   repeat — a category in several languages or on several sites — are told apart by their language
-  and site: `"Travel · en · site-a"`.
+  and site, `"Travel · en · site-a"`, and by their slug last when those repeat too.
 
   `opts` are `:search`, a part of the name to look for, and `:offset`, where the page starts; or
   `:id` alone, to label one already picked (`{[{label, id}], false}`, or `{[], false}` when the
@@ -178,11 +178,12 @@ defmodule MishkaBlog.Dashboard.Analytics do
           select: %{
             id: r.id,
             name: field(r, ^field),
+            slug: r.slug,
             site: s.name,
             repeats: over(count(r.id), :same_name)
           }
         )
-        |> with_language(language?)
+        |> with_place(field, language?)
         |> choose(resource, field, opts)
       end)
 
@@ -228,13 +229,25 @@ defmodule MishkaBlog.Dashboard.Analytics do
   defp choice_label(%{repeats: 1, name: name}), do: name
 
   defp choice_label(row) do
-    [row.name, Map.get(row, :language), row.site]
+    [row.name, Map.get(row, :language), row.site, row.twins > 1 && row.slug]
     |> Enum.filter(&is_binary/1)
     |> Enum.join(" · ")
   end
 
-  defp with_language(query, true), do: from([r] in query, select_merge: %{language: r.language})
-  defp with_language(query, false), do: query
+  # `twins` counts those of the same name, language and site, which only their slug tells apart.
+  defp with_place(query, field, true) do
+    from([r] in query,
+      windows: [same_place: [partition_by: [field(r, ^field), r.language, r.site_id]]],
+      select_merge: %{language: r.language, twins: over(count(r.id), :same_place)}
+    )
+  end
+
+  defp with_place(query, field, false) do
+    from([r] in query,
+      windows: [same_place: [partition_by: [field(r, ^field), r.site_id]]],
+      select_merge: %{twins: over(count(r.id), :same_place)}
+    )
+  end
 
   @doc """
   Reads `panel` for `period` as `user`, then hands it to the `blog:analytics:panel` plugins.
