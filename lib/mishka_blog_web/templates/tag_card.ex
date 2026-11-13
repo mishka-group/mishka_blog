@@ -129,6 +129,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       |> assign(:tint, tint(record))
       |> assign(:accent, LanguageAccent.of(record))
       |> assign(:editions, EditionChips.editions(record))
+      |> assign(:editions_shown, 2)
       |> assign(:posts, count(record, :post_count))
       |> assign(:views, count(record, :view_count))
       |> assign(
@@ -145,13 +146,13 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       id={@id}
       data-role="tagchip"
       class={[
-        "flex items-center gap-2.5 rounded-[12px] border bg-white px-[13px] py-[11px] shadow-[0_1px_2px_rgba(30,28,24,0.03)] transition-colors",
+        "flex items-start gap-2.5 rounded-[12px] border bg-white px-[13px] py-[11px] shadow-[0_1px_2px_rgba(30,28,24,0.03)] transition-colors",
         (@checked? && "border-[#dcdbf5] ring-1 ring-[#5b57d6]") ||
           "border-[#ecebe6] hover:border-[#dcdbf5]",
         !@checked? && @row_class
       ]}
     >
-      <div :if={@show_checkboxes} class="flex-none">
+      <div :if={@show_checkboxes} class="flex h-6 flex-none items-center">
         <.dynamic_component
           module={@static.ui_adapter}
           function={:checkbox}
@@ -194,26 +195,39 @@ defmodule MishkaBlogWeb.Templates.TagCard do
         </span>
 
         <%!-- A translated tag names its languages under its name instead of in the badge at the
-              end: each is the way to that edition. --%>
-        <div :if={@editions != []} class="mt-1.5">
+              end: each is the way to that edition. Two are shown and the rest counted, so a tag in
+              many languages keeps the card as short as its neighbours. --%>
+        <div :if={@editions != []} class="mt-1.5 flex items-center gap-[5px]">
           <EditionChips.inline
             id={"#{@id}-editions"}
             record={@record}
-            editions={@editions}
+            editions={Enum.take(@editions, @editions_shown)}
             accent={@accent}
           />
+          <span
+            :if={length(@editions) > @editions_shown}
+            data-role="editions-rest"
+            title={
+              @editions
+              |> Enum.drop(@editions_shown)
+              |> Enum.map_join(", ", &String.upcase(&1.language))
+            }
+            class="flex-none text-[10px] font-bold text-[#8a877f]"
+          >
+            +{length(@editions) - @editions_shown}
+          </span>
         </div>
       </div>
 
       <span
         :if={@editions == []}
-        class="flex-none rounded-[5px] bg-[#f2f1ec] px-1.5 py-[2px] text-[8.5px] font-bold uppercase tracking-[0.05em] text-[#8a877f]"
+        class="mt-[5px] flex-none rounded-[5px] bg-[#f2f1ec] px-1.5 py-[2px] text-[8.5px] font-bold uppercase tracking-[0.05em] text-[#8a877f]"
       >
         {String.upcase(@record.language || "")}
       </span>
 
       <span class={[
-        "flex-none text-end font-['Space_Grotesk'] text-[11px] font-bold",
+        "flex-none text-end font-['Space_Grotesk'] text-[11px] font-bold leading-6",
         (@posts > 0 && "text-[#4f4bcc]") || "text-[#c3c0b8]"
       ]}>
         {@posts}
@@ -226,7 +240,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       <div
         :if={@has_actions?}
         data-role="tag-actions"
-        class="flex flex-none items-center [&_[aria-haspopup]]:size-[22px] [&_[aria-haspopup]]:rounded-md"
+        class="flex h-6 flex-none items-center [&_[aria-haspopup]]:size-[22px] [&_[aria-haspopup]]:rounded-md"
       >
         <Gervaz.render_row_actions
           row_actions={@static.row_actions}
