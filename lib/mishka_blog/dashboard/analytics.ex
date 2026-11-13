@@ -6,8 +6,8 @@ defmodule MishkaBlog.Dashboard.Analytics do
   @moduledoc """
   Every number on the blog analytics page (`/admin/dashboard/blog/analytics`), read from the database.
 
-  `load/2` reads one window — seven, thirty or ninety whole days ending today — and returns the KPI
-  figures, the daily views series and the posts read most in that window, from
+  The page asks for one panel at a time — `load/4` with a panel of `panels/0` — and each panel is
+  one or two `GROUP BY` reads (`MishkaBlog.Dashboard.Scope.grouped/2`), most of them over
   `MishkaBlog.PostViewDaily`: one row per post and day with its views and unique readers. Nothing is
   estimated, which is why there is no read time and no bounce rate: nothing observes a reader leaving.
 
@@ -15,22 +15,35 @@ defmodule MishkaBlog.Dashboard.Analytics do
   the sum of those, and approximate where the site runs on several nodes, each telling its readers
   apart on its own. Views are written within a minute of being counted.
 
+  ## The period
+
+  `period/1` reads the page's URL params into the window asked for: `days` (7, 30 or 90 whole days
+  ending today), the same number of days before it to compare against, a `category`, `tag`,
+  `blogger` or `team` id that narrows every figure to that one's posts, and `compare`, which draws
+  the window before beside this one. `params/1` writes it back, so a reload or a shared link keeps it.
+
+  ## Who reads what
+
   Every figure is read as `user` through `MishkaBlog.Dashboard.Scope`, as
   `MishkaBlog.Dashboard.Overview` reads its own: a master (a user whose `site_id` is nil) counts every
-  site, a site user only its own. A day's row is joined to its post (`not is_nil(post.id)`), so the
-  views of an archived post are not counted.
-
-  The window's rows are read once — four selected columns — and the series, the readers and the top
-  posts are folded out of them in memory, as an Ash read does not `GROUP BY`. The all-time and
-  previous-window totals are one `SUM` each (`Scope.sum/2`).
+  site, a site user only its own. A day's row counts only while its post is not archived.
 
   Views and posts are read only for a holder of `admin:dashboard:blog:post`, and comments only for a
   holder of `admin:dashboard:blog:comment` (`MishkaBlog.Dashboard.Overview.areas/1`) — the
   permissions those resources' policies ask for. A read of an area the viewer does not hold is
-  refused and counted as no data, so its figures are zero and an engagement rate needs both.
+  refused and counted as no data; the comment reads are not even run without the comment area, and
+  their figures come back `nil`.
+
+  ## The `blog:analytics:panel` event
+
+  Every panel is handed to the plugins of `"blog:analytics:panel"` before the page draws it, as
+  `%{panel: atom, period: period, current_user: user, data: map}`; a plugin answers the same map,
+  `data` changed or not — to add a figure of its own, or leave out a post it keeps private.
 
   The caller runs this off the render — see `MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index`.
   """
+  import Ecto.Query, only: [from: 2]
+
   require Ash.Query
 
   alias MishkaBlog.BlogPost
@@ -41,7 +54,24 @@ defmodule MishkaBlog.Dashboard.Analytics do
 
   @ranges [7, 30, 90]
   @default_days 30
-  @top_posts 5
+  @filters [:category, :tag, :blogger, :team]
+  @panels [:overview, :categories, :tags, :bloggers, :post_age, :posts, :commenters]
+  @top 5
+  @top_posts 10
+  @quiet_below 3
+  @fresh_days 30
+  @options 200
+  @event "blog:analytics:panel"
+
+  @type period :: %{
+          days: pos_integer(),
+          from: Date.t(),
+          to: Date.t(),
+          previous_from: Date.t(),
+          previous_to: Date.t(),
+          filters: %{optional(atom()) => String.t()},
+          compare: boolean()
+        }
 
   @doc "The windows the page offers, in whole days."
   @spec ranges() :: [pos_integer()]
@@ -51,124 +81,598 @@ defmodule MishkaBlog.Dashboard.Analytics do
   @spec default_days() :: pos_integer()
   def default_days, do: @default_days
 
+  @doc "What a period can be narrowed by: a category, a tag, a blogger or a team."
+  @spec filters() :: [atom()]
+  def filters, do: @filters
+
+  @doc "The panels `load/4` reads, each on its own."
+  @spec panels() :: [atom()]
+  def panels, do: @panels
+
+  @doc "The event a panel is handed to before the page draws it."
+  @spec event() :: String.t()
+  def event, do: @event
+
   @doc """
-  Reads the analytics page for the last `days` days, as `user` (see `MishkaBlog.Dashboard.Scope`).
-
-  Returns a flat map: the all-time and windowed view totals, the window before it to compare
-  against, today and yesterday, the readers behind the window, the comment engagement rate, and two
-  collections — `:series` (one `%{date, count}` per day of the window, zeros included) and
-  `:top_posts` (`%{title, status, published_at, views}`, most read first).
-
-  `:from` and `:to` are the window's own bounds, so the page can say which days it is describing
-  rather than assuming they match the `days` it asked for.
+  The period the URL params `params` ask for, ending today. A `days` the page does not offer is the
+  default, and a filter that is not an id is left out.
   """
-  @spec load(map(), pos_integer()) :: map()
-  def load(user, days \\ @default_days) when days > 0 do
-    today = Date.utc_today()
-    from = Date.add(today, -(days - 1))
-    previous_from = Date.add(from, -days)
-    previous_to = Date.add(from, -1)
-
-    views = views_base(user)
-    comments = Scope.query(Comment, user)
-
-    rows = window_rows(views, from, today)
-
-    by_day =
-      rows
-      |> Enum.group_by(& &1.day, & &1.views)
-      |> Map.new(fn {day, v} -> {day, Enum.sum(v)} end)
-
-    daily = series(by_day, from, days)
-    views_window = Enum.sum_by(rows, & &1.views)
-    views_previous = views |> in_days(previous_from, previous_to) |> Scope.sum(:views)
-    comments_window = count(comments_in_days(comments, from, today))
+  @spec period(map()) :: period()
+  def period(params) do
+    days = Enum.find(@ranges, @default_days, &(to_string(&1) == params["days"]))
+    to = Date.utc_today()
+    from = Date.add(to, -(days - 1))
 
     %{
       days: days,
       from: from,
-      to: today,
-      views_total: Scope.sum(views, :views),
-      views_window: views_window,
-      views_previous: views_previous,
-      views_today: Map.get(by_day, today, 0),
-      views_yesterday: Map.get(by_day, Date.add(today, -1), 0),
-      visitors: Enum.sum_by(rows, & &1.unique_readers),
-      comments_window: comments_window,
-      engagement_rate: Figures.rate(comments_window, views_window),
-      engagement_previous:
-        Figures.rate(
-          count(comments_in_days(comments, previous_from, previous_to)),
-          views_previous
-        ),
-      series: daily,
-      peak: Enum.max_by(daily, & &1.count),
-      top_posts: top_posts(rows, user)
+      to: to,
+      previous_from: Date.add(from, -days),
+      previous_to: Date.add(from, -1),
+      filters: for(key <- @filters, id <- uuid(params[to_string(key)]), into: %{}, do: {key, id}),
+      compare: params["compare"] == "true"
     }
   end
 
-  defp window_rows(views, from, to) do
-    views
-    |> in_days(from, to)
-    |> Ash.Query.select([:day, :views, :unique_readers, :post_id])
-    |> Scope.list()
+  @doc "The URL params of `period`, leaving out what is the default."
+  @spec params(period()) :: map()
+  def params(period) do
+    period.filters
+    |> Map.new(fn {key, id} -> {to_string(key), id} end)
+    |> put_param("days", period.days != @default_days && to_string(period.days))
+    |> put_param("compare", period.compare && "true")
   end
 
-  # Every day of the window is emitted, including the empty ones: a line drawn only through the days
-  # that happened to have a view would space a quiet week the same as a busy one.
-  defp series(by_day, from, days) do
-    Enum.map(0..(days - 1), fn offset ->
-      date = Date.add(from, offset)
+  defp put_param(params, _key, false), do: params
+  defp put_param(params, key, value), do: Map.put(params, key, value)
 
-      %{date: date, count: Map.get(by_day, date, 0)}
+  defp uuid(value) when is_binary(value) do
+    case Ecto.UUID.cast(value) do
+      {:ok, id} -> [id]
+      :error -> []
+    end
+  end
+
+  defp uuid(_value), do: []
+
+  @doc """
+  What the filters can be set to, as `user` reads them: `%{category: [{id, name}], tag: …,
+  blogger: …, team: …}`, by name.
+  """
+  @spec options(map()) :: %{atom() => [{String.t(), String.t()}]}
+  def options(user) do
+    %{
+      category: names(MishkaBlog.Collection, :name, user),
+      tag: names(MishkaBlog.Tag, :name, user),
+      blogger: names(MishkaBlog.Blogger, :display_name, user),
+      team: names(MishkaBlog.Team, :name, user)
+    }
+  end
+
+  defp names(resource, field, user, ids \\ nil)
+
+  defp names(_resource, _field, _user, []), do: []
+
+  defp names(resource, field, user, ids) do
+    resource
+    |> Scope.query(user)
+    |> only(ids)
+    |> Ash.Query.select([:id, field])
+    |> Ash.Query.sort([{field, :asc}])
+    |> Scope.list(@options)
+    |> Enum.map(&{&1.id, Map.fetch!(&1, field)})
+  end
+
+  defp only(query, nil), do: query
+  defp only(query, ids), do: Ash.Query.filter(query, id in ^ids)
+
+  @doc """
+  Reads `panel` for `period` as `user`, then hands it to the `blog:analytics:panel` plugins.
+  `comments?` says whether the viewer holds the comment area; without it no comment is read.
+
+    * `:overview` — the KPI figures, the daily views of the window and of the one before
+      (`:series`, `:previous_series`), views per weekday (`:weekdays`), views and posts published
+      per week (`:weeks`) and the daily comments (`:comments`, `nil` without the comment area);
+    * `:categories` — the views of the five categories read most, day by day for a stacked chart
+      (`:series`, every other category's under `:other`), and their totals and share (`:top`);
+    * `:tags` and `:bloggers` — the five read most, with their views and share; a blogger also with
+      the posts it published in the window and the comments its posts were given;
+    * `:post_age` — the views of posts published in the last thirty days and of older ones;
+    * `:posts` — the posts read most (`:top`), those that grew most against the window before
+      (`:rising`), and published posts almost nobody read (`:quiet`);
+    * `:commenters` — who wrote the most comments in the window (`[]` without the comment area).
+  """
+  @spec load(atom(), map(), period(), boolean()) :: map() | list()
+  def load(panel, user, period, comments?) when panel in @panels do
+    data = read(panel, user, period, comments?)
+
+    case MishkaInstaller.Event.Hook.call(@event, %{
+           panel: panel,
+           period: period,
+           current_user: user,
+           data: data
+         }) do
+      %{data: data} -> data
+      _other -> data
+    end
+  end
+
+  defp read(:overview, user, period, comments?) do
+    by_day =
+      user
+      |> views(period, period.previous_from)
+      |> grouped(
+        :post_id,
+        period,
+        &from(r in &1,
+          group_by: r.day,
+          select: {r.day, {type(sum(r.views), :integer), type(sum(r.unique_readers), :integer)}}
+        )
+      )
+      |> Map.new()
+
+    series = daily(by_day, period.from, period.to, &elem(&1, 0))
+    previous_series = daily(by_day, period.previous_from, period.previous_to, &elem(&1, 0))
+    views_window = Enum.sum_by(series, & &1.count)
+    views_previous = Enum.sum_by(previous_series, & &1.count)
+    comments = comments?(comments?, fn -> comments_by_day(user, period) end)
+
+    %{
+      views_total: views_total(user, period),
+      views_window: views_window,
+      views_previous: views_previous,
+      views_today: by_day |> Map.get(period.to, {0, 0}) |> elem(0),
+      views_yesterday: by_day |> Map.get(Date.add(period.to, -1), {0, 0}) |> elem(0),
+      visitors: by_day |> daily(period.from, period.to, &elem(&1, 1)) |> Enum.sum_by(& &1.count),
+      series: series,
+      previous_series: previous_series,
+      peak: Enum.max_by(series, & &1.count),
+      weekdays: weekdays(series),
+      weeks: weeks(series, published_by_week(user, period)),
+      comments: comments,
+      comments_window: comments && comments.window,
+      engagement_rate: comments && Figures.rate(comments.window, views_window),
+      engagement_previous: comments && Figures.rate(comments.previous, views_previous)
+    }
+  end
+
+  defp read(:categories, user, period, _comments?) do
+    rows =
+      user
+      |> views(period, period.from)
+      |> grouped(
+        :post_id,
+        period,
+        &from([r] in &1,
+          left_join: pc in MishkaBlog.PostCollection,
+          on: pc.post_id == r.post_id,
+          group_by: [r.day, pc.collection_id],
+          select: {r.day, pc.collection_id, type(sum(r.views), :integer)}
+        )
+      )
+
+    top =
+      rows
+      |> Enum.group_by(&elem(&1, 1), &elem(&1, 2))
+      |> Enum.map(fn {id, views} -> {id, Enum.sum(views)} end)
+      |> ranked(MishkaBlog.Collection, :name, user)
+
+    shown = MapSet.new(top, & &1.id)
+
+    series =
+      Enum.map(days(period.from, period.to), fn date ->
+        counts =
+          for {^date, id, views} <- rows, reduce: %{} do
+            acc ->
+              Map.update(acc, (MapSet.member?(shown, id) && id) || :other, views, &(&1 + views))
+          end
+
+        %{date: date, counts: counts}
+      end)
+
+    %{top: top, series: series}
+  end
+
+  defp read(:tags, user, period, _comments?) do
+    user
+    |> views(period, period.from)
+    |> grouped(
+      :post_id,
+      period,
+      &from([r] in &1,
+        join: pt in MishkaBlog.PostTag,
+        on: pt.post_id == r.post_id,
+        group_by: pt.tag_id,
+        select: {pt.tag_id, type(sum(r.views), :integer)}
+      )
+    )
+    |> ranked(MishkaBlog.Tag, :name, user)
+  end
+
+  defp read(:bloggers, user, period, comments?) do
+    top =
+      user
+      |> views(period, period.from)
+      |> grouped(
+        :post_id,
+        period,
+        &from([r] in &1,
+          join: pb in MishkaBlog.PostBlogger,
+          on: pb.post_id == r.post_id,
+          group_by: pb.blogger_id,
+          select: {pb.blogger_id, type(sum(r.views), :integer)}
+        )
+      )
+      |> ranked(MishkaBlog.Blogger, :display_name, user)
+
+    ids = Enum.map(top, & &1.id)
+    published = user |> published(period) |> by_blogger(:id, period, ids)
+
+    comments =
+      comments?(comments?, fn ->
+        user |> comments(period, period.from) |> by_blogger(:post_id, period, ids)
+      end)
+
+    Enum.map(
+      top,
+      &Map.merge(&1, %{
+        posts: Map.get(published, &1.id, 0),
+        comments: comments && Map.get(comments, &1.id, 0)
+      })
+    )
+  end
+
+  defp read(:post_age, user, period, _comments?) do
+    cutoff = Figures.beginning_of_day(Date.add(period.to, -(@fresh_days - 1)))
+
+    rows =
+      user
+      |> views(period, period.from)
+      |> grouped(
+        :post_id,
+        period,
+        &from([r, post: p] in &1,
+          group_by: selected_as(:fresh),
+          select: %{
+            fresh:
+              selected_as(fragment("coalesce(? >= ?, false)", p.published_at, ^cutoff), :fresh),
+            views: type(sum(r.views), :integer)
+          }
+        )
+      )
+      |> Map.new(&{&1.fresh, &1.views})
+
+    %{fresh: Map.get(rows, true, 0), older: Map.get(rows, false, 0), fresh_days: @fresh_days}
+  end
+
+  defp read(:posts, user, period, comments?) do
+    from = period.from
+
+    rows =
+      user
+      |> views(period, period.previous_from)
+      |> grouped(
+        :post_id,
+        period,
+        &from([r, post: p] in &1,
+          group_by: [p.id, p.title, p.status, p.published_at],
+          select: %{
+            id: p.id,
+            title: p.title,
+            status: p.status,
+            published_at: p.published_at,
+            views: type(coalesce(filter(sum(r.views), r.day >= ^from), 0), :integer),
+            readers: type(coalesce(filter(sum(r.unique_readers), r.day >= ^from), 0), :integer),
+            previous: type(coalesce(filter(sum(r.views), r.day < ^from), 0), :integer)
+          }
+        )
+      )
+
+    top =
+      rows
+      |> Enum.filter(&(&1.views > 0))
+      |> Enum.sort_by(&{-&1.views, &1.title})
+      |> Enum.take(@top_posts)
+
+    comments = comments?(comments?, fn -> comments_by_post(user, period, top) end)
+
+    %{
+      top: Enum.map(top, &with_comments(&1, comments)),
+      rising:
+        rows
+        |> Enum.filter(&(&1.views > &1.previous))
+        |> Enum.sort_by(&{&1.previous - &1.views, &1.title})
+        |> Enum.take(@top)
+        |> Enum.map(&Map.put(&1, :change, change(&1.views, &1.previous))),
+      quiet: quiet(user, period)
+    }
+  end
+
+  defp read(:commenters, _user, _period, false), do: []
+
+  defp read(:commenters, user, period, true) do
+    counted =
+      user
+      |> comments(period, period.from)
+      |> grouped(
+        :post_id,
+        period,
+        &from(c in &1,
+          group_by: [c.author_id, c.guest_name],
+          order_by: [desc: count()],
+          limit: @top,
+          select: {c.author_id, c.guest_name, type(count(), :integer)}
+        )
+      )
+
+    authors = authors(user, for({id, _guest, _count} when is_binary(id) <- counted, do: id))
+
+    Enum.map(counted, fn {id, guest, count} ->
+      %{comment: Map.get(authors, id, %{author_id: id, guest_name: guest}), count: count}
     end)
   end
 
-  defp top_posts(rows, user) do
-    rows
-    |> Enum.group_by(& &1.post_id, & &1.views)
-    |> Enum.map(fn {id, views} -> {id, Enum.sum(views)} end)
-    |> Enum.sort_by(fn {_id, views} -> -views end)
-    |> Enum.take(@top_posts)
-    |> with_titles(user)
+  @doc """
+  `posts` ordered by `key` — `:views`, `:readers`, `:comments`, `:engagement` or `:change` — the
+  largest first; any other key orders by views.
+  """
+  @spec sort_posts([map()], atom()) :: [map()]
+  def sort_posts(posts, key) when key in [:readers, :comments, :engagement, :change],
+    do: Enum.sort_by(posts, &{-(Map.get(&1, key) || 0), -&1.views})
+
+  def sort_posts(posts, _key), do: Enum.sort_by(posts, &{-&1.views, &1.title})
+
+  defp with_comments(post, comments) do
+    count = comments && Map.get(comments, post.id, 0)
+
+    Map.merge(post, %{
+      comments: count,
+      engagement: count && Figures.rate(count, post.views),
+      change: change(post.views, post.previous)
+    })
   end
 
-  defp with_titles([], _user), do: []
+  # The share of growth against the window before, as whole percent; `nil` when there was nothing
+  # to grow from.
+  defp change(_views, 0), do: nil
+  defp change(views, previous), do: round((views - previous) * 100 / previous)
 
-  # A post the viewer cannot read simply drops out of the ranking rather than appearing as an
-  # untitled row: the counts came from views the viewer may read, the titles must come from posts it
-  # may read too.
-  defp with_titles(counted, user) do
-    views = Map.new(counted)
+  # The five most read of `counted` (`{id, views}`), named as `user` reads them, with their share of
+  # every view counted. A row the viewer cannot read the name of keeps its place, unnamed.
+  defp ranked(counted, resource, field, user) do
+    total = Enum.sum_by(counted, &elem(&1, 1))
+
+    top =
+      counted
+      |> Enum.reject(&is_nil(elem(&1, 0)))
+      |> Enum.sort_by(&(-elem(&1, 1)))
+      |> Enum.take(@top)
+
+    named = Map.new(names(resource, field, user, Enum.map(top, &elem(&1, 0))))
+
+    Enum.map(top, fn {id, views} ->
+      %{id: id, name: Map.get(named, id), views: views, share: Figures.rate(views, total)}
+    end)
+  end
+
+  defp authors(_user, []), do: %{}
+
+  defp authors(user, ids) do
+    Comment
+    |> Scope.query(user)
+    |> Ash.Query.filter(author_id in ^ids)
+    |> Ash.Query.distinct([:author_id])
+    |> Ash.Query.load([:author, :author_profile, :author_master?])
+    |> Scope.list(length(ids))
+    |> Map.new(&{&1.author_id, &1})
+  end
+
+  # A `GROUP BY` over `query`, narrowed by the period's filters on the post id held in `column`; a
+  # daily row's post is joined as `:post`, and counts only while that post is not archived.
+  defp grouped(%{resource: PostViewDaily} = query, column, period, build) do
+    Scope.grouped(query, fn ecto ->
+      from(r in ecto,
+        join: p in BlogPost,
+        as: :post,
+        on: p.id == r.post_id and is_nil(p.archived_at)
+      )
+      |> narrow(column, period.filters)
+      |> build.()
+    end)
+  end
+
+  defp grouped(query, column, period, build),
+    do: Scope.grouped(query, &(&1 |> narrow(column, period.filters) |> build.()))
+
+  defp narrow(query, column, filters) do
+    Enum.reduce(filters, query, fn {key, id}, query ->
+      from([x] in query, where: field(x, ^column) in subquery(posts_of(key, id)))
+    end)
+  end
+
+  defp posts_of(:category, id),
+    do: from(pc in MishkaBlog.PostCollection, where: pc.collection_id == ^id, select: pc.post_id)
+
+  defp posts_of(:tag, id),
+    do: from(pt in MishkaBlog.PostTag, where: pt.tag_id == ^id, select: pt.post_id)
+
+  defp posts_of(:blogger, id),
+    do: from(pb in MishkaBlog.PostBlogger, where: pb.blogger_id == ^id, select: pb.post_id)
+
+  defp posts_of(:team, id) do
+    from(pb in MishkaBlog.PostBlogger,
+      join: tm in MishkaBlog.TeamMember,
+      on: tm.blogger_id == pb.blogger_id,
+      where: tm.team_id == ^id,
+      select: pb.post_id
+    )
+  end
+
+  defp views(user, period, from) do
+    to = period.to
+
+    PostViewDaily
+    |> Scope.query(user)
+    |> Ash.Query.filter(day >= ^from and day <= ^to)
+  end
+
+  defp views_total(user, period) do
+    PostViewDaily
+    |> Scope.query(user)
+    |> grouped(
+      :post_id,
+      period,
+      &from([r] in &1, select: type(coalesce(sum(r.views), 0), :integer))
+    )
+    |> List.first(0)
+  end
+
+  defp published(user, period) do
+    from = Figures.beginning_of_day(period.from)
+    to = Figures.beginning_of_day(Date.add(period.to, 1))
 
     BlogPost
+    |> Scope.query(user, :read_any)
+    |> Ash.Query.filter(status == :published and published_at >= ^from and published_at < ^to)
+  end
+
+  defp published_by_week(user, period) do
+    user
+    |> published(period)
+    |> grouped(
+      :id,
+      period,
+      &from([p] in &1,
+        group_by: fragment("date_trunc('week', ?)::date", p.published_at),
+        select:
+          {type(fragment("date_trunc('week', ?)::date", p.published_at), :date),
+           type(count(), :integer)}
+      )
+    )
+    |> Map.new()
+  end
+
+  defp quiet(user, period) do
+    from = period.from
+    to = period.to
+    published_before = Figures.beginning_of_day(Date.add(to, 1))
+
+    BlogPost
+    |> Scope.query(user, :read_any)
+    |> Ash.Query.filter(status == :published and published_at < ^published_before)
+    |> grouped(
+      :id,
+      period,
+      &from([p] in &1,
+        left_join: r in PostViewDaily,
+        on: r.post_id == p.id and r.day >= ^from and r.day <= ^to,
+        group_by: [p.id, p.title, p.status, p.published_at],
+        having: coalesce(sum(r.views), 0) < @quiet_below,
+        order_by: [asc: coalesce(sum(r.views), 0), desc: p.published_at],
+        limit: @top,
+        select: %{
+          id: p.id,
+          title: p.title,
+          status: p.status,
+          published_at: p.published_at,
+          views: type(coalesce(sum(r.views), 0), :integer)
+        }
+      )
+    )
+  end
+
+  defp comments(user, period, from) do
+    from = Figures.beginning_of_day(from)
+    to = Figures.beginning_of_day(Date.add(period.to, 1))
+
+    Comment
     |> Scope.query(user)
-    |> Ash.Query.filter(id in ^Map.keys(views))
-    |> Ash.Query.select([:id, :title, :status, :published_at])
-    |> Scope.list(map_size(views))
-    |> Enum.map(
-      &%{
-        title: &1.title,
-        status: &1.status,
-        published_at: &1.published_at,
-        views: Map.fetch!(views, &1.id)
-      }
-    )
-    |> Enum.sort_by(&{-&1.views, &1.title})
+    |> Ash.Query.filter(inserted_at >= ^from and inserted_at < ^to)
   end
 
-  defp views_base(user),
-    do: PostViewDaily |> Scope.query(user) |> Ash.Query.filter(not is_nil(post.id))
+  defp comments_by_day(user, period) do
+    by_day =
+      user
+      |> comments(period, period.previous_from)
+      |> grouped(
+        :post_id,
+        period,
+        &from(c in &1,
+          group_by: fragment("?::date", c.inserted_at),
+          select: {type(fragment("?::date", c.inserted_at), :date), type(count(), :integer)}
+        )
+      )
+      |> Map.new()
 
-  defp in_days(query, from, to), do: Ash.Query.filter(query, day >= ^from and day <= ^to)
+    series = daily(by_day, period.from, period.to, & &1)
+    previous = daily(by_day, period.previous_from, period.previous_to, & &1)
 
-  defp comments_in_days(query, from, to) do
-    Ash.Query.filter(
-      query,
-      inserted_at >= ^Figures.beginning_of_day(from) and
-        inserted_at < ^Figures.beginning_of_day(Date.add(to, 1))
-    )
+    %{
+      series: series,
+      previous_series: previous,
+      window: Enum.sum_by(series, & &1.count),
+      previous: Enum.sum_by(previous, & &1.count)
+    }
   end
 
-  defp count(query), do: Scope.count(query)
+  defp comments_by_post(_user, _period, []), do: %{}
+
+  defp comments_by_post(user, period, posts) do
+    ids = Enum.map(posts, & &1.id)
+
+    user
+    |> comments(period, period.from)
+    |> Ash.Query.filter(post_id in ^ids)
+    |> grouped(
+      :post_id,
+      period,
+      &from(c in &1, group_by: c.post_id, select: {c.post_id, type(count(), :integer)})
+    )
+    |> Map.new()
+  end
+
+  defp by_blogger(_query, _column, _period, []), do: %{}
+
+  defp by_blogger(query, column, period, ids) do
+    query
+    |> grouped(
+      column,
+      period,
+      &from([x] in &1,
+        join: pb in MishkaBlog.PostBlogger,
+        on: pb.post_id == field(x, ^column),
+        where: pb.blogger_id in ^ids,
+        group_by: pb.blogger_id,
+        select: {pb.blogger_id, type(count(), :integer)}
+      )
+    )
+    |> Map.new()
+  end
+
+  defp comments?(true, read), do: read.()
+  defp comments?(false, _read), do: nil
+
+  defp daily(by_day, from, to, pick) do
+    Enum.map(days(from, to), fn date ->
+      %{date: date, count: (Map.has_key?(by_day, date) && pick.(by_day[date])) || 0}
+    end)
+  end
+
+  defp days(from, to), do: Enum.to_list(Date.range(from, to))
+
+  # Monday first, as `Date.day_of_week/1` counts.
+  defp weekdays(series) do
+    sums = Enum.group_by(series, &Date.day_of_week(&1.date), & &1.count)
+
+    Enum.map(1..7, &%{day: &1, count: sums |> Map.get(&1, []) |> Enum.sum()})
+  end
+
+  defp weeks(series, published) do
+    series
+    |> Enum.group_by(&Date.beginning_of_week(&1.date), & &1.count)
+    |> Enum.sort_by(&elem(&1, 0), Date)
+    |> Enum.map(fn {week, counts} ->
+      %{week: week, views: Enum.sum(counts), posts: Map.get(published, week, 0)}
+    end)
+  end
 end

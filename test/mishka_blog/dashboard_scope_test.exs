@@ -35,7 +35,7 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
 
     before = %{
       overview: Overview.load(master),
-      analytics: Analytics.load(master, 7)
+      analytics: analytics(master)
     }
 
     site_a = create_site!()
@@ -132,6 +132,7 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
       assert Scope.count(query) == 0
       assert Scope.list(query) == []
       assert Scope.list(query, 5) == []
+      assert Scope.grouped(query, &Ecto.Query.from(p in &1, select: count())) == []
     end
   end
 
@@ -210,7 +211,7 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
 
   describe "the analytics page" do
     test "a master counts both sites", %{master: master, before: before} do
-      stats = Analytics.load(master, 7)
+      stats = analytics(master)
 
       assert stats.views_window - before.analytics.views_window == 3
       assert stats.views_total - before.analytics.views_total == 3
@@ -221,32 +222,32 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
       admin_a: admin_a,
       admin_b: admin_b
     } do
-      a = Analytics.load(admin_a, 7)
-      b = Analytics.load(admin_b, 7)
+      a = analytics(admin_a)
+      b = analytics(admin_b)
 
       assert {a.views_total, a.views_window, a.views_today, a.comments_window} == {2, 2, 2, 2}
-      assert Enum.map(a.top_posts, &{&1.title, &1.views}) == [{"A Read", 2}]
+      assert Enum.map(top_posts(admin_a), &{&1.title, &1.views}) == [{"A Read", 2}]
       assert Enum.sum_by(a.series, & &1.count) == 2
       assert a.visitors == 2
 
       assert {b.views_total, b.views_window, b.comments_window} == {1, 1, 1}
-      assert Enum.map(b.top_posts, &{&1.title, &1.views}) == [{"B Read", 1}]
+      assert Enum.map(top_posts(admin_b), &{&1.title, &1.views}) == [{"B Read", 1}]
     end
 
     test "a moderator reads the comments alone", %{moderator_a: moderator} do
-      stats = Analytics.load(moderator, 7)
+      stats = analytics(moderator)
 
       assert {stats.views_total, stats.views_window, stats.visitors} == {0, 0, 0}
       assert stats.comments_window == 2
-      assert stats.top_posts == []
+      assert top_posts(moderator) == []
     end
 
     for actor <- [:nobody_a, :bare_master, :page_master] do
       test "#{actor} holds no blog area and reads nothing", context do
-        stats = Analytics.load(context[unquote(actor)], 7)
+        stats = analytics(context[unquote(actor)])
 
-        assert {stats.views_total, stats.views_window, stats.comments_window} == {0, 0, 0}
-        assert stats.top_posts == []
+        assert {stats.views_total, stats.views_window, stats.comments_window || 0} == {0, 0, 0}
+        assert top_posts(context[unquote(actor)]) == []
       end
     end
   end
@@ -379,6 +380,12 @@ defmodule MishkaBlog.Dashboard.ScopeTest do
     |> Enum.uniq()
     |> Enum.sort()
   end
+
+  defp analytics(user),
+    do: Analytics.load(:overview, user, Analytics.period(%{"days" => "7"}), true)
+
+  defp top_posts(user),
+    do: Analytics.load(:posts, user, Analytics.period(%{"days" => "7"}), true).top
 
   defp empty?(value) when is_integer(value), do: value == 0
   defp empty?(value) when is_list(value), do: value == []

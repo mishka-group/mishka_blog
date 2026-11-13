@@ -15,12 +15,12 @@ defmodule MishkaBlog.Dashboard.Scope do
     * a site user reads through the resource's primary `:read` with its own site as the tenant, so
       it reads that site alone.
 
-  Refine the query with filters, sorts, selects and loads, then run it with `count/1`, `sum/2` or
-  `list/2`.
+  Refine the query with filters, sorts, selects and loads, then run it with `count/1`, `sum/2`,
+  `list/2` or, for a `GROUP BY`, `grouped/2`.
   The viewer is the query's actor, so the resource's policies decide what it reads: a viewer who
-  does not hold the area a resource belongs to is refused, or has every row filtered out. Both run
+  does not hold the area a resource belongs to is refused, or has every row filtered out. They run
   without raising and give a refused or failed read as no data — `0` from `count/1` and `sum/2`,
-  `[]` from `list/2`.
+  `[]` from `list/2` and `grouped/2`.
 
       MishkaBlog.BlogPost
       |> Scope.query(user)
@@ -104,6 +104,39 @@ defmodule MishkaBlog.Dashboard.Scope do
   def list(query, limit) when is_integer(limit) and limit > 0 do
     case Ash.read(query, page: [limit: limit]) do
       {:ok, %{results: records}} -> records
+      {:error, error} -> no_data(query, error, [])
+    end
+  end
+
+  @doc """
+  The rows of a `GROUP BY` over the records `query` reads, which an Ash read does not do. `[]`
+  when the read is refused or fails.
+
+  The query is authorized first, so the resource's policy filters and the tenant are in it, then
+  handed to the data layer as an `Ecto.Query` with no select; `build` adds the joins, the
+  `group_by` and the `select`. A join is by key to a row of the same site, as the rows the
+  authorized query reads are.
+
+      MishkaBlog.PostViewDaily
+      |> Scope.query(user)
+      |> Scope.grouped(&Ecto.Query.from(r in &1, group_by: r.day, select: {r.day, sum(r.views)}))
+  """
+  @spec grouped(Ash.Query.t(), (Ecto.Query.t() -> Ecto.Query.t())) :: [term()]
+  def grouped(query, build) do
+    with {:ok, true, authorized} <-
+           Ash.can(query, query.context.private.actor,
+             alter_source?: true,
+             maybe_is: false,
+             run_queries?: false
+           ),
+         {:ok, ecto} <- Ash.Query.data_layer_query(authorized) do
+      ecto
+      |> Ecto.Query.exclude(:select)
+      |> Ecto.Query.exclude(:order_by)
+      |> build.()
+      |> AshPostgres.DataLayer.Info.repo(query.resource, :read).all()
+    else
+      {:ok, false} -> []
       {:error, error} -> no_data(query, error, [])
     end
   end
