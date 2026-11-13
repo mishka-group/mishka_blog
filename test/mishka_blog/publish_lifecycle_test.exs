@@ -106,6 +106,21 @@ defmodule MishkaBlog.Test.PublishLifecycleTest do
         assert Enum.any?(errors, &(Map.get(&1, :field) == :scheduled_publish_at))
       end
 
+      test "refuses a scheduled time already gone, in a sentence that names the field's label" do
+        site = create_site!()
+        past = DateTime.utc_now() |> DateTime.add(-3_600, :second) |> DateTime.truncate(:second)
+
+        assert {:error, %Ash.Error.Invalid{errors: errors}} =
+                 create(site, unquote(scope), unquote(create_action), %{
+                   status: :scheduled,
+                   scheduled_publish_at: past
+                 })
+
+        assert [error] = Enum.filter(errors, &(Map.get(&1, :field) == :scheduled_publish_at))
+        assert Exception.message(error) =~ "Publish At must be in the future."
+        refute Exception.message(error) =~ "scheduled_publish_at field"
+      end
+
       test "takes a scheduled post that says when, with no published time yet" do
         site = create_site!()
         at = future() |> DateTime.truncate(:second)

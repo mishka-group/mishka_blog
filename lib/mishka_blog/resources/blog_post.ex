@@ -1463,8 +1463,7 @@ defmodule MishkaBlog.BlogPost do
     field :published_at, :utc_datetime,
       derives: "validate(optional=[utc_datetime, past_datetime])"
 
-    field :scheduled_publish_at, :utc_datetime,
-      derives: "validate(optional=[utc_datetime, future_datetime])"
+    field :scheduled_publish_at, :utc_datetime, derives: "validate(optional=[utc_datetime])"
 
     field :schema, {:array, :map}, derives: "validate(list)"
     field :seo_tags, {:array, :map}, derives: "validate(list)"
@@ -2693,6 +2692,11 @@ defmodule MishkaBlog.BlogPost do
               read_action: :read_any},
              on: [:create],
              before_action?: true
+
+    # A scheduled time still to come, said with the form's own label for the field.
+    validate compare(:scheduled_publish_at, greater_than_or_equal_to: &DateTime.utc_now/0),
+      where: [present(:scheduled_publish_at), changing(:scheduled_publish_at)],
+      message: dgettext_noop("errors", "Publish At must be in the future.")
 
     # A blogger without Can Publish Directly saves a draft for an editor to publish.
     validate MishkaBlog.Resources.Validations.PublishDirectly,
