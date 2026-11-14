@@ -16,11 +16,9 @@ defmodule MishkaBlog.Plugins.PostMovedTest do
   use MishkaBlog.DataCase, async: false
 
   alias MishkaBlog.Plugins.{PageRecords, PostMoved}
-  alias MishkaCmsCore.PluginRegistrations
   alias MishkaCmsCore.Runtime.{Redirects, Seo}
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState, WebRunTimeMetaDataState}
   alias MishkaCmsCore.Settings
-  alias MishkaInstaller.Event.{Event, EventHandler}
 
   @slug_page "/:lang/blog/:slug"
   @category_page "/:lang/blog/:category/:slug"
@@ -47,8 +45,8 @@ defmodule MishkaBlog.Plugins.PostMovedTest do
       SettingsState.delete(site.id, "site.languages")
     end)
 
-    register(PageRecords)
-    register(PostMoved)
+    register_plugin!(PageRecords)
+    register_plugin!(PostMoved)
 
     news = create_collection!(site_id: site.id, slug: "news", status: :active, display_order: 1)
     apps = create_collection!(site_id: site.id, slug: "apps", status: :active, display_order: 2)
@@ -60,15 +58,6 @@ defmodule MishkaBlog.Plugins.PostMovedTest do
         do: create_post_collection!(post_id: post.id, collection_id: category.id)
 
     {:ok, site: site, tips: tips}
-  end
-
-  # Registered the way the CMS boot registers it, and unregistered when the test exits.
-  defp register(plugin) do
-    PluginRegistrations.reconcile(false)
-    {:ok, _} = plugin.register()
-    {:ok, _} = plugin.start()
-    on_exit(fn -> Event.unregister(:name, plugin, false) end)
-    :ok = EventHandler.do_compile(plugin.config(:__event__), :start, false)
   end
 
   defp page!(site, path, priority \\ 0) do

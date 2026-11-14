@@ -16,7 +16,8 @@ defmodule MishkaBlog.DataCase do
   The helpers come from the core too — `errors_on/1` and the rest of `MishkaCmsCore.DataCase`, the
   sites, users and runtime records of `MishkaCmsCore.Test.Factory`, `MishkaCmsCore.Test.VersionHelpers`
   — and this case adds the blog's own: its records (`MishkaBlog.Test.Factory`), a plugin for the
-  length of a block (`with_plugin/3`) and the SQL a block ran (`queries_while/1`).
+  length of a block (`with_plugin/3`), a shipped plugin for the length of a test
+  (`register_plugin!/1`) and the SQL a block ran (`queries_while/1`).
 
   See `MishkaBlog.ConnCase` for tests that go through the JSON API instead.
   """
@@ -70,6 +71,29 @@ defmodule MishkaBlog.DataCase do
     after
       MishkaInstaller.Event.Event.unregister(:name, module, false)
     end
+  end
+
+  @doc """
+  Registers and starts one of this extension's plugins the way the CMS boot does, and unregisters
+  it when the test ends. The application's own plugins also register themselves at boot once the
+  installer is ready, so one a test did not register may still be answering, but only until a test
+  that registered it exits: the registry is shared by the whole run. A test whose result depends on
+  a shipped plugin therefore calls this in its setup rather than relying on boot.
+
+      setup do
+        register_plugin!(MishkaBlog.Plugins.PostShareCard)
+      end
+  """
+  def register_plugin!(plugin) do
+    MishkaCmsCore.PluginRegistrations.reconcile(false)
+    {:ok, _registered} = plugin.register()
+    {:ok, _started} = plugin.start()
+
+    ExUnit.Callbacks.on_exit(fn ->
+      MishkaInstaller.Event.Event.unregister(:name, plugin, false)
+    end)
+
+    :ok = MishkaInstaller.Event.EventHandler.do_compile(plugin.config(:__event__), :start, false)
   end
 
   @doc """
