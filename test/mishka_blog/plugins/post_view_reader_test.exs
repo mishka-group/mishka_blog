@@ -6,7 +6,8 @@ defmodule MishkaBlog.Plugins.PostViewReaderTest do
   @moduledoc """
   A connected runtime page keeps its reader (user agent and session secret) whether the connect
   info is a websocket's map or the `Plug.Conn` of a `Phoenix.LiveViewTest`; a socket without a
-  session keeps `session: nil` and a not connected one keeps no reader.
+  session keeps `session: nil` and a not connected one keeps no reader. A proxy's address and
+  forwarded headers change nothing.
   """
   use ExUnit.Case, async: true
 
@@ -21,6 +22,18 @@ defmodule MishkaBlog.Plugins.PostViewReaderTest do
 
   test "a websocket's connect info map gives the reader" do
     info = %{user_agent: "Firefox", session: %{"_csrf_token" => "secret"}}
+
+    assert %{session: "secret", user_agent: "Firefox"} ==
+             reader(PostViewReader.call(socket(info)))
+  end
+
+  test "behind a reverse proxy the reader is still the session and user agent, with no address" do
+    info = %{
+      user_agent: "Firefox",
+      session: %{"_csrf_token" => "secret"},
+      peer_data: %{address: {10, 0, 0, 2}, port: 443, ssl_cert: nil},
+      x_headers: [{"x-forwarded-for", "203.0.113.7"}, {"x-forwarded-proto", "https"}]
+    }
 
     assert %{session: "secret", user_agent: "Firefox"} ==
              reader(PostViewReader.call(socket(info)))

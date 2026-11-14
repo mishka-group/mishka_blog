@@ -21,6 +21,9 @@ defmodule MishkaBlog.Plugins.PostViewReader do
   `Phoenix.LiveView.get_connect_info/2` has no `:session` clause and would raise, so the session
   is read from the conn when it was fetched. Without a session the reader's `:session` is `nil`.
 
+  No address is read, so the reader is the same behind a reverse proxy (nginx, Traefik), where
+  `:peer_data` is the proxy's and the client's sits in `:x_headers`.
+
   Registered in `MishkaBlog.Application`.
   """
 
