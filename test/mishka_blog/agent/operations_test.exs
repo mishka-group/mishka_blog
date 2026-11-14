@@ -11,11 +11,13 @@ defmodule MishkaBlog.Agent.OperationsTest do
   use MishkaBlog.DataCase, async: false
 
   alias MishkaBlog.BlogPost
+  alias MishkaBlog.Plugins.PostShareCard
   alias MishkaCmsCore.Agent.{Operation, Receipts}
 
   setup do
     Receipts.switch(true)
     on_exit(fn -> Receipts.switch(false) end)
+    register_plugin!(PostShareCard)
 
     site = create_site!()
 

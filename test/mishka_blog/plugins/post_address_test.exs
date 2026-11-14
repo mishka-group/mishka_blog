@@ -17,11 +17,9 @@ defmodule MishkaBlog.Plugins.PostAddressTest do
 
   alias MishkaBlog.Plugins.{BlogSettings, PostAddress}
   alias MishkaBlog.Provision
-  alias MishkaCmsCore.PluginRegistrations
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.States.SettingsState
   alias MishkaCmsCore.Settings
-  alias MishkaInstaller.Event.{Event, EventHandler}
 
   @slug_page "/:lang/blog/:slug"
   @category_page "/:lang/blog/:category/:slug"
@@ -31,14 +29,6 @@ defmodule MishkaBlog.Plugins.PostAddressTest do
     Provision.ensure!(site)
     on_exit(fn -> SettingsState.delete(site.id, "blog.post_address") end)
     {:ok, site: site}
-  end
-
-  defp register(plugin) do
-    PluginRegistrations.reconcile(false)
-    {:ok, _} = plugin.register()
-    {:ok, _} = plugin.start()
-    on_exit(fn -> Event.unregister(:name, plugin, false) end)
-    :ok = EventHandler.do_compile(plugin.config(:__event__), :start, false)
   end
 
   defp post_pages(site) do
@@ -80,7 +70,7 @@ defmodule MishkaBlog.Plugins.PostAddressTest do
   end
 
   test "saving the setting moves the page", %{site: site} do
-    register(PostAddress)
+    register_plugin!(PostAddress)
 
     {:ok, _} = Settings.put("blog.post_address", "category", site_id: site.id)
     assert %{@category_page => %{active: true}} = post_pages(site)

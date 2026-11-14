@@ -22,22 +22,8 @@ defmodule MishkaBlog.ShareCardsTest do
     TeamShareCard
   }
 
-  alias MishkaCmsCore.PluginRegistrations
   alias MishkaCmsCore.Runtime.Workers.ShareCardRefreshWorker
   alias MishkaGervaz.Resource.Info.Form, as: FormInfo
-  alias MishkaInstaller.Event.{Event, EventHandler}
-
-  # Each plugin a test needs is registered the way the CMS boot registers it, and unregistered when
-  # the test exits, since Mnesia is on disk. The application's own plugin processes run in this suite
-  # too and register themselves once the installer is ready, so a plugin a test did not register may
-  # still be answering.
-  defp register(plugin) do
-    PluginRegistrations.reconcile(false)
-    {:ok, _} = plugin.register()
-    {:ok, _} = plugin.start()
-    on_exit(fn -> Event.unregister(:name, plugin, false) end)
-    :ok = EventHandler.do_compile(plugin.config(:__event__), :start, false)
-  end
 
   defp looks, do: for(job <- all_enqueued(worker: ShareCardRefreshWorker), do: job.args)
 
@@ -77,7 +63,7 @@ defmodule MishkaBlog.ShareCardsTest do
 
   describe "after a post is saved" do
     setup do
-      register(PostShareCard)
+      register_plugin!(PostShareCard)
       %{site: create_site!(active: true)}
     end
 
@@ -121,7 +107,7 @@ defmodule MishkaBlog.ShareCardsTest do
     site = create_site!(active: true)
 
     for plugin <- [CollectionShareCard, TagShareCard, BloggerShareCard, TeamShareCard],
-        do: register(plugin)
+        do: register_plugin!(plugin)
 
     create_collection!(site_id: site.id, status: :active, slug: "eng")
     create_blog_tag!(site_id: site.id, slug: "elixir")
@@ -133,7 +119,7 @@ defmodule MishkaBlog.ShareCardsTest do
       for %{"target" => %{"record" => kind, "params" => %{"slug" => slug}}} <- looks(),
           do: {kind, slug}
 
-    # The post's own plugin may be running (see `register/1`); if it is, its card is the post's alone.
+    # The post's own plugin may be running from boot; if it is, its card is the post's alone.
     assert Enum.sort(looked -- [{"blog:post", "no-plugin-here"}]) == [
              {"blog:author", "mona"},
              {"blog:category", "eng"},
