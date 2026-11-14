@@ -119,7 +119,7 @@ defmodule MishkaBlog.ShareCardsTest do
       for %{"target" => %{"record" => kind, "params" => %{"slug" => slug}}} <- looks(),
           do: {kind, slug}
 
-    # The post's own plugin may be running (see `MishkaBlog.DataCase.register_plugin!/1`); if it is, its card is the post's alone.
+    # The post's own plugin may be running from boot; if it is, its card is the post's alone.
     assert Enum.sort(looked -- [{"blog:post", "no-plugin-here"}]) == [
              {"blog:author", "mona"},
              {"blog:category", "eng"},
