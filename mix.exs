@@ -88,7 +88,7 @@ defmodule MishkaBlog.MixProject do
       {:makeup_css, "~> 0.2"},
       {:oban, "~> 2.24"},
       mishka_dep(:mishka_installer, "~> 0.1.16"),
-      {:guarded_struct, "~> 0.1.8"},
+      {:guarded_struct, "~> 0.1.10"},
       mishka_dep(:mishka_cms_core, "~> 0.0.5-alpha.18"),
       mishka_dep(:mishka_gervaz, "~> 0.0.10"),
       mishka_dep(:mishka_slug, "~> 0.0.1"),
