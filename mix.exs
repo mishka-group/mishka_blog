@@ -5,7 +5,7 @@
 defmodule MishkaBlog.MixProject do
   use Mix.Project
 
-  @version "0.0.3-alpha.10"
+  @version "0.0.3"
   @source_url "https://github.com/mishka-group/mishka_blog"
 
   def project do
@@ -90,7 +90,7 @@ defmodule MishkaBlog.MixProject do
       mishka_dep(:mishka_installer, "~> 0.1.16"),
       {:guarded_struct, "~> 0.1.10"},
       mishka_dep(:mishka_cms_core, "~> 0.0.5-alpha.18"),
-      mishka_dep(:mishka_gervaz, "~> 0.0.10"),
+      mishka_dep(:mishka_gervaz, "~> 0.0.12"),
       mishka_dep(:mishka_slug, "~> 0.0.1"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
