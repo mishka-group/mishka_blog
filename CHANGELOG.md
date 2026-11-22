@@ -1,5 +1,6 @@
 # Changelog for MishkaBlog 0.0.3
 
+- Dependencies updated to hammer 7.6.0, postgrex 0.23.0 and, for development, ex_doc 0.40.5. assent 0.4.0 and color 1.0.0 stay behind: ash_authentication requires `~> 0.3.2` and image requires `~> 0.13`
 - A runtime page test no longer logs an `[error]` from `Plugins.PostViewReader` and stores no reader: under `Phoenix.LiveViewTest` the connect info is a `Plug.Conn`, which `get_connect_info(socket, :session)` cannot read, so the reader takes the session's CSRF secret from the conn as it does from a websocket's connect info
 - The post form's Publish At can't be in the past on a new post: its calendar greys out the days before today and a past time is refused with "is too early". Editing a post leaves it free, so an older scheduled post is still saved as it is
 - Needs mishka_gervaz 0.0.10, whose relation selects open through their `.SearchSelect` hook in place of `phx-focus`, and mishka_cms_core 0.0.5-alpha.17. Every dependency is at its latest release, including joken 2.8.0 and mochiweb 3.6.1
