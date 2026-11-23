@@ -1,3 +1,7 @@
+# Changelog for MishkaBlog 0.0.4
+
+- The kit's `blog-related-posts` cards fill their rows: one column on a phone, two from 640px and three from 1024px, and on the two-column width a lone last card spans the row instead of leaving an empty slot beside it
+
 # Changelog for MishkaBlog 0.0.3
 
 - Dependencies updated to hammer 7.6.0, postgrex 0.23.0 and, for development, ex_doc 0.40.5. assent 0.4.0 and color 1.0.0 stay behind: ash_authentication requires `~> 0.3.2` and image requires `~> 0.13`
