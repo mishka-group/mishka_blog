@@ -53,6 +53,8 @@ defmodule MishkaBlog.MixProject do
       {:decimal, "~> 3.2"},
       {:sourceror, "~> 1.13", only: [:dev, :test]},
       {:lazy_html, "~> 0.1", only: :test},
+      # The feed tests read the rendered RSS and Atom documents with its XPath.
+      {:sweet_xml, "~> 0.7", only: :test},
       # The core's Heroicons catalogue (`MishkaCmsCore.Runtime.Authoring.Icons.Heroicons`) reads
       # these SVGs at compile time, out of the deps of the project being built. A host brings its own
       # copy, so this one serves only this library's own suite, and it is never a requirement of the
@@ -72,7 +74,7 @@ defmodule MishkaBlog.MixProject do
       {:ash_oban, "~> 0.10.3"},
       {:ash_json_api, "~> 1.7"},
       {:ash_phoenix, "~> 2.3"},
-      {:ash, "~> 3.37"},
+      {:ash, "~> 3.38"},
       {:html_sanitize_ex, "~> 1.5"},
       # The RSS and Atom feeds (`MishkaBlog.Feeds.Renderer`) are written with it.
       {:xml_builder, "~> 2.4"},
