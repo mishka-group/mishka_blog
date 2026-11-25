@@ -111,7 +111,7 @@ To send the blog's own counts to Google Analytics or Plausible from the server, 
 Mishka Blog is installed with [Mishka CMS](https://github.com/mishka-group/mishka_cms#-getting-started). Add it from Hex:
 
 ```elixir
-{:mishka_blog, "~> 0.0.3"}
+{:mishka_blog, "~> 0.0.4"}
 ```
 
 [Mishka CMS](https://github.com/mishka-group/mishka_cms) loads it from `__extensions/mishka_blog` instead when that folder exists.

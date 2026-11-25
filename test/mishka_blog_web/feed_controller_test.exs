@@ -17,9 +17,9 @@ defmodule MishkaBlogWeb.FeedControllerTest do
   use MishkaBlog.ConnCase, async: false
 
   import MishkaBlog.Test.Factory
-  import SweetXml
 
   alias MishkaBlog.{Feeds, Provision}
+  alias MishkaBlog.Test.Xml
 
   alias MishkaCmsCore.Runtime.States.{
     AssetsState,
@@ -99,7 +99,7 @@ defmodule MishkaBlogWeb.FeedControllerTest do
   end
 
   defp titles(%Plug.Conn{resp_body: body}), do: titles(body)
-  defp titles(body), do: xpath(body, ~x"//item/title/text()"sl)
+  defp titles(body), do: Xml.texts(body, "//item/title/text()")
 
   defp json_titles(conn),
     do: conn.resp_body |> Jason.decode!() |> Map.fetch!("items") |> Enum.map(& &1["title"])
@@ -115,12 +115,12 @@ defmodule MishkaBlogWeb.FeedControllerTest do
       assert conn.status == 200
       assert ["application/rss+xml; charset=utf-8"] = get_resp_header(conn, "content-type")
       assert get_resp_header(conn, "set-cookie") == []
-      assert xpath(conn.resp_body, ~x"//channel/title/text()"s) == "Feed Site"
+      assert Xml.text(conn.resp_body, "//channel/title/text()") == "Feed Site"
       assert titles(conn) == ["New", "Old"]
-      assert xpath(conn.resp_body, ~x"//item[1]/link/text()"s) =~ "#{site.host}"
-      assert xpath(conn.resp_body, ~x"//item[1]/guid/text()"s) =~ "/blog/#{new.slug}"
-      assert xpath(conn.resp_body, ~x"//item[1]/guid/@isPermaLink"s) == "true"
-      assert xpath(conn.resp_body, ~x"//item[2]/link/text()"s) =~ "/blog/#{old.slug}"
+      assert Xml.text(conn.resp_body, "//item[1]/link/text()") =~ "#{site.host}"
+      assert Xml.text(conn.resp_body, "//item[1]/guid/text()") =~ "/blog/#{new.slug}"
+      assert Xml.text(conn.resp_body, "//item[1]/guid/@isPermaLink") == "true"
+      assert Xml.text(conn.resp_body, "//item[2]/link/text()") =~ "/blog/#{old.slug}"
 
       assert titles(fetch(site, "/fa/feed")) == ["Persian"]
       assert titles(fetch(site, "/feed.rss")) == ["New", "Old"]
@@ -167,21 +167,21 @@ defmodule MishkaBlogWeb.FeedControllerTest do
       assert titles(body) == ["Tom & Jerry <3"]
       refute body =~ "<script>"
       assert body =~ "<![CDATA["
-      assert xpath(body, ~x"//item/dc:creator/text()"s) == "Mona Lisa"
-      assert xpath(body, ~x"//item/category/text()"s) == "News"
-      assert xpath(body, ~x"//item/description/text()"s) =~ "Hello world & all"
-      assert xpath(body, ~x"//item/content:encoded/text()"s) =~ "world"
-      refute xpath(body, ~x"//item/content:encoded/text()"s) =~ "<script"
+      assert Xml.text(body, "//item/dc:creator/text()") == "Mona Lisa"
+      assert Xml.text(body, "//item/category/text()") == "News"
+      assert Xml.text(body, "//item/description/text()") =~ "Hello world & all"
+      assert Xml.text(body, "//item/content:encoded/text()") =~ "world"
+      refute Xml.text(body, "//item/content:encoded/text()") =~ "<script"
     end
 
     test "leaves the text out while blog.feeds.full_content is off", %{site: site} do
       post!(site, :published, content: "<p>Full text</p>")
 
-      assert xpath(fetch(site, "/feed").resp_body, ~x"//item/content:encoded/text()"s) =~
+      assert Xml.text(fetch(site, "/feed").resp_body, "//item/content:encoded/text()") =~
                "Full text"
 
       {:ok, _} = Settings.put("blog.feeds.full_content", false, site_id: site.id)
-      assert xpath(fetch(site, "/feed").resp_body, ~x"//item/content:encoded"l) == []
+      assert Xml.nodes(fetch(site, "/feed").resp_body, "//item/content:encoded") == []
     end
 
     test "lists at most blog.feeds.items", %{site: site} do
@@ -205,13 +205,13 @@ defmodule MishkaBlogWeb.FeedControllerTest do
       conn = fetch(site, "/feed/atom")
       assert ["application/atom+xml; charset=utf-8"] = get_resp_header(conn, "content-type")
 
-      assert xpath(conn.resp_body, ~x"/*[local-name()='feed']/*[local-name()='title']/text()"s) ==
+      assert Xml.text(conn.resp_body, "/*[local-name()='feed']/*[local-name()='title']/text()") ==
                "Feed Site"
 
-      assert xpath(conn.resp_body, ~x"//*[local-name()='entry']/*[local-name()='title']/text()"s) ==
+      assert Xml.text(conn.resp_body, "//*[local-name()='entry']/*[local-name()='title']/text()") ==
                "Hello"
 
-      assert xpath(conn.resp_body, ~x"//*[local-name()='entry']/*[local-name()='content']/@type"s) ==
+      assert Xml.text(conn.resp_body, "//*[local-name()='entry']/*[local-name()='content']/@type") ==
                "html"
 
       json = fetch(site, "/feed.json")
@@ -237,7 +237,7 @@ defmodule MishkaBlogWeb.FeedControllerTest do
 
       conn = fetch(site, "/feed/category/#{category.slug}")
       assert titles(conn) == ["Filed"]
-      assert xpath(conn.resp_body, ~x"//channel/title/text()"s) == "Feed Site - News"
+      assert Xml.text(conn.resp_body, "//channel/title/text()") == "Feed Site - News"
       assert fetch(site, "/feed/category/#{category.slug}/atom").status == 200
       assert json_titles(fetch(site, "/feed/category/#{category.slug}/json")) == ["Filed"]
     end

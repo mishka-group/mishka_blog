@@ -10,9 +10,8 @@ defmodule MishkaBlog.Feeds.RendererTest do
   """
   use ExUnit.Case, async: true
 
-  import SweetXml
-
   alias MishkaBlog.Feeds.Renderer
+  alias MishkaBlog.Test.Xml
 
   defp feed(item) do
     %{
@@ -46,17 +45,17 @@ defmodule MishkaBlog.Feeds.RendererTest do
     rss = Renderer.render(:rss, feed(%{title: "A & <b>B</b>", content_html: "<p>a ]]> b</p>"}))
 
     assert rss =~ "<![CDATA["
-    assert xpath(rss, ~x"//item/title/text()"s) == "A & <b>B</b>"
-    assert xpath(rss, ~x"//item/content:encoded/text()"s) == "<p>a ]]> b</p>"
+    assert Xml.text(rss, "//item/title/text()") == "A & <b>B</b>"
+    assert Xml.text(rss, "//item/content:encoded/text()") == "<p>a ]]> b</p>"
   end
 
   test "takes the characters XML forbids out of every text" do
     item = %{title: "Bad\u0001 title", summary: "x\u0000y", content_html: "<p>a\u000Bb￾c</p>"}
     rss = Renderer.render(:rss, feed(item))
 
-    assert xpath(rss, ~x"//item/title/text()"s) == "Bad title"
-    assert xpath(rss, ~x"//item/description/text()"s) == "xy"
-    assert xpath(rss, ~x"//item/content:encoded/text()"s) == "<p>abc</p>"
+    assert Xml.text(rss, "//item/title/text()") == "Bad title"
+    assert Xml.text(rss, "//item/description/text()") == "xy"
+    assert Xml.text(rss, "//item/content:encoded/text()") == "<p>abc</p>"
 
     assert [%{"title" => "Bad title"}] =
              :json |> Renderer.render(feed(item)) |> Jason.decode!() |> Map.fetch!("items")
@@ -67,8 +66,8 @@ defmodule MishkaBlog.Feeds.RendererTest do
 
     for format <- [:rss, :atom] do
       doc = Renderer.render(format, feed(%{title: text}))
-      path = if format == :rss, do: ~x"//item/title/text()"s, else: ~x"//entry/title/text()"s
-      assert xpath(doc, path) == text
+      path = if format == :rss, do: "//item/title/text()", else: "//entry/title/text()"
+      assert Xml.text(doc, path) == text
     end
   end
 
@@ -78,24 +77,24 @@ defmodule MishkaBlog.Feeds.RendererTest do
     assert %{"items" => [%{"title" => "ab"}]} =
              :json |> Renderer.render(feed(item)) |> Jason.decode!()
 
-    assert xpath(Renderer.render(:atom, feed(item)), ~x"//entry/title/text()"s) == "ab"
+    assert Xml.text(Renderer.render(:atom, feed(item)), "//entry/title/text()") == "ab"
 
     rss = Renderer.render(:rss, feed(item))
-    assert xpath(rss, ~x"//item/title/text()"s) == "ab"
-    assert xpath(rss, ~x"//item/content:encoded/text()"s) == "<p>xy</p>"
+    assert Xml.text(rss, "//item/title/text()") == "ab"
+    assert Xml.text(rss, "//item/content:encoded/text()") == "<p>xy</p>"
   end
 
   test "an Atom entry with no author names the feed, and its content is html" do
     atom = Renderer.render(:atom, feed(%{authors: []}))
 
-    assert xpath(
+    assert Xml.text(
              atom,
-             ~x"//*[local-name()='entry']/*[local-name()='author']/*[local-name()='name']/text()"s
+             "//*[local-name()='entry']/*[local-name()='author']/*[local-name()='name']/text()"
            ) == "Feed Site"
 
-    assert xpath(atom, ~x"//*[local-name()='entry']/*[local-name()='content']/@type"s) == "html"
+    assert Xml.text(atom, "//*[local-name()='entry']/*[local-name()='content']/@type") == "html"
 
-    assert xpath(atom, ~x"//*[local-name()='entry']/*[local-name()='category']/@term"s) ==
+    assert Xml.text(atom, "//*[local-name()='entry']/*[local-name()='category']/@term") ==
              "Elixir"
   end
 end

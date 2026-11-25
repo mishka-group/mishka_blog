@@ -163,7 +163,7 @@ defmodule MishkaBlogWeb.Test.PostPublishFormTest do
     render_async(view, @await)
 
     assert saved_post(ctx) == nil
-    assert render(view) =~ "is too early"
+    assert render(view) =~ "Publish At must be in the future."
   end
 
   test "Edit of a scheduled post leaves Publish At free of a lower bound", ctx do
