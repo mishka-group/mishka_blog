@@ -1,5 +1,8 @@
 # Changelog for MishkaBlog 0.0.4
 
+- The check and repair window on the Blog dashboard ("The blog on this site") lists the checks other installed extensions add, run as the admin who opened the page, so an extension's check sees what that admin may see. Needs mishka_cms_core 0.0.7
+- Ash 3.38.1, which carries the keyset pagination security fixes, is the minimum, and every dependency is on its newest Hex release. assent 0.4.0 and bcrypt_elixir 4.0.0 stay behind: ash_authentication pins them
+- The blog's feed tests read the RSS and Atom documents with OTP's own `xmerl`, so a feed that uses a prefix without declaring its namespace now fails them, and the blog needs no XML package for its tests
 - The kit's `blog-related-posts` cards fill their rows: one column on a phone, two from 640px and three from 1024px, and on the two-column width a lone last card spans the row instead of leaving an empty slot beside it
 
 # Changelog for MishkaBlog 0.0.3
