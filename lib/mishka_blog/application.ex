@@ -9,8 +9,7 @@ defmodule MishkaBlog.Application do
   The blog's OTP application. It supervises the task supervisor that highlights a post's code blocks,
   the post view counter (`MishkaBlog.Views`) and every mishka_installer plugin the extension ships (`plugins/0`): the dashboard widgets, the
   notification producers, the settings, sidebar, install, SEO, share card, stylesheet and page
-  plugins, and in development the dev seed. A plugin registers on the event it listens on once it is
-  supervised here.
+  plugins. A plugin registers on the event it listens on once it is supervised here.
   """
 
   use Application
@@ -51,9 +50,12 @@ defmodule MishkaBlog.Application do
 
   # Installs this extension onto a site when an admin asks for it — the `installer:extension:install`
   # event. Subscribing is also how the installer's own registry learns this extension exists, so
-  # there is nothing else to register: see `MishkaCmsCore.Install.Extensions`.
+  # there is nothing else to register: see `MishkaCmsCore.Install.Extensions`. The blog's parts of
+  # the installer's checklist, its pages and in development its sample data, are an
+  # `installer:seed` plugin (`MishkaCmsCore.Install.Seeds`).
   @provision_plugins [
-    MishkaBlog.Plugins.Installer
+    MishkaBlog.Plugins.Installer,
+    MishkaBlog.Plugins.Seed
   ]
 
   # Adds the blog's posts, categories, tags, bloggers and teams to each site's sitemap (a
@@ -121,21 +123,13 @@ defmodule MishkaBlog.Application do
     MishkaBlog.Plugins.AgentOperations
   ]
 
-  # Adds the blog's sample data to the dev seeds (a `dev:seed` plugin, see
-  # `MishkaCmsCore.Dev.Seeds`). Supervised only where the config sets `:env_dev?` or `:env_test?`
-  # (`dev_plugins/0`), so a production build never registers it.
-  @dev_plugins [
-    MishkaBlog.Plugins.DevSeed
-  ]
-
   # Each code block of a post being written is lexed in a task of its own under this supervisor — see
   # `MishkaBlog.Resources.Changes.HighlightCode`.
   @highlight_supervisor {Task.Supervisor, name: MishkaBlog.HighlightSupervisor}
 
   @doc """
   Every mishka_installer plugin this extension ships, all of which `start/2` supervises. A plugin
-  left out of it never registers, so the event it listens on never reaches it. The dev seed plugin
-  is among them only in development and test.
+  left out of it never registers, so the event it listens on never reaches it.
   """
   @spec plugins() :: [module()]
   def plugins,
@@ -148,14 +142,7 @@ defmodule MishkaBlog.Application do
         @seo_plugins ++
         @feed_plugins ++
         @share_card_plugins ++
-        @runtime_plugins ++ @frame_plugins ++ @view_plugins ++ @agent_plugins ++ dev_plugins()
-
-  defp dev_plugins do
-    if Application.get_env(:mishka_cms_core, :env_dev?, false) or
-         Application.get_env(:mishka_cms_core, :env_test?, false),
-       do: @dev_plugins,
-       else: []
-  end
+        @runtime_plugins ++ @frame_plugins ++ @view_plugins ++ @agent_plugins
 
   @impl true
   def start(_type, _args) do
