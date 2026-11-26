@@ -1,5 +1,6 @@
 # Changelog for MishkaBlog 0.0.4
 
+- Every blog admin page follows the site a master picked in the top bar (`MishkaCmsCore.Accounts.AdminSite`): with one site picked the dashboard's figures, the lists and the setup window are that site's alone, and with All sites every site's, the tag and comment cards now naming each record's site as the other cards do. Needs mishka_cms_core 0.0.7
 - The check and repair window on the Blog dashboard ("The blog on this site") lists the checks other installed extensions add, run as the admin who opened the page, so an extension's check sees what that admin may see. Needs mishka_cms_core 0.0.7
 - Needs mishka_cms_core 0.0.7, mishka_gervaz 0.0.13 and mishka_installer 0.1.18. With gervaz 0.0.13 a past Publish At on a new post is refused with the post's own sentence, "Publish At must be in the future.", in place of "is too early"
 - Ash 3.38.1, which carries the keyset pagination security fixes, is the minimum, and every dependency is on its newest Hex release. assent 0.4.0 and bcrypt_elixir 4.0.0 stay behind: ash_authentication pins them

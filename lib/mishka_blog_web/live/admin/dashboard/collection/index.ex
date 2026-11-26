@@ -16,6 +16,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Collection.Index do
   """
   use MishkaCmsCore.ExtensionLiveView
 
+  on_mount MishkaCmsCore.Accounts.AdminSite
+
   import MishkaBlogWeb.Live.Admin.Dashboard.VersionsModal, only: [open_modal: 2, close_modal: 2]
 
   alias MishkaBlogWeb.Live.Admin.Dashboard.VersionsModal
