@@ -9,7 +9,9 @@ defmodule MishkaBlog.Plugins.Installer do
   Subscribing to `installer:extension:install` is the whole declaration: the installer's own
   registry now knows this extension exists, under `:mishka_blog`, at priority 50, and `:extra` below
   is what the picker draws. Nothing is registered anywhere else, and there is no list of extensions
-  to keep in step with this file.
+  to keep in step with this file. Its `nav` is the blog's link, `/blog` behind the page's language:
+  the first install on a site adds it to the site's header menu, and the dev sites' `Dev` dropdown
+  lists it (`MishkaCmsCore.Install.Extensions`).
 
   A SITE IS NEVER SET UP BEHIND SOMEBODY'S BACK. This answers a request naming a site; it does not
   listen for a site being created. A site added to a running CMS gets its own core content and
@@ -32,7 +34,8 @@ defmodule MishkaBlog.Plugins.Installer do
         %{
           label: gettext_noop("Blog"),
           summary: gettext_noop("Posts, categories and tags, with the pages that read them"),
-          fields: []
+          fields: [],
+          nav: [%{label: gettext_noop("Blog"), path: "/blog"}]
         }
       ]
     }

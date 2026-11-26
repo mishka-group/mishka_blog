@@ -7,9 +7,11 @@ defmodule MishkaBlog.Plugins.Seed do
   The blog's parts of the installer's checklist: a plugin on `installer:seed`
   (`MishkaCmsCore.Install.Seeds`).
 
-  Subscribing is the whole declaration. The installer lists the blog's row with its two parts, the
-  host's seed scripts run them with every other plugin's, and the `samples` part's `nav` puts
-  `/blog` in every dev site's `Dev` dropdown. Priority 10 runs the blog before the documentation.
+  Subscribing is the whole declaration. The installer lists the blog's row with its two parts, and
+  the host's seed scripts run them with every other plugin's. The blog's link (`/blog`) is declared
+  once, on `MishkaBlog.Plugins.Installer`: the `pages` part's install adds it to the site's header
+  menu the first time, and every dev site's `Dev` dropdown lists it. Priority 10 runs the blog
+  before the documentation.
 
   | part | | installers |
   | --- | --- | --- |
@@ -50,8 +52,7 @@ defmodule MishkaBlog.Plugins.Seed do
           summary:
             gettext_noop("Multilingual posts, comments, bloggers and teams, with locked examples"),
           envs: [:dev],
-          default: true,
-          nav: [%{label: "Blog", path: "/blog"}]
+          default: true
         }
       ]
     }
