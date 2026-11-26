@@ -136,6 +136,42 @@ defmodule MishkaBlogWeb.Test.AdminSiteTest do
     assert {"/admin/dashboard/blog/tags", _flash} = assert_redirect(view)
   end
 
+  test "a master picks the site in the top bar's switcher on a blog page", %{
+    conn: conn,
+    master: master,
+    home: home,
+    other: other
+  } do
+    {:ok, view, _html} = live(conn, "/admin/dashboard/blog/tags")
+    render_async(view, 5_000)
+
+    assert has_element?(view, "[data-testid=site-switcher-name]", "All sites")
+    assert has_element?(view, "[data-testid=site-switcher-site-#{home.id}]", home.name)
+
+    view |> element("[data-testid=site-switcher-site-#{other.id}]") |> render_click()
+
+    assert {"/admin/dashboard/blog/tags", _flash} = assert_redirect(view)
+    assert AdminSite.chosen(master) == other.id
+
+    {:ok, view, _html} = live(conn, "/admin/dashboard/blog/tags")
+    html = render_async(view, 5_000)
+    assert has_element?(view, "[data-testid=site-switcher-name]", other.name)
+    refute html =~ "Home Tag"
+  end
+
+  test "a site's own admin has no switcher on a blog page", %{home: home} do
+    site_admin = MishkaCmsCore.Test.Admin.create_admin("blog-site-admin@example.com", home.id)
+
+    {:ok, view, _html} =
+      "localhost"
+      |> MishkaCmsCore.Test.Admin.build_conn_for_host()
+      |> log_in(site_admin)
+      |> live("/admin/dashboard/blog/tags")
+
+    render_async(view, 5_000)
+    refute has_element?(view, "[data-testid=site-switcher]")
+  end
+
   # The Total Tags figure of the dashboard's Tags card, as the admin reads it.
   defp tags_total(conn) do
     {:ok, view, _html} = live(conn, "/admin/dashboard/blog")
