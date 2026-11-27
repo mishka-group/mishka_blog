@@ -30,6 +30,10 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   figures divide comments by views, so they need both. A card, a row or a link whose area the
   viewer does not hold is not drawn, and `MishkaBlog.Dashboard.Overview` does not read its data.
 
+  A master is shown the site they picked in the top bar, or every site at once for All sites
+  (`MishkaCmsCore.Accounts.AdminSite`, mounted on every blog admin page): with one site picked
+  every figure, list and setup card is that site's alone, as for that site's own admin.
+
   Setting the blog up, the Doctor and the kit upgrade write pages, components and a snippet, and
   read the site they are for, so they need all three of `admin:dashboard:runtime:page` (the pages
   and the page builder's snippet), `admin:dashboard:runtime:component` and
@@ -38,6 +42,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Home.Index do
   See `MishkaBlog.Dashboard.Overview` for the queries.
   """
   use MishkaCmsCore.ExtensionLiveView
+
+  on_mount MishkaCmsCore.Accounts.AdminSite
 
   require Logger
 

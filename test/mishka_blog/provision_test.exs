@@ -27,7 +27,7 @@ defmodule MishkaBlog.ProvisionTest do
 
   import ExUnit.CaptureLog
 
-  alias MishkaBlog.Plugins.{Installer, PageFrame}
+  alias MishkaBlog.Plugins.{Installer, PageFrame, Seed}
   alias MishkaBlog.Provision
   alias MishkaBlog.Test.Plugins.ProvisionSnippetSaved
   alias MishkaCmsCore.Install
@@ -42,7 +42,7 @@ defmodule MishkaBlog.ProvisionTest do
   alias MishkaCmsCore.Runtime.SiteLayout
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Test.Installer, as: TestInstaller
-  alias MishkaInstaller.Event.EventHandler
+  alias MishkaInstaller.Event.{Event, EventHandler}
 
   require Ash.Query
 
@@ -1031,13 +1031,20 @@ defmodule MishkaBlog.ProvisionTest do
 
     test "the install wizard sets the blog up with nobody behind the request, and the same request is refused after it",
          %{site: site} do
+      # THE WIZARD'S CHECKLIST OFFERS THE BLOG THROUGH ITS `installer:seed` PLUGIN, whose "pages"
+      # part asks for this install.
+      {:ok, _registered} = Seed.register()
+      {:ok, _started} = Seed.start()
+      :ok = EventHandler.do_compile(Seed.config(:__event__), :start, false)
+      on_exit(fn -> Event.unregister(:name, Seed, false) end)
+
       assert {:ok, %{site: first}} =
                Bootstrap.run(%{
                  email: "owner-#{System.unique_integer([:positive])}@example.com",
                  password: "Password123!",
                  site_name: "Blog wizard",
                  host: "wizard-#{System.unique_integer([:positive])}.example.com",
-                 extensions: ["mishka_blog"]
+                 parts: %{"mishka_blog" => ["pages"]}
                })
 
       # THE RUN COMPILES THE SITE ONTO DISK, as it does for a real one: its templates under

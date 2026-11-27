@@ -40,6 +40,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Analytics.Index do
   """
   use MishkaCmsCore.ExtensionLiveView
 
+  on_mount MishkaCmsCore.Accounts.AdminSite
+
   require Logger
 
   alias MishkaBlog.Dashboard.Analytics

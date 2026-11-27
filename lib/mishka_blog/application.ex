@@ -50,9 +50,12 @@ defmodule MishkaBlog.Application do
 
   # Installs this extension onto a site when an admin asks for it — the `installer:extension:install`
   # event. Subscribing is also how the installer's own registry learns this extension exists, so
-  # there is nothing else to register: see `MishkaCmsCore.Install.Extensions`.
+  # there is nothing else to register: see `MishkaCmsCore.Install.Extensions`. The blog's parts of
+  # the installer's checklist, its pages and in development its sample data, are an
+  # `installer:seed` plugin (`MishkaCmsCore.Install.Seeds`).
   @provision_plugins [
-    MishkaBlog.Plugins.Installer
+    MishkaBlog.Plugins.Installer,
+    MishkaBlog.Plugins.Seed
   ]
 
   # Adds the blog's posts, categories, tags, bloggers and teams to each site's sitemap (a

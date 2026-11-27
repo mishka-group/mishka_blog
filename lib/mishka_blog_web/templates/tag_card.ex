@@ -8,7 +8,8 @@ defmodule MishkaBlogWeb.Templates.TagCard do
 
   Declared only by `MishkaBlog.Tag`, and it reads that record directly rather than by column
   position. A tag is small — a hash tile, a name, its language, and how many posts wear it — so the
-  chip is dense and the actions fold into the kebab menu the resource already declares as a
+  chip is dense (a master reading across sites also sees the tag's site under its name) and the
+  actions fold into the kebab menu the resource already declares as a
   `dropdown` row-action layout, which `MishkaGervaz.Table.Templates.Shared.render_row_actions/1`
   draws.
 
@@ -131,6 +132,7 @@ defmodule MishkaBlogWeb.Templates.TagCard do
       |> assign(:editions, EditionChips.editions(record))
       |> assign(:posts, count(record, :post_count))
       |> assign(:views, count(record, :view_count))
+      |> assign(:site, CardRecord.site_name(record, state))
       |> assign(
         :has_actions?,
         Gervaz.has_user_visible_actions?(
@@ -194,6 +196,20 @@ defmodule MishkaBlogWeb.Templates.TagCard do
             class="size-[13px]"
           />
           {@views}
+        </span>
+        <span
+          :if={@site}
+          data-role="tag-site"
+          title={@site}
+          class="mt-0.5 flex min-w-0 items-center gap-[5px] text-[11px] font-semibold text-[#4f4bcc]"
+        >
+          <.dynamic_component
+            module={@static.ui_adapter}
+            function={:icon}
+            name="hero-globe-alt"
+            class="size-[11px] flex-none"
+          />
+          <span class="truncate">{@site}</span>
         </span>
 
         <%!-- A translated tag names its languages under its name instead of in the badge at the

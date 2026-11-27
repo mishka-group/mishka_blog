@@ -7,12 +7,17 @@ defmodule MishkaBlogWeb.Test.AgentReceiptLiveTest do
   The UI layer of a publish's receipt: with the posts page open, the page itself reports that it
   received this publish's broadcast (`MishkaCmsCore.Agent.UiObserver`), and the receipt says which
   page, never what it holds. With the page closed the same stage stays unverified.
+
+  A publish's receipt needs the share-card job `MishkaBlog.Plugins.PostShareCard` queues, so setup
+  registers that plugin: the one registered at boot is gone once another test that registered it
+  ends.
   """
   use MishkaBlog.ConnCase
 
   import Phoenix.LiveViewTest
   import MishkaBlog.Test.Factory
 
+  alias MishkaBlog.Plugins.PostShareCard
   alias MishkaCmsCore.Agent.Receipts
   alias MishkaCmsCore.Runtime.States.SiteState
 
@@ -28,6 +33,8 @@ defmodule MishkaBlogWeb.Test.AgentReceiptLiveTest do
       Receipts.switch(false)
       :persistent_term.erase(:mishka_installed)
     end)
+
+    MishkaBlog.DataCase.register_plugin!(PostShareCard)
 
     n = System.unique_integer([:positive])
     home = create_site!(name: "localhost", host: "localhost", active: true, master: true)

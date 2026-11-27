@@ -18,6 +18,9 @@ defmodule MishkaBlogWeb.Templates.CommentCard do
   as `%Ash.NotLoaded{}`, which is truthy, so `post/1` picks whichever is actually a record rather
   than testing for nil.
 
+  A master reading across sites sees each comment's site beside its post, as every other blog card
+  names it (`MishkaBlogWeb.Templates.CardRecord.site_name/2`).
+
   ## Features
   - `:filter` - the labelled filter row: search, site, status, post, with Pinned as a switch
   - `:select` - per-row selection for bulk operations
@@ -33,6 +36,7 @@ defmodule MishkaBlogWeb.Templates.CommentCard do
 
   import MishkaGervaz.Helpers, only: [dynamic_component: 1]
 
+  alias MishkaBlogWeb.Templates.CardRecord
   alias MishkaCmsCore.Accounts.Helper
   alias MishkaCmsCore.Localized
   alias MishkaCmsCoreWeb.Templates.CardChrome, as: Shared
@@ -161,6 +165,7 @@ defmodule MishkaBlogWeb.Templates.CommentCard do
       |> assign(:guest_email, guest_email(record))
       |> assign(:post_title, post_title(record))
       |> assign(:date, Localized.date(record.inserted_at, :yMMMd))
+      |> assign(:site, CardRecord.site_name(record, state))
       |> assign(
         :visible_row_actions,
         Enum.filter(assigns.static.row_actions, &Gervaz.action_visible?(&1, record, state))
@@ -247,6 +252,21 @@ defmodule MishkaBlogWeb.Templates.CommentCard do
           </span>
           <span :if={@post_title} class="min-w-0 truncate text-[11.5px] font-semibold text-[#4f4bcc]">
             {@post_title}
+          </span>
+
+          <span
+            :if={@site}
+            data-role="comment-site"
+            title={@site}
+            class="inline-flex max-w-[140px] items-center gap-[5px] rounded-md border border-[#e4e2f7] bg-[#f2f1fc] px-1.5 py-[2px] text-[10.5px] font-semibold text-[#4f4bcc]"
+          >
+            <.dynamic_component
+              module={@static.ui_adapter}
+              function={:icon}
+              name="hero-globe-alt"
+              class="size-[11px] flex-none"
+            />
+            <span class="truncate">{@site}</span>
           </span>
 
           <span class={[

@@ -16,6 +16,8 @@ defmodule MishkaBlogWeb.Live.Admin.Dashboard.Comment.Index do
   """
   use MishkaCmsCore.ExtensionLiveView
 
+  on_mount MishkaCmsCore.Accounts.AdminSite
+
   alias MishkaCmsCore.Accounts.User
   alias MishkaGervaz.Table.Web.UrlSync
 
